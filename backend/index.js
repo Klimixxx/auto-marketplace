@@ -4,13 +4,26 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { query } from './db.js';
-import fetch from 'node-fetch';
+
 
 
 dotenv.config();
 
 // Нормализация телефона к виду +79XXXXXXXXX
 function normalizePhone(p) {
+  // Нативный fetch + таймаут через AbortController
+async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { signal: ac.signal });
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, data };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
   const digits = String(p || '').replace(/[^\d+]/g, '');
   return digits.startsWith('+') ? digits : '+' + digits;
 }
@@ -105,15 +118,13 @@ app.post('/api/auth/request-code', async (req, res) => {
     const text   = encodeURIComponent(`Код входа: ${code}. Никому его не сообщайте.`);
     const url    = `https://smsc.ru/sys/send.php?login=${encodeURIComponent(login)}&psw=${encodeURIComponent(pass)}&phones=${encodeURIComponent(phone)}&mes=${text}&fmt=3&charset=utf-8${sender?`&sender=${encodeURIComponent(sender)}`:''}`;
 
-    const r = await fetch(url, { timeout: 15000 });
-    const d = await r.json().catch(()=> ({}));
+    const { data: d } = await fetchJSON(url, { timeoutMs: 15000 });
+console.log('SMSC response:', d);
 
-    console.log('SMSC response:', d);
-
-    if (!d || d.error || !d.id) {
-      const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
-      return res.status(502).json({ error: `SMSC error: ${errMsg}` });
-    }
+if (!d || d.error || !d.id) {
+  const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
+  return res.status(502).json({ error: `SMSC error: ${errMsg}` });
+}
 
     return res.json({ ok: true, attemptId: d.id });
   } catch (e) {
