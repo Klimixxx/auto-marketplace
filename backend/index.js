@@ -56,34 +56,43 @@ function admin(req, res, next) {
 // ===== Служебный =====
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// ===== Auth =====
-app.post('/api/auth/signup', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: 'email & password required' });
-  try {
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await query(
-      'INSERT INTO users(email, password_hash) VALUES($1,$2) RETURNING id, email, role',
-      [email, hash]
-    );
-    const token = signToken(rows[0]);
-    res.json({ token, user: rows[0] });
-  } catch (e) {
-    if (e.code === '23505') return res.status(409).json({ error: 'Email already exists' });
-    console.error('Signup error:', e);
-    res.status(500).json({ error: 'Signup failed' });
-  }
+// ===== Phone auth (MVP) =====
+
+// Запросить код
+app.post('/api/auth/request-code', async (req,res)=>{
+  const { phone } = req.body || {};
+  if (!phone) return res.status(400).json({error:'phone required'});
+  const code = Math.floor(100000 + Math.random()*900000).toString(); // 6-значный
+  await query('INSERT INTO auth_codes(phone, code) VALUES($1,$2)', [phone, code]);
+  console.log(`Код для ${phone}: ${code}`); // смотри в логах Render
+  res.json({ ok: true, code }); // ⚠️ для теста возвращаем код сразу в ответе
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: 'email & password required' });
-  const { rows } = await query('SELECT * FROM users WHERE email=$1', [email]);
-  const u = rows[0];
-  if (!u) return res.status(401).json({ error: 'Invalid credentials' });
-  const ok = await bcrypt.compare(password, u.password_hash);
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-  const user = { id: u.id, email: u.email, role: u.role };
+// Проверить код и войти
+app.post('/api/auth/verify-code', async (req,res)=>{
+  const { phone, code } = req.body || {};
+  if (!phone || !code) return res.status(400).json({error:'phone+code required'});
+
+  const { rows } = await query(
+    `SELECT * FROM auth_codes
+     WHERE phone=$1 AND code=$2
+       AND created_at > now() - interval '5 minutes'
+     ORDER BY created_at DESC LIMIT 1`,
+    [phone, code]
+  );
+  if (!rows[0]) return res.status(401).json({error:'Invalid or expired code'});
+
+  // ищем или создаём пользователя
+  let u = await query('SELECT * FROM users WHERE email=$1', [phone]);
+  if (!u.rows[0]) {
+    const ins = await query(
+      'INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id,email,role',
+      [phone,'']
+    );
+    u = { rows: [ins.rows[0]] };
+  }
+
+  const user = { id: u.rows[0].id, email: u.rows[0].email, role: u.rows[0].role };
   const token = signToken(user);
   res.json({ token, user });
 });
