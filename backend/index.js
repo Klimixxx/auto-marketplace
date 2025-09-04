@@ -318,6 +318,55 @@ app.delete('/api/favorites/:id', auth, async (req, res) => {
   await query('DELETE FROM favorites WHERE user_id=$1 AND listing_id=$2', [userId, id]);
   res.json({ ok: true });
 });
+// Профиль текущего пользователя
+app.get('/api/me', auth, async (req, res) => {
+  const userId = req.user.sub;
+  const { rows } = await query(
+    `SELECT id, phone, name, email, role
+       FROM users
+      WHERE id=$1`,
+    [userId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+  res.json(rows[0]);
+});
+
+// Обновление профиля: name (обязательно при первичном заполнении), email (опц.)
+app.patch('/api/me', auth, async (req, res) => {
+  const userId = req.user.sub;
+  let { name, email } = req.body || {};
+
+  if (name !== undefined) {
+    name = String(name).trim();
+    if (name.length < 2 || name.length > 60) {
+      return res.status(400).json({ error: 'Имя должно быть 2–60 символов' });
+    }
+  } else {
+    name = null;
+  }
+
+  if (email !== undefined) {
+    email = String(email).trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Некорректная почта' });
+    }
+  } else {
+    email = null;
+  }
+
+  const { rows } = await query(
+    `UPDATE users
+        SET name = COALESCE($1, name),
+            email = COALESCE($2, email),
+            updated_at = now()
+      WHERE id=$3
+      RETURNING id, phone, name, email, role`,
+    [name, email, userId]
+  );
+
+  res.json(rows[0]);
+});
+
 
 app.get('/api/me/favorites', auth, async (req, res) => {
   const userId = req.user.sub;
