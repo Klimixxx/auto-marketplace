@@ -11,7 +11,11 @@ dotenv.config();
 
 // Нормализация телефона к виду +79XXXXXXXXX
 function normalizePhone(p) {
-  // Нативный fetch + таймаут через AbortController
+  const digits = String(p || '').replace(/[^\d+]/g, '');
+  return digits.startsWith('+') ? digits : '+' + digits;
+}
+
+// Нативный fetch + таймаут через AbortController
 async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);
@@ -24,9 +28,6 @@ async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
   }
 }
 
-  const digits = String(p || '').replace(/[^\d+]/g, '');
-  return digits.startsWith('+') ? digits : '+' + digits;
-}
 
 
 const app = express();
@@ -87,7 +88,6 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // ===== Phone auth (MVP) =====
 
-import fetch from 'node-fetch'; // наверху подключи (npm i node-fetch)
 
 app.post('/api/auth/request-code', async (req, res) => {
   try {
