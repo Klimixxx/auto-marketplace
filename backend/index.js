@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { query } from './db.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 
 
 
@@ -32,6 +36,28 @@ async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+
+// ==== МИГРАЦИИ ====
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function runMigrations() {
+  const file = path.join(__dirname, '001_init.sql');
+  try {
+    const sql = await fs.readFile(file, 'utf8');
+    if (sql && sql.trim()) {
+      console.log('Applying migrations from 001_init.sql...');
+      await query(sql);
+      console.log('Migrations applied.');
+    }
+  } catch (e) {
+    console.error('Migration error:', e.message);
+  }
+}
+
+// Запускаем миграции перед стартом сервера
+await runMigrations();
+
 
 // CORS
 const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
