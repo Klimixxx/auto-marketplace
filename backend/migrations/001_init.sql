@@ -62,3 +62,23 @@ ALTER TABLE listings
   ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT now();
 
+
+-- === Добивка для старых БД: добавить id и PK, если их не было ===
+ALTER TABLE auth_codes
+  ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+
+-- Проставить id существующим строкам
+UPDATE auth_codes SET id = DEFAULT WHERE id IS NULL;
+
+-- Сделать id первичным ключом, если PK ещё не задан
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE table_name = 'auth_codes'
+      AND constraint_type = 'PRIMARY KEY'
+  ) THEN
+    ALTER TABLE auth_codes ADD PRIMARY KEY (id);
+  END IF;
+END $$;
