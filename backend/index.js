@@ -58,15 +58,33 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // ===== Phone auth (MVP) =====
 
-// Запросить код
+import fetch from 'node-fetch'; // наверху подключи (npm i node-fetch)
+
 app.post('/api/auth/request-code', async (req,res)=>{
   const { phone } = req.body || {};
   if (!phone) return res.status(400).json({error:'phone required'});
-  const code = Math.floor(100000 + Math.random()*900000).toString(); // 6-значный
+  const code = Math.floor(1000 + Math.random()*9000).toString(); // 4 цифры
+
+  // сохраняем код в БД
   await query('INSERT INTO auth_codes(phone, code) VALUES($1,$2)', [phone, code]);
-  console.log(`Код для ${phone}: ${code}`); // смотри в логах Render
-  res.json({ ok: true, code }); // ⚠️ для теста возвращаем код сразу в ответе
+
+  // отправляем SMS через smsc.ru
+  try {
+    const login = process.env.SMSC_LOGIN;
+    const pass = process.env.SMSC_PASSWORD;
+    const text = encodeURIComponent(`Ваш код: ${code}`);
+    const url = `https://smsc.ru/sys/send.php?login=${login}&psw=${pass}&phones=${phone}&mes=${text}&fmt=3`;
+
+    const r = await fetch(url);
+    const d = await r.json();
+    console.log('SMS response:', d);
+  } catch(e) {
+    console.error('Ошибка отправки SMS', e);
+  }
+
+  res.json({ ok: true });
 });
+
 
 // Проверить код и войти
 app.post('/api/auth/verify-code', async (req,res)=>{
