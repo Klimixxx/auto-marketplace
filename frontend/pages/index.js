@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import FirstLoginModal from '../components/FirstLoginModal';
+
 
 export default function Home() {
   return (
@@ -11,6 +13,7 @@ export default function Home() {
           <Link href="/admin">Админ</Link>
         </nav>
       </header>
+    <FirstLoginModal />
 
       <div className="card" style={{padding:32, textAlign:'center'}}>
         <h2>Все торги — в одном месте</h2>
