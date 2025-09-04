@@ -4,15 +4,31 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { query } from './db.js';
+import fetch from 'node-fetch';
+
 
 dotenv.config();
+
+// Нормализация телефона к виду +79XXXXXXXXX
+function normalizePhone(p) {
+  const digits = String(p || '').replace(/[^\d+]/g, '');
+  return digits.startsWith('+') ? digits : '+' + digits;
+}
+
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 // CORS
-const allowedOrigin = process.env.CORS_ORIGIN || '*';
-app.use(cors({ origin: allowedOrigin === '*' ? true : [allowedOrigin] }));
+const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowed.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  }
+}));
+
 
 // Порт: Render сам задаёт process.env.PORT
 const PORT = process.env.PORT || 8080;
@@ -60,60 +76,101 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 import fetch from 'node-fetch'; // наверху подключи (npm i node-fetch)
 
-app.post('/api/auth/request-code', async (req,res)=>{
-  const { phone } = req.body || {};
-  if (!phone) return res.status(400).json({error:'phone required'});
-  const code = Math.floor(1000 + Math.random()*9000).toString(); // 4 цифры
-
-  // сохраняем код в БД
-  await query('INSERT INTO auth_codes(phone, code) VALUES($1,$2)', [phone, code]);
-
-  // отправляем SMS через smsc.ru
+app.post('/api/auth/request-code', async (req, res) => {
   try {
-    const login = process.env.SMSC_LOGIN;
-    const pass = process.env.SMSC_PASSWORD;
-    const text = encodeURIComponent(`Ваш код: ${code}`);
-    const url = `https://smsc.ru/sys/send.php?login=${login}&psw=${pass}&phones=${phone}&mes=${text}&fmt=3`;
+    const raw = req.body?.phone;
+    if (!raw) return res.status(400).json({ error: 'phone required' });
 
-    const r = await fetch(url);
-    const d = await r.json();
-    console.log('SMS response:', d);
-  } catch(e) {
-    console.error('Ошибка отправки SMS', e);
+    const phone = normalizePhone(raw);
+
+    // rate-limit: не чаще 1 заявки в 30 сек
+    const last = await query(
+      `SELECT created_at FROM auth_codes WHERE phone=$1 ORDER BY created_at DESC LIMIT 1`,
+      [phone]
+    );
+    if (last.rows[0] && Date.now() - new Date(last.rows[0].created_at).getTime() < 30_000) {
+      return res.status(429).json({ error: 'Подождите 30 секунд перед повторной отправкой' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 цифр
+    await query(
+      `INSERT INTO auth_codes(phone, code, created_at, is_used) VALUES($1,$2, now(), false)`,
+      [phone, code]
+    );
+
+    // отправка SMS через smsc.ru
+    const login  = process.env.SMSC_LOGIN;
+    const pass   = process.env.SMSC_PASSWORD;
+    const sender = process.env.SMSC_SENDER || ''; // если согласован
+    const text   = encodeURIComponent(`Код входа: ${code}. Никому его не сообщайте.`);
+    const url    = `https://smsc.ru/sys/send.php?login=${encodeURIComponent(login)}&psw=${encodeURIComponent(pass)}&phones=${encodeURIComponent(phone)}&mes=${text}&fmt=3&charset=utf-8${sender?`&sender=${encodeURIComponent(sender)}`:''}`;
+
+    const r = await fetch(url, { timeout: 15000 });
+    const d = await r.json().catch(()=> ({}));
+
+    console.log('SMSC response:', d);
+
+    if (!d || d.error || !d.id) {
+      const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
+      return res.status(502).json({ error: `SMSC error: ${errMsg}` });
+    }
+
+    return res.json({ ok: true, attemptId: d.id });
+  } catch (e) {
+    console.error('request-code error:', e);
+    return res.status(500).json({ error: 'Не удалось отправить SMS' });
   }
-
-  res.json({ ok: true });
 });
+
 
 
 // Проверить код и войти
-app.post('/api/auth/verify-code', async (req,res)=>{
-  const { phone, code } = req.body || {};
-  if (!phone || !code) return res.status(400).json({error:'phone+code required'});
+app.post('/api/auth/verify-code', async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    const code  = String(req.body?.code || '').trim();
+    if (!phone || !code) return res.status(400).json({ error:'phone+code required' });
 
-  const { rows } = await query(
-    `SELECT * FROM auth_codes
-     WHERE phone=$1 AND code=$2
-       AND created_at > now() - interval '5 minutes'
-     ORDER BY created_at DESC LIMIT 1`,
-    [phone, code]
-  );
-  if (!rows[0]) return res.status(401).json({error:'Invalid or expired code'});
-
-  // ищем или создаём пользователя
-  let u = await query('SELECT * FROM users WHERE email=$1', [phone]);
-  if (!u.rows[0]) {
-    const ins = await query(
-      'INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id,email,role',
-      [phone,'']
+    const { rows } = await query(
+      `SELECT id, phone, code, is_used, created_at
+       FROM auth_codes
+       WHERE phone=$1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [phone]
     );
-    u = { rows: [ins.rows[0]] };
-  }
+    if (!rows[0]) return res.status(400).json({ error: 'Сессия кода не найдена' });
 
-  const user = { id: u.rows[0].id, email: u.rows[0].email, role: u.rows[0].role };
-  const token = signToken(user);
-  res.json({ token, user });
+    const row = rows[0];
+    if (row.is_used) return res.status(400).json({ error: 'Код уже использован' });
+    if (row.code !== code) return res.status(401).json({ error: 'Неверный код' });
+
+    // TTL 5 мин
+    const expired = (Date.now() - new Date(row.created_at).getTime()) > 5*60*1000;
+    if (expired) return res.status(400).json({ error: 'Код просрочен' });
+
+    await query(`UPDATE auth_codes SET is_used = true, used_at = now() WHERE id=$1`, [row.id]);
+
+    // ищем/создаём пользователя по phone
+    let u = await query('SELECT id, phone, role FROM users WHERE phone=$1', [phone]);
+    if (!u.rows[0]) {
+      const created = await query(
+        `INSERT INTO users(phone, created_at) VALUES($1, now()) RETURNING id, phone, role`,
+        [phone]
+      );
+      u = { rows: [created.rows[0]] };
+    }
+
+    const user = u.rows[0];
+    const token = signToken({ id: user.id, phone: user.phone, role: user.role });
+
+    res.json({ ok: true, token });
+  } catch (e) {
+    console.error('verify-code error:', e);
+    res.status(500).json({ error: 'Ошибка проверки кода' });
+  }
 });
+
 
 // ===== Listings (каталог) =====
 app.get('/api/listings', async (req, res) => {
