@@ -135,52 +135,68 @@ if (!d || d.error || !d.id) {
 
 
 
-// Проверить код и войти
 app.post('/api/auth/verify-code', async (req, res) => {
   try {
+    // 1) Нормализуем телефон и код
     const phone = normalizePhone(req.body?.phone);
-    const code  = String(req.body?.code || '').trim();
-    if (!phone || !code) return res.status(400).json({ error:'phone+code required' });
+    const code  = String(req.body?.code || '').replace(/\s/g, '');
+    if (!phone || !code) return res.status(400).json({ error: 'phone+code required' });
 
+    // 2) Ищем ровно этот код для этого номера за последние 5 минут
     const { rows } = await query(
       `SELECT id, phone, code, is_used, created_at
-       FROM auth_codes
-       WHERE phone=$1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [phone]
+         FROM auth_codes
+        WHERE phone = $1
+          AND code  = $2
+          AND created_at > now() - interval '5 minutes'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [phone, code]
     );
-    if (!rows[0]) return res.status(400).json({ error: 'Сессия кода не найдена' });
+
+    if (!rows[0]) {
+      // Доп. лог для отладки — последние 3 кода по номеру
+      const dbg = await query(
+        `SELECT code, created_at, is_used
+           FROM auth_codes
+          WHERE phone=$1
+          ORDER BY created_at DESC
+          LIMIT 3`,
+        [phone]
+      );
+      console.log('OTP DEBUG last codes for', phone, dbg.rows);
+      return res.status(401).json({ error: 'Неверный или просроченный код' });
+    }
 
     const row = rows[0];
     if (row.is_used) return res.status(400).json({ error: 'Код уже использован' });
-    if (row.code !== code) return res.status(401).json({ error: 'Неверный код' });
 
-    // TTL 5 мин
-    const expired = (Date.now() - new Date(row.created_at).getTime()) > 5*60*1000;
-    if (expired) return res.status(400).json({ error: 'Код просрочен' });
+    // 3) Помечаем код использованным
+    await query(`UPDATE auth_codes SET is_used=true, used_at=now() WHERE id=$1`, [row.id]);
 
-    await query(`UPDATE auth_codes SET is_used = true, used_at = now() WHERE id=$1`, [row.id]);
-
-    // ищем/создаём пользователя по phone
+    // 4) Находим/создаём пользователя по телефону
     let u = await query('SELECT id, phone, role FROM users WHERE phone=$1', [phone]);
     if (!u.rows[0]) {
       const created = await query(
-        `INSERT INTO users(phone, created_at) VALUES($1, now()) RETURNING id, phone, role`,
+        `INSERT INTO users(phone, created_at)
+         VALUES($1, now())
+         RETURNING id, phone, role`,
         [phone]
       );
       u = { rows: [created.rows[0]] };
     }
 
+    // 5) JWT
     const user = u.rows[0];
     const token = signToken({ id: user.id, phone: user.phone, role: user.role });
 
-    res.json({ ok: true, token });
+    return res.json({ ok: true, token });
   } catch (e) {
     console.error('verify-code error:', e);
-    res.status(500).json({ error: 'Ошибка проверки кода' });
+    return res.status(500).json({ error: 'Ошибка проверки кода' });
   }
 });
+
 
 
 // ===== Listings (каталог) =====
