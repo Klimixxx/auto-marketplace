@@ -91,14 +91,14 @@ console.log('Starting server with env:', {
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
 });
 
-// ===== Вспомогательные функции аутентификации =====
 function signToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, role: user.role },
+    { sub: user.id, phone: user.phone, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
+
 
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
@@ -207,7 +207,17 @@ app.post('/api/auth/verify-code', async (req, res) => {
     if (row.is_used) return res.status(400).json({ error: 'Код уже использован' });
 
     // 3) Помечаем код использованным
-    await query(`UPDATE auth_codes SET is_used=true, used_at=now() WHERE id=$1`, [row.id]);
+    await query(
+  `UPDATE auth_codes
+      SET is_used = true,
+          used_at = now()
+    WHERE phone = $1
+      AND code  = $2
+      AND created_at = $3
+      AND is_used = false`,
+  [phone, code, row.created_at]
+);
+
 
     // 4) Находим/создаём пользователя по телефону
     let u = await query('SELECT id, phone, role FROM users WHERE phone=$1', [phone]);
