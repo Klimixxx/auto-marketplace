@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 
 
 
+
 dotenv.config();
 
 // Нормализация телефона к виду +79XXXXXXXXX
@@ -37,26 +38,34 @@ async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
-// ==== МИГРАЦИИ ====
+// ==== МИГРАЦИИ (выполнить все .sql из /backend/migrations по алфавиту) ====
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function runMigrations() {
-  const file = path.join(__dirname, '001_init.sql');
   try {
-    const sql = await fs.readFile(file, 'utf8');
-    if (sql && sql.trim()) {
-      console.log('Applying migrations from 001_init.sql...');
-      await query(sql);
-      console.log('Migrations applied.');
+    const migrationsDir = path.join(__dirname, 'migrations'); // backend/migrations
+    const files = (await fs.readdir(migrationsDir))
+      .filter(f => f.endsWith('.sql'))
+      .sort();
+
+    for (const f of files) {
+      const full = path.join(migrationsDir, f);
+      const sql = await fs.readFile(full, 'utf8');
+      if (sql && sql.trim()) {
+        console.log(`Applying migration: ${f}`);
+        await query(sql);
+      }
     }
+    console.log('Migrations applied.');
   } catch (e) {
     console.error('Migration error:', e.message);
   }
 }
 
-// Запускаем миграции перед стартом сервера
+// ВЫПОЛНЯЕМ МИГРАЦИИ ПЕРЕД СТАРТОМ СЕРВЕРА
 await runMigrations();
+
 
 
 // CORS
