@@ -1,28 +1,37 @@
+// pages/account.js
 import { useEffect, useState } from 'react';
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
-export default function Account(){
-  const [items, setItems] = useState([]);
+export default function Account() {
+  const [me, setMe] = useState(null);
+  const [err, setErr] = useState('');
 
-  useEffect(()=>{
+  useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) { location.href='/login'; return; }
-    fetch(`${API}/api/me/favorites`, { headers:{ 'Authorization':'Bearer '+token } })
-      .then(r=>r.json()).then(d=> setItems(d.items||[]));
-  },[]);
+    if (!token) { location.href = '/login'; return; }
+    fetch(`${API}/api/me`, { headers: { Authorization: 'Bearer ' + token } })
+      .then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Не удалось загрузить профиль');
+        return d;
+      })
+      .then(setMe)
+      .catch(e => setErr(e.message));
+  }, []);
 
   return (
-    <div className="container">
-      <h1>Избранное</h1>
-      <div className="grid" style={{marginTop:16}}>
-        {items.map(i=> (
-          <div key={i.id} className="card">
-            <div style={{fontWeight:600}}>{i.title}</div>
-            <div style={{color:'var(--muted)'}}>Регион: {i.region||'—'}</div>
-          </div>
-        ))}
-      </div>
+    <div className="container" style={{ maxWidth: 600 }}>
+      <h1>Личный кабинет</h1>
+
+      {err && <div style={{ color: 'salmon' }}>{err}</div>}
+      {!me && !err && <div>Загрузка…</div>}
+
+      {me && (
+        <div className="card" style={{ display: 'grid', gap: 8, padding: 16 }}>
+          <div><span style={{ color: 'var(--muted)' }}>Имя:</span> {me.name || '—'}</div>
+          <div><span style={{ color: 'var(--muted)' }}>Телефон:</span> {me.phone}</div>
+        </div>
+      )}
     </div>
   );
 }
-
