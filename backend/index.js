@@ -14,10 +14,17 @@ import { fileURLToPath } from 'url';
 
 dotenv.config();
 
+
+
 // Нормализация телефона к виду +79XXXXXXXXX
 function normalizePhone(p) {
   const digits = String(p || '').replace(/[^\d+]/g, '');
   return digits.startsWith('+') ? digits : '+' + digits;
+}
+
+// 6-значный код пользователя
+function genUserCode() {
+  return String(Math.floor(100000 + Math.random()*900000)).padStart(6, '0');
 }
 
 // Нативный fetch + таймаут через AbortController
@@ -220,16 +227,39 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
 
     // 4) Находим/создаём пользователя по телефону
-    let u = await query('SELECT id, phone, role FROM users WHERE phone=$1', [phone]);
-    if (!u.rows[0]) {
+    let u = await query('SELECT id, phone, role, user_code, name, email FROM users WHERE phone=$1', [phone]);
+if (!u.rows[0]) {
+  // пытаемся вставить с уникальным user_code (несколько попыток на случай коллизии)
+  let userRow = null;
+  for (let i = 0; i < 5; i++) {
+    const code6 = genUserCode();
+    try {
       const created = await query(
-        `INSERT INTO users(phone, created_at)
-         VALUES($1, now())
-         RETURNING id, phone, role`,
-        [phone]
+        `INSERT INTO users(phone, user_code, created_at)
+         VALUES($1, $2, now())
+         RETURNING id, phone, role, user_code, name, email`,
+        [phone, code6]
       );
-      u = { rows: [created.rows[0]] };
+      userRow = created.rows[0];
+      break;
+    } catch (e) {
+      // если нарушена уникальность по user_code — пробуем снова
+      if (!String(e.message || '').includes('users_user_code_key')) throw e;
     }
+  }
+  if (!userRow) {
+    // почти невозможно, но на всякий случай
+    const fallback = await query(
+      `INSERT INTO users(phone, user_code, created_at)
+       VALUES($1, $2, now())
+       RETURNING id, phone, role, user_code, name, email`,
+      [phone, genUserCode()]
+    );
+    userRow = fallback.rows[0];
+  }
+  u = { rows: [userRow] };
+}
+
 
     // 5) JWT
     const user = u.rows[0];
@@ -322,10 +352,10 @@ app.delete('/api/favorites/:id', auth, async (req, res) => {
 app.get('/api/me', auth, async (req, res) => {
   const userId = req.user.sub;
   const { rows } = await query(
-    `SELECT id, phone, name, email, role
-       FROM users
-      WHERE id=$1`,
-    [userId]
+    `SELECT id, user_code, name, email, phone, role
+     FROM users
+    WHERE id=$1`,
+  [userId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
   res.json(rows[0]);
@@ -334,38 +364,57 @@ app.get('/api/me', auth, async (req, res) => {
 // Обновление профиля: name (обязательно при первичном заполнении), email (опц.)
 app.patch('/api/me', auth, async (req, res) => {
   const userId = req.user.sub;
-  let { name, email } = req.body || {};
+  let { name, email, phone } = req.body || {};
 
+  // Валидация
   if (name !== undefined) {
     name = String(name).trim();
-    if (name.length < 2 || name.length > 60) {
+    if (name && (name.length < 2 || name.length > 60)) {
       return res.status(400).json({ error: 'Имя должно быть 2–60 символов' });
     }
-  } else {
-    name = null;
   }
-
   if (email !== undefined) {
     email = String(email).trim();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Некорректная почта' });
     }
-  } else {
-    email = null;
+  }
+  if (phone !== undefined) {
+    phone = normalizePhone(String(phone || ''));
+    if (!/^\+\d{11,15}$/.test(phone)) {
+      return res.status(400).json({ error: 'Некорректный телефон' });
+    }
+    // уникальность телефона
+    const taken = await query(`SELECT 1 FROM users WHERE phone=$1 AND id<>$2`, [phone, userId]);
+    if (taken.rows[0]) {
+      return res.status(409).json({ error: 'Этот телефон уже используется' });
+    }
   }
 
   const { rows } = await query(
     `UPDATE users
-        SET name = COALESCE($1, name),
-            email = COALESCE($2, email),
+        SET name       = COALESCE($1, name),
+            email      = COALESCE($2, email),
+            phone      = COALESCE($3, phone),
             updated_at = now()
-      WHERE id=$3
-      RETURNING id, phone, name, email, role`,
-    [name, email, userId]
+      WHERE id=$4
+      RETURNING id, user_code, name, email, phone, role`,
+    [name ?? null, email ?? null, phone ?? null, userId]
   );
 
-  res.json(rows[0]);
+  const u = rows[0];
+  // если телефон изменился — выдадим новый токен с обновлённым phone
+  let token;
+  if (phone) {
+    token = jwt.sign(
+      { sub: u.id, phone: u.phone, role: u.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+  }
+  res.json({ ok: true, user: u, token });
 });
+
 
 
 app.get('/api/me/favorites', auth, async (req, res) => {
