@@ -352,9 +352,9 @@ app.delete('/api/favorites/:id', auth, async (req, res) => {
 app.get('/api/me', auth, async (req, res) => {
   const userId = req.user.sub;
   const { rows } = await query(
-    `SELECT id, user_code, name, email, phone, role
-     FROM users
-    WHERE id=$1`,
+    `SELECT id, user_code, name, email, phone, role, balance
+   FROM users
+  WHERE id=$1`,
   [userId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -414,6 +414,28 @@ app.patch('/api/me', auth, async (req, res) => {
   }
   res.json({ ok: true, user: u, token });
 });
+
+// Пополнение баланса (временный dev-эндпоинт)
+app.post('/api/me/balance-add', auth, async (req, res) => {
+  const userId = req.user.sub;
+  const amount = Number(req.body?.amount);
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Некорректная сумма' });
+  try {
+    const { rows } = await query(
+      `UPDATE users
+          SET balance = COALESCE(balance,0) + $1,
+              updated_at = now()
+        WHERE id=$2
+        RETURNING balance`,
+      [amount, userId]
+    );
+    return res.json({ ok: true, balance: rows[0].balance });
+  } catch (e) {
+    console.error('balance-add error:', e);
+    res.status(500).json({ error: 'Не удалось пополнить' });
+  }
+});
+
 
 
 
