@@ -142,7 +142,7 @@ export default function Header() {
             >
               <MenuItem href="/trades" text="Мои Торги" />
               <MenuItem href="/account" text="Личный Кабинет" />
-              <MenuItem href="/settings" text="Настройки" />
+              <MenuItem href="/inspections" text="Мои Осмотры" />
               <MenuItem href="/support" text="Поддержка" />
               <MenuItem href="/favorites" text="Избранное" />
               <hr style={{ margin: 0, border: 'none', borderTop: `1px solid ${UI.menuBorder}` }} />
