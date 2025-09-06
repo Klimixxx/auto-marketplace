@@ -128,6 +128,18 @@ function admin(req, res, next) {
 // ===== Служебный =====
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Публичная статистика платформы
+app.get('/api/public-stats', async (req, res) => {
+  try {
+    const { rows: [{ c: users }] } = await query(`SELECT count(*)::int c FROM users`);
+    res.json({ users });
+  } catch (e) {
+    console.error('public-stats error:', e);
+    res.status(500).json({ error: 'Failed to load stats' });
+  }
+});
+
+
 // ===== Phone auth (MVP) =====
 
 
