@@ -73,7 +73,7 @@ export default function Header() {
   <img
     src="/logo.png"
     alt="AuctionAfto"
-    style={{ height: 40, width: 'auto', display: 'block' }}
+    style={{ height: 50, width: 'auto', display: 'block' }}
   />
 </a>
 
