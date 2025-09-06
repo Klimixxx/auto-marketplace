@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import FirstLoginModal from '../components/FirstLoginModal';
 
+const API = process.env.NEXT_PUBLIC_API_BASE;
+
 export default function Home() {
   const [q, setQ] = useState('');
+  const [stats, setStats] = useState(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!API) return;
+    fetch(`${API}/api/public-stats`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   function submit(e) {
     e.preventDefault();
@@ -29,6 +40,7 @@ export default function Home() {
     <div className="container" style={{ maxWidth: 1000 }}>
       <FirstLoginModal />
 
+      {/* Поиск */}
       <section style={{ margin: '32px 0' }}>
         <h1 style={{ color: UI.title, marginBottom: 8 }}>Найдите нужный лот</h1>
         <p style={{ color: UI.text, marginTop: 0 }}>Поиск по названию, номеру лота, источнику и т. п.</p>
@@ -60,6 +72,28 @@ export default function Home() {
         </form>
       </section>
 
+      {/* Статистика платформы */}
+      <section style={{ margin: '20px 0' }}>
+        <div style={{
+          background: UI.cardBg,
+          border: `1px solid ${UI.border}`,
+          borderRadius: 12,
+          padding: 16,
+          display: 'flex',
+          gap: 20,
+          alignItems: 'center'
+        }}>
+          <div style={{ flex: '0 0 auto' }}>
+            <div style={{ fontSize: 12, color: UI.text, opacity: 0.7 }}>Пользователей</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: UI.title }}>
+              {stats ? stats.users.toLocaleString('ru-RU') : '—'}
+            </div>
+          </div>
+          {/* Здесь позже добавим остальные метрики */}
+        </div>
+      </section>
+
+      {/* Инфо-блок */}
       <section style={{ margin: '24px 0' }}>
         <div className="card" style={{ padding: 16 }}>
           <h2 style={{ marginTop: 0 }}>Все торги — в одном месте</h2>
