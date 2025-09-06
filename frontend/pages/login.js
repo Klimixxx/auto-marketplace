@@ -1,11 +1,13 @@
 // pages/login.js
 import { useState, useEffect, useRef } from 'react';
+import PhoneInput, { toE164Ru } from '../components/PhoneInput';
+
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
 export default function Login() {
   const [step, setStep] = useState('phone'); // 'phone' → 'code'
-  const [phone, setPhone] = useState('');
+  const [phoneLocal, setPhoneLocal] = useState(''); // только 10 цифр без +7
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
@@ -79,14 +81,12 @@ export default function Login() {
 
       {step === 'phone' && (
         <form onSubmit={requestCode} className="card" style={{ display: 'grid', gap: 12 }}>
-          <input
-            className="input"
-            placeholder="+79XXXXXXXXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            inputMode="tel"
-            autoComplete="tel"
-          />
+          <PhoneInput
+  value={phoneLocal}
+  onChange={setPhoneLocal}
+  autoFocus
+/>
+
           {err && <div style={{ color: 'salmon' }}>{err}</div>}
           <button className="button" disabled={loading}>
             {loading ? 'Отправляю…' : 'Получить код'}
