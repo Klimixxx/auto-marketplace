@@ -28,52 +28,69 @@ export default function Login() {
   }, [cooldown]);
 
   async function requestCode(e) {
-    e?.preventDefault?.();
-    if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
-    setErr(''); setInfo(''); setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/auth/request-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error || 'Не удалось отправить SMS');
-      }
-      setStep('code');
-      setCooldown(30); // показать таймер 30 сек
-      // Если бэк в DRY-режиме — покажем тестовый код, иначе просто “отправлен”
-      setInfo(data.dry ? `Код отправлен! (тест: ${data.test})` : 'Код отправлен!');
-    } catch (e) {
-      setErr(e.message || 'Ошибка');
-    } finally {
+  e?.preventDefault?.();
+  if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
+  setErr(''); setInfo(''); setLoading(true);
+  try {
+    // <<< ВАЖНО: строим E.164 из локальных 10 цифр
+    const phone = toE164Ru(phoneLocal);
+    if (!phone) {
+      setErr('Введите номер полностью (10 цифр)');
       setLoading(false);
+      return;
     }
+
+    const res = await fetch(`${API}/api/auth/request-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || 'Не удалось отправить SMS');
+    }
+    setStep('code');
+    setCooldown(30);
+    setInfo(data.dry ? `Код отправлен! (тест: ${data.test})` : 'Код отправлен!');
+  } catch (e) {
+    setErr(e.message || 'Ошибка');
+  } finally {
+    setLoading(false);
   }
+}
+
 
   async function verifyCode(e) {
-    e.preventDefault();
-    if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
-    setErr(''); setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/auth/verify-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error || 'Ошибка проверки кода');
-      }
-      localStorage.setItem('token', data.token);
-      window.location.href = '/';
-    } catch (e) {
-      setErr(e.message || 'Ошибка проверки кода');
-    } finally {
+  e.preventDefault();
+  if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
+  setErr(''); setLoading(true);
+  try {
+    // <<< та же логика: из 10 локальных цифр делаем +7XXXXXXXXXX
+    const phone = toE164Ru(phoneLocal);
+    if (!phone) {
+      setErr('Номер неполный');
       setLoading(false);
+      return;
     }
+
+    const res = await fetch(`${API}/api/auth/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || 'Ошибка проверки кода');
+    }
+    localStorage.setItem('token', data.token);
+    window.location.href = '/';
+  } catch (e) {
+    setErr(e.message || 'Ошибка проверки кода');
+  } finally {
+    setLoading(false);
   }
+}
+
 
   return (
     <div className="container" style={{ maxWidth: 520, margin: '80px auto' }}>
@@ -88,15 +105,16 @@ export default function Login() {
 />
 
           {err && <div style={{ color: 'salmon' }}>{err}</div>}
-          <button className="button" disabled={loading}>
-            {loading ? 'Отправляю…' : 'Получить код'}
-          </button>
+          <button className="button" disabled={loading || phoneLocal.length !== 10}>
+  {loading ? 'Отправляю…' : 'Получить код'}
+</button>
+
         </form>
       )}
 
       {step === 'code' && (
         <form onSubmit={verifyCode} className="card" style={{ display: 'grid', gap: 12 }}>
-          <div>Телефон: <b>{phone}</b></div>
+          <div>Телефон: <b>{toE164Ru(phoneLocal) || ''}</b></div>
           <input
             ref={codeInputRef}
             className="input"
