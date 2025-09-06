@@ -69,9 +69,14 @@ export default function Header() {
         zIndex: 50,
       }}
     >
-      <a href="/" style={{ fontWeight: 800, letterSpacing: 0.2, color: UI.text, textDecoration: 'none' }}>
-        Auto Auctions Hub
-      </a>
+      <a href="/" style={{ display:'flex', alignItems:'center', textDecoration:'none', color: UI.text }}>
+  <img
+    src="/logo.png"
+    alt="AuctionAfto"
+    style={{ height: 36, width: 'auto', display: 'block' }}
+  />
+</a>
+
 
       <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <a href="/trades" style={{ color: UI.subtext, textDecoration: 'none' }}>Торги</a>
