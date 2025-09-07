@@ -18,56 +18,91 @@ export default function Account() {
 
   function setUser(u){ setMe(u); }
 
+  const UI = {
+    pageBg: 'linear-gradient(90deg, #0B1220 0%, #0E1A2E 100%)', // фон страницы как в шапке
+    title: '#E6EDF3',
+    muted: 'var(--muted)',
+    cardBg: 'rgba(255,255,255,0.03)',
+    cardBorder: 'rgba(255,255,255,0.08)',
+    accent: '#22C55E',
+    inputBorder: 'rgba(255,255,255,0.12)',
+  };
+
   return (
-    <div className="container" style={{ maxWidth: 760 }}>
-      <h1>Личный кабинет</h1>
+    <div style={{ background: UI.pageBg, minHeight: '100vh', padding: '16px 0 40px' }}>
+      <div className="container" style={{ maxWidth: 760 }}>
+        {/* Заголовок + иконка аккаунта слева */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.06)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: `1px solid ${UI.inputBorder}`,
+            }}
+          >
+            <IconUser size={18} color={UI.title} />
+          </span>
+          <h1 style={{ margin: 0, color: UI.title }}>Личный кабинет</h1>
+        </div>
 
-      {err && <div style={{ color: 'salmon' }}>{err}</div>}
-      {msg && <div style={{ color: 'lightgreen' }}>{msg}</div>}
-      {!me && !err && <div>Загрузка…</div>}
+        {err && <div style={{ color: 'salmon' }}>{err}</div>}
+        {msg && <div style={{ color: 'lightgreen' }}>{msg}</div>}
+        {!me && !err && <div>Загрузка…</div>}
 
-      {me && (
-        <>
-          <Section title="Информация об аккаунте">
-            <StaticRow label="ID пользователя" value={me.user_code} />
-            <EditRow label="Имя" field="name" value={me.name} onSaved={setUser} />
-            <EditRow label="Телефон" field="phone" value={me.phone} type="tel" onSaved={(u, token) => {
-              setUser(u); if (token) localStorage.setItem('token', token);
-            }} />
-            <EditRow label="Почта" field="email" value={me.email} type="email" addText="Добавить" onSaved={setUser} />
-          </Section>
+        {me && (
+          <>
+            <Section title="Информация об аккаунте">
+              <StaticRow label="ID пользователя" value={me.user_code} />
+              <EditRow label="Имя" field="name" value={me.name} onSaved={setUser} />
+              <EditRow label="Телефон" field="phone" value={me.phone} type="tel" onSaved={(u, token) => {
+                setUser(u); if (token) localStorage.setItem('token', token);
+              }} />
+              <EditRow label="Почта" field="email" value={me.email} type="email" addText="Добавить" onSaved={setUser} />
+            </Section>
 
-          <Section title="Баланс">
-            <BalanceRow balance={me.balance ?? 0} onChange={(newBal)=> setUser({ ...me, balance: newBal })} />
-          </Section>
+            <Section title="Баланс">
+              <BalanceRow balance={me.balance ?? 0} onChange={(newBal)=> setUser({ ...me, balance: newBal })} />
+            </Section>
 
-          <Section title="Поддержка">
-            <SupportItem
-              icon={<TelegramIcon/>}
-              label="Telegram"
-              value="@auctionafto"
-              href="https://t.me/auctionafto"
-            />
-            <SupportItem
-              icon={<MailIcon/>}
-              label="Почта"
-              value="tklimov01@gmail.com"
-              href="mailto:tklimov01@gmail.com"
-            />
-            <SupportItem
-              icon={<WhatsAppIcon/>}
-              label="WhatsApp"
-              value="+7 985 619-93-59"
-              href="https://wa.me/79856199359"
-            />
-            <SupportItem
-              icon={<ClockIcon/>}
-              label="Время работы"
-              value="Пн.–Пят. 10:00–20:00"
-            />
-          </Section>
-        </>
-      )}
+            {/* Поддержка с копированием и переходом по ссылке */}
+            <Section title="Поддержка">
+              <SupportItem
+                icon={<TelegramIcon/>}
+                label="Telegram"
+                value="@auctionafto"
+                copyText="@auctionafto"
+                href="https://t.me/auctionafto"
+              />
+              <SupportItem
+                icon={<MailIcon/>}
+                label="Почта"
+                value="tklimov01@gmail.com"
+                copyText="tklimov01@gmail.com"
+                href="mailto:tklimov01@gmail.com"
+              />
+              <SupportItem
+                icon={<WhatsAppIcon/>}
+                label="WhatsApp"
+                value="+7 985 619-93-59"
+                copyText="+79856199359"
+                href="https://wa.me/79856199359"
+              />
+              <SupportItem
+                icon={<ClockIcon/>}
+                label="Время работы"
+                value="Пн.–Пят. 10:00–20:00"
+                copyText="Пн.–Пят. 10:00–20:00"
+              />
+            </Section>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -212,14 +247,16 @@ function BalanceRow({ balance, onChange }) {
   );
 }
 
-/* -------- Support UI -------- */
-function SupportItem({ icon, label, value, href }) {
-  const Item = (
+/* ——— Support with copy ——— */
+function SupportItem({ icon, label, value, copyText, href }) {
+  const [copied, setCopied] = useState(false);
+
+  const body = (
     <div style={{
       display:'flex', alignItems:'center', gap:12,
       background:'rgba(255,255,255,0.03)',
       border:'1px solid rgba(255,255,255,0.08)',
-      borderRadius:12, padding:12
+      borderRadius:12, padding:12, position:'relative'
     }}>
       <div style={{
         width:38, height:38, borderRadius:10,
@@ -229,16 +266,53 @@ function SupportItem({ icon, label, value, href }) {
       }}>
         {icon}
       </div>
-      <div style={{ minWidth:0 }}>
+      <div style={{ minWidth:0, flex:1 }}>
         <div style={{ fontSize:12, color:'var(--muted)' }}>{label}</div>
-        <div style={{ fontWeight:700 }}>{value}</div>
+        {/* делаем текст селектируемым для ручного копирования */}
+        <div style={{ fontWeight:700, userSelect:'text', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {value}
+        </div>
       </div>
+      <button
+        className="button"
+        onClick={(e)=> {
+          e.preventDefault(); e.stopPropagation();
+          const text = (copyText ?? value) || '';
+          if (navigator?.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).then(()=>setCopied(true));
+          } else {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta);
+            ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            setCopied(true);
+          }
+          setTimeout(()=>setCopied(false), 1200);
+        }}
+        style={{ padding: '6px 10px' }}
+        title="Скопировать"
+      >
+        {copied ? 'Скопировано' : 'Копировать'}
+      </button>
     </div>
   );
-  return href ? <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration:'none', color:'inherit' }}>{Item}</a> : Item;
+
+  // Если есть ссылка — оборачиваем, но кнопка "Копировать" не даёт переходить (stopPropagation выше)
+  return href
+    ? <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration:'none', color:'inherit' }}>{body}</a>
+    : body;
 }
 
-/* Icons */
+/* ——— Icons ——— */
+function IconUser({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 12c2.761 0 5-2.686 5-6s-2.239-6-5-6-5 2.686-5 6 2.239 6 5 6Z"
+        transform="translate(0,4)" fill="none" stroke={color} strokeWidth="1.5"/>
+      <path d="M3 20c1.5-3.5 5-5 9-5s7.5 1.5 9 5" fill="none" stroke={color} strokeWidth="1.5"/>
+    </svg>
+  );
+}
 function TelegramIcon(){
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
