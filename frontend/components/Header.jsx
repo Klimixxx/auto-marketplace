@@ -69,7 +69,7 @@ export default function Header() {
       }}
     >
       <a href="/" style={{ display:'flex', alignItems:'center', textDecoration:'none', color: UI.text }}>
-        <img src="/logo.png" alt="AuctionAfto" style={{ height: 36, width: 'auto', display:'block' }} />
+        <img src="/logo.png" alt="AuctionAfto" style={{ height: 50, width: 'auto', display:'block' }} />
       </a>
 
       <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
