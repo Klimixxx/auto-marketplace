@@ -74,7 +74,7 @@ export default function Header() {
 
       <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <a href="/trades" style={{ color: UI.subtext, textDecoration: 'none' }}>Торги</a>
-        <a href="/account" style={{ color: UI.subtext, textDecoration: 'none' }}>Кабинет</a>
+        
 
         <div ref={ref} style={{ position: 'relative' }}>
           <button
