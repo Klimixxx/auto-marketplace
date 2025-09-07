@@ -35,6 +35,7 @@ export default function Home() {
     btnHover: '#1A2A44',
     btnText: '#E6EDF3',
     accent: '#22C55E',
+    red: '#EF4444',
   };
 
   const fmt = new Intl.NumberFormat('ru-RU');
@@ -105,19 +106,54 @@ export default function Home() {
             />
             <StatCard
               title="Публичные предложения"
-              value="—" // добавим позже
+              value="—"
               Icon={OffersIcon}
             />
             <StatCard
               title="Открытых аукционов"
-              value="—" // добавим позже
+              value="—"
               Icon={AuctionsIcon}
             />
             <StatCard
               title="Стоимость имущества в торгах"
-              value="—" // добавим позже (₽)
+              value="—"
               Icon={ValueIcon}
             />
+          </div>
+        </div>
+      </section>
+
+      {/* Обучение */}
+      <section style={{ margin: '28px 0' }}>
+        <div style={{
+          background: UI.cardBg,
+          border: `1px solid ${UI.border}`,
+          borderRadius: 12,
+          padding: 18,
+          display:'grid', gridTemplateColumns:'auto 1fr', gap:16, alignItems:'center'
+        }}>
+          <div style={{
+            width:56, height:56, borderRadius:14,
+            background:'rgba(34,197,94,0.08)',
+            border:'1px solid rgba(34,197,94,0.25)',
+            display:'flex', alignItems:'center', justifyContent:'center'
+          }}>
+            <EducationIcon />
+          </div>
+
+          <div>
+            <h2 style={{ margin:'0 0 6px', color: UI.title }}>
+              Обучение от платформы{' '}
+              <span style={{ color: '#fff' }}>
+                AuctionA<span style={{ color: UI.red }}>f</span>to
+              </span>
+            </h2>
+            <p style={{ margin:0, color: UI.text, lineHeight: 1.6 }}>
+              Мы готовим серию практических материалов по работе с публичными торгами:
+              как находить ликвидные лоты, быстро оценивать цену, оформлять участие и
+              снижать риски. В курс войдут разборы реальных кейсов, чек-листы и шаблоны
+              для работы с организаторами. Подпишитесь на обновления — старт уже скоро.
+            </p>
           </div>
         </div>
       </section>
@@ -136,8 +172,7 @@ export default function Home() {
   );
 }
 
-/* ———————— UI components ———————— */
-
+/* ——— UI helpers ——— */
 function StatCard({ title, value, Icon }) {
   return (
     <div style={{
@@ -148,7 +183,7 @@ function StatCard({ title, value, Icon }) {
     }}>
       <div style={{
         width:42, height:42, borderRadius:10,
-        background:'rgba(34,197,94,0.08)', // зелёный акцент под тему
+        background:'rgba(34,197,94,0.08)',
         border:'1px solid rgba(34,197,94,0.25)',
         display:'flex', alignItems:'center', justifyContent:'center'
       }}>
@@ -162,7 +197,7 @@ function StatCard({ title, value, Icon }) {
   );
 }
 
-/* ———————— Icons (SVG, тёмная стилистика) ———————— */
+/* ——— Icons ——— */
 function SearchIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
@@ -191,7 +226,6 @@ function OffersIcon() {
     </svg>
   );
 }
-
 function AuctionsIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
@@ -207,6 +241,16 @@ function ValueIcon() {
       <rect x="3" y="7" width="18" height="10" rx="2" stroke="#22C55E" strokeWidth="1.5"/>
       <path d="M7 12h10" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
       <circle cx="12" cy="12" r="2" stroke="#22C55E" strokeWidth="1.5"/>
+    </svg>
+  );
+}
+function EducationIcon() {
+  // «академическая шапочка»
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M3 9l9-4 9 4-9 4-9-4Z" stroke="#22C55E" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M7 12v4c0 .8 4 2 5 2s5-1.2 5-2v-4" stroke="#22C55E" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M21 10v5" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }
