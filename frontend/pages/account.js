@@ -40,6 +40,32 @@ export default function Account() {
           <Section title="Баланс">
             <BalanceRow balance={me.balance ?? 0} onChange={(newBal)=> setUser({ ...me, balance: newBal })} />
           </Section>
+
+          <Section title="Поддержка">
+            <SupportItem
+              icon={<TelegramIcon/>}
+              label="Telegram"
+              value="@auctionafto"
+              href="https://t.me/auctionafto"
+            />
+            <SupportItem
+              icon={<MailIcon/>}
+              label="Почта"
+              value="tklimov01@gmail.com"
+              href="mailto:tklimov01@gmail.com"
+            />
+            <SupportItem
+              icon={<WhatsAppIcon/>}
+              label="WhatsApp"
+              value="+7 985 619-93-59"
+              href="https://wa.me/79856199359"
+            />
+            <SupportItem
+              icon={<ClockIcon/>}
+              label="Время работы"
+              value="Пн.–Пят. 10:00–20:00"
+            />
+          </Section>
         </>
       )}
     </div>
@@ -183,5 +209,65 @@ function BalanceRow({ balance, onChange }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* -------- Support UI -------- */
+function SupportItem({ icon, label, value, href }) {
+  const Item = (
+    <div style={{
+      display:'flex', alignItems:'center', gap:12,
+      background:'rgba(255,255,255,0.03)',
+      border:'1px solid rgba(255,255,255,0.08)',
+      borderRadius:12, padding:12
+    }}>
+      <div style={{
+        width:38, height:38, borderRadius:10,
+        background:'rgba(34,197,94,0.08)',
+        border:'1px solid rgba(34,197,94,0.25)',
+        display:'flex', alignItems:'center', justifyContent:'center'
+      }}>
+        {icon}
+      </div>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:12, color:'var(--muted)' }}>{label}</div>
+        <div style={{ fontWeight:700 }}>{value}</div>
+      </div>
+    </div>
+  );
+  return href ? <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration:'none', color:'inherit' }}>{Item}</a> : Item;
+}
+
+/* Icons */
+function TelegramIcon(){
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M21 5L3 11l6 2" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M21 5l-6 16-3-7" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+function MailIcon(){
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="#22C55E" strokeWidth="1.6"/>
+      <path d="M3 7l9 6 9-6" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+function WhatsAppIcon(){
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M5 19l1.5-3.5A8 8 0 1 1 12 20a8.3 8.3 0 0 1-3.5-.8L5 19Z" stroke="#22C55E" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M9.5 9.5c.3 1.4 1.7 3 3.2 3.2M9 8c.5-.5 1.7-.5 2 0 .2.3 0 1-.3 1.3M12.7 12.7c.4.3 1 .5 1.3.3.5-.3.5-1.5 0-2" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+function ClockIcon(){
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
+      <circle cx="12" cy="12" r="8" stroke="#22C55E" strokeWidth="1.6"/>
+      <path d="M12 7v5l3 2" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
   );
 }
