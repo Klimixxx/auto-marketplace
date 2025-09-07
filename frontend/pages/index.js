@@ -34,10 +34,13 @@ export default function Home() {
     btnBg: '#152235',
     btnHover: '#1A2A44',
     btnText: '#E6EDF3',
+    accent: '#22C55E',
   };
 
+  const fmt = new Intl.NumberFormat('ru-RU');
+
   return (
-    <div className="container" style={{ maxWidth: 1000 }}>
+    <div className="container" style={{ maxWidth: 1100 }}>
       <FirstLoginModal />
 
       {/* Поиск */}
@@ -48,8 +51,17 @@ export default function Home() {
         <form onSubmit={submit}
           style={{
             background: UI.cardBg, border: `1px solid ${UI.border}`,
-            borderRadius: 12, padding: 14, display: 'flex', gap: 10
+            borderRadius: 12, padding: 12, display: 'flex', gap: 10, alignItems: 'center'
           }}>
+          {/* Иконка поиска слева */}
+          <span aria-hidden style={{
+            display:'inline-flex', alignItems:'center', justifyContent:'center',
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(255,255,255,0.06)', border: `1px solid ${UI.inputBorder}`
+          }}>
+            <SearchIcon />
+          </span>
+
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -73,23 +85,40 @@ export default function Home() {
       </section>
 
       {/* Статистика платформы */}
-      <section style={{ margin: '20px 0' }}>
+      <section style={{ margin: '22px 0' }}>
+        <h2 style={{ margin: '0 0 12px 2px', color: UI.title, letterSpacing: .2 }}>Статистика платформы</h2>
         <div style={{
           background: UI.cardBg,
           border: `1px solid ${UI.border}`,
           borderRadius: 12,
-          padding: 16,
-          display: 'flex',
-          gap: 20,
-          alignItems: 'center'
+          padding: 16
         }}>
-          <div style={{ flex: '0 0 auto' }}>
-            <div style={{ fontSize: 12, color: UI.text, opacity: 0.7 }}>Пользователей</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: UI.title }}>
-              {stats ? stats.users.toLocaleString('ru-RU') : '—'}
-            </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
+            gap: 12
+          }}>
+            <StatCard
+              title="Пользователей"
+              value={stats ? fmt.format(stats.users) : '—'}
+              Icon={UsersIcon}
+            />
+            <StatCard
+              title="Публичные предложения"
+              value="—" // добавим позже
+              Icon={OffersIcon}
+            />
+            <StatCard
+              title="Открытых аукционов"
+              value="—" // добавим позже
+              Icon={AuctionsIcon}
+            />
+            <StatCard
+              title="Стоимость имущества в торгах"
+              value="—" // добавим позже (₽)
+              Icon={ValueIcon}
+            />
           </div>
-          {/* Здесь позже добавим остальные метрики */}
         </div>
       </section>
 
@@ -104,5 +133,77 @@ export default function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+/* ———————— UI components ———————— */
+
+function StatCard({ title, value, Icon }) {
+  return (
+    <div style={{
+      display:'flex', gap:12, alignItems:'center',
+      background:'rgba(255,255,255,0.03)',
+      border:'1px solid rgba(255,255,255,0.08)',
+      borderRadius:12, padding:12, minHeight:72
+    }}>
+      <div style={{
+        width:42, height:42, borderRadius:10,
+        background:'rgba(34,197,94,0.08)', // зелёный акцент под тему
+        border:'1px solid rgba(34,197,94,0.25)',
+        display:'flex', alignItems:'center', justifyContent:'center'
+      }}>
+        <Icon />
+      </div>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:12, opacity:.8 }}> {title} </div>
+        <div style={{ fontSize:20, fontWeight:800 }}> {value} </div>
+      </div>
+    </div>
+  );
+}
+
+/* ———————— Icons (SVG, тёмная стилистика) ———————— */
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none">
+      <circle cx="11" cy="11" r="7" stroke="#E6EDF3" strokeWidth="1.5" />
+      <path d="M20 20L17 17" stroke="#E6EDF3" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function UsersIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M7 14c-3 0-5 2-5 5" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="7" cy="7" r="3.5" stroke="#22C55E" strokeWidth="1.5"/>
+      <path d="M17 14c-1.7 0-3.2.6-4.2 1.8" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="17" cy="7.5" r="3" stroke="#22C55E" strokeWidth="1.5"/>
+    </svg>
+  );
+}
+function OffersIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M3 11l9-8 9 8v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8Z" stroke="#22C55E" strokeWidth="1.5" />
+      <path d="M9 21v-7h6v7" stroke="#22C55E" strokeWidth="1.5" />
+    </svg>
+  );
+}
+function AuctionsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
+      <path d="M3 21h18" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M7 10l6 6 3-3-6-6-3 3Z" stroke="#22C55E" strokeWidth="1.5"/>
+      <path d="M14 5l5 5" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+function ValueIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
+      <rect x="3" y="7" width="18" height="10" rx="2" stroke="#22C55E" strokeWidth="1.5"/>
+      <path d="M7 12h10" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="2" stroke="#22C55E" strokeWidth="1.5"/>
+    </svg>
   );
 }
