@@ -182,13 +182,16 @@ function UsersIcon() {
   );
 }
 function OffersIcon() {
+  // иконка "лист бумаги" с загнутым уголком
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
-      <path d="M3 11l9-8 9 8v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8Z" stroke="#22C55E" strokeWidth="1.5" />
-      <path d="M9 21v-7h6v7" stroke="#22C55E" strokeWidth="1.5" />
+      <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="#22C55E" strokeWidth="1.5"/>
+      <path d="M14 3v5h5" stroke="#22C55E" strokeWidth="1.5"/>
+      <path d="M9 9h4M9 13h6M9 17h6" stroke="#22C55E" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   );
 }
+
 function AuctionsIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none">
