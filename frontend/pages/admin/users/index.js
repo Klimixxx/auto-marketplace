@@ -54,22 +54,54 @@ export default function AdminUsers() {
       {!loading && list.length === 0 && <div>Пользователи не найдены.</div>}
 
       {!loading && list.length > 0 && (
-        <div style={{ borderTop:'1px solid var(--line)' }}>
-          {list.map(u => (
-            <a key={u.user_code} href={`/admin/users/${u.user_code}`}
-               style={{ display:'grid', gridTemplateColumns:'1fr 160px 220px 170px 130px', gap:12, padding:'10px 0',
-                        borderBottom:'1px solid var(--line)', textDecoration:'none', color:'inherit' }}>
-              <div><b>{u.name || 'Без имени'}</b></div>
-              <div>{u.phone || '—'}</div>
-              <div>{u.email || '—'}</div>
-              <div style={{ fontSize:12, opacity:.8 }}>{new Date(u.created_at).toLocaleDateString('ru-RU')}</div>
-              <div style={{ fontSize:12 }}>
-                {u.subscription_status || 'free'}
-              </div>
-            </a>
-          ))}
+  <div>
+    {/* заголовки колонок */}
+    <div style={{
+      display:'grid',
+      gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+      gap:12,
+      padding:'10px 0',
+      borderTop:'1px solid var(--line)',
+      borderBottom:'1px solid var(--line)',
+      fontSize:12,
+      opacity:.8
+    }}>
+      <div>Имя</div>
+      <div>ID</div>
+      <div>Номер</div>
+      <div>Почта</div>
+      <div>Дата регистрации</div>
+      <div>Статус подписки</div>
+      <div></div> {/* колонка под кнопку */}
+    </div>
+
+    {/* строки */}
+    {list.map(u => (
+      <div key={u.user_code}
+           style={{
+             display:'grid',
+             gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+             gap:12, padding:'10px 0',
+             borderBottom:'1px solid var(--line)'
+           }}>
+        <div><b>{u.name || 'Без имени'}</b></div>
+        <div>{u.user_code}</div>
+        <div>{u.phone || '—'}</div>
+        <div>{u.email || '—'}</div>
+        <div style={{ fontSize:12, opacity:.8 }}>
+          {new Date(u.created_at).toLocaleDateString('ru-RU')}
         </div>
-      )}
+        <div style={{ fontSize:12 }}>
+          {u.subscription_status || 'free'}
+        </div>
+        <div>
+          <a className="button" href={`/admin/users/${u.user_code}`}>Профиль</a>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
     </AdminLayout>
   );
 }
