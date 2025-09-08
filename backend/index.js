@@ -313,6 +313,18 @@ if (!u.rows[0]) {
     return res.status(500).json({ error: 'Ошибка проверки кода' });
   }
 });
+// === логируем сессию пользователя ===
+try {
+  const ip = String((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')).split(',')[0].trim();
+  const device = String(req.headers['user-agent'] || '').slice(0, 300);
+  await query(
+    `INSERT INTO user_sessions(user_id, ip, device) VALUES ($1,$2,$3)`,
+    [user.id, ip || null, device || null]
+  );
+} catch (e) {
+  console.warn('session log error:', e.message);
+}
+
 
 
 
@@ -579,6 +591,96 @@ app.patch('/api/listings/:id', auth, admin, async (req, res) => {
     res.status(500).json({ error: 'Failed to update' });
   }
 });
+
+// === ADMIN: пользователи ===
+
+// список пользователей / поиск по ID (user_code)
+app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (/^\d{6}$/.test(q)) {
+      const { rows } = await query(`
+        SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
+          FROM users
+         WHERE user_code = $1
+      `, [q]);
+      return res.json({ items: rows });
+    }
+    const { rows } = await query(`
+      SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
+        FROM users
+       ORDER BY created_at DESC
+       LIMIT 500
+    `);
+    res.json({ items: rows });
+  } catch (e) {
+    console.error('admin users list error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// карточка пользователя
+app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.params.code || '');
+    const { rows } = await query(`
+      SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
+        FROM users WHERE user_code = $1
+    `, [code]);
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+
+    const user = rows[0];
+    const { rows: sessions } = await query(`
+      SELECT ip, city, device, created_at
+        FROM user_sessions
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 30
+    `, [user.id]);
+
+    res.json({ user, sessions });
+  } catch (e) {
+    console.error('admin user card error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// блокировка/разблокировка пользователя
+app.post('/api/admin/users/:code/block', auth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.params.code || '');
+    const block = Boolean(req.body?.block);
+    const { rows } = await query(`
+      UPDATE users SET is_blocked = $2, updated_at = now()
+       WHERE user_code = $1
+      RETURNING user_code, is_blocked
+    `, [code, block]);
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true, user: rows[0] });
+  } catch (e) {
+    console.error('admin block error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// заморозка/разморозка баланса
+app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.params.code || '');
+    const freeze = Boolean(req.body?.freeze);
+    const { rows } = await query(`
+      UPDATE users SET balance_frozen = $2, updated_at = now()
+       WHERE user_code = $1
+      RETURNING user_code, balance_frozen
+    `, [code, freeze]);
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true, user: rows[0] });
+  } catch (e) {
+    console.error('admin freeze error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 
 // ===== Ingest для парсера (UPSERT по source_id) =====
 app.post('/api/ingest', async (req, res) => {
