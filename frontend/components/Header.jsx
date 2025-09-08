@@ -36,9 +36,26 @@ export default function Header() {
     setAuthed(Boolean(token));
     if (token && API) {
       fetch(`${API}/api/me`, { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => (r.ok ? r.json() : null))
-        .then(setMe)
-        .catch(() => {});
+  .then(async (r) => {
+    let d = null;
+    try { d = await r.json(); } catch {}
+
+    // ⬇️ если аккаунт заблокирован — сразу вылогиниваем и уводим на /login
+    if (r.status === 403 && d?.error === 'blocked') {
+      localStorage.removeItem('token');
+      alert('Ваш аккаунт заблокирован. Свяжитесь с поддержкой.');
+      location.href = '/login';
+      return null;
+    }
+
+    // для любых неуспешных ответов вернём null (без падения)
+    if (!r.ok) return null;
+
+    return d;
+  })
+  .then(setMe)
+  .catch(() => {});
+
     }
   }, []);
 
