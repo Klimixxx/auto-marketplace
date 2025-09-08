@@ -107,18 +107,27 @@ function signToken(user) {
 }
 
 
-function auth(req, res, next) {
+async function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload;
-    next();
-  } catch {
+    req.user = payload; // { sub, phone, role }
+
+    // ⬇️ ДОБАВЛЕНО: мгновенная проверка блокировки
+    const { rows } = await query('SELECT is_blocked FROM users WHERE id = $1', [req.user.sub]);
+    if (rows[0]?.is_blocked) {
+      return res.status(403).json({ error: 'blocked' });
+    }
+
+    return next();
+  } catch (e) {
+    console.error('auth error:', e);
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
+
 
 // --- admin guard ---
 async function requireAdmin(req, res, next) {
@@ -269,7 +278,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
 
     // 4) Находим/создаём пользователя по телефону
-    let u = await query('SELECT id, phone, role, user_code, name, email FROM users WHERE phone=$1', [phone]);
+    let u = await query('SELECT id, phone, role, user_code, name, email, is_blocked FROM users WHERE phone=$1', [phone]);
 if (!u.rows[0]) {
   // пытаемся вставить с уникальным user_code (несколько попыток на случай коллизии)
   let userRow = null;
@@ -303,17 +312,16 @@ if (!u.rows[0]) {
 }
 
 
-    // 5) JWT
-    const user = u.rows[0];
-    const token = signToken({ id: user.id, phone: user.phone, role: user.role });
+// 5) Проверка блокировки
+const user = u.rows[0];
+if (user?.is_blocked) {
+  return res.status(403).json({
+    ok: false,
+    error: 'Ваш аккаунт заблокирован. Свяжитесь с поддержкой.'
+  });
+}
 
-    return res.json({ ok: true, token });
-  } catch (e) {
-    console.error('verify-code error:', e);
-    return res.status(500).json({ error: 'Ошибка проверки кода' });
-  }
-});
-// === логируем сессию пользователя ===
+// 6) Логируем сессию до ответа
 try {
   const ip = String((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')).split(',')[0].trim();
   const device = String(req.headers['user-agent'] || '').slice(0, 300);
@@ -324,6 +332,16 @@ try {
 } catch (e) {
   console.warn('session log error:', e.message);
 }
+
+// 7) Выдаём токен
+const token = signToken({ id: user.id, phone: user.phone, role: user.role });
+return res.json({ ok: true, token });
+
+  } catch (e) {
+    console.error('verify-code error:', e);
+    return res.status(500).json({ error: 'Ошибка проверки кода' });
+  }
+});
 
 
 
@@ -569,13 +587,14 @@ app.get('/api/me/favorites', auth, async (req, res) => {
 });
 
 // ===== Admin =====
-app.get('/api/admin/stats', auth, admin, async (req, res) => {
+app.get('/api/admin/listings-stats', auth, admin, async (req, res) => {
   const [{ rows: [{ c: total }] }, { rows: [{ c: active }] }] = await Promise.all([
     query('SELECT count(*)::int c FROM listings', []),
     query('SELECT count(*)::int c FROM listings WHERE published = TRUE', [])
   ]);
   res.json({ total, active });
 });
+
 
 app.patch('/api/listings/:id', auth, admin, async (req, res) => {
   const { id } = req.params; const { published } = req.body || {};
