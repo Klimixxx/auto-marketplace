@@ -36,10 +36,8 @@ export default function AdminLayout({ me, title, children }) {
   };
 
   return (
-    <div className="container" style={{ maxWidth: 1200 }}>
-      {/* ЛЕВОЕ меню + ПРАВЫЙ контент */}
-      <div style={{ display:'grid', gridTemplateColumns:'280px 1fr', gap:16, alignItems:'start' }}>
-        {/* ЛЕВАЯ колонка — меню */}
+    <div className="container" style={{ maxWidth: 1280 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'220px 1fr', gap:16, alignItems:'start' }}>
         <aside>
           <div style={{
             background: UI.menuBg,
@@ -49,7 +47,7 @@ export default function AdminLayout({ me, title, children }) {
             display:'grid',
             gap:12,
             position:'sticky',
-            top: 86, // чтобы меню держалось под шапкой
+            top: 86,
           }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span
@@ -63,7 +61,7 @@ export default function AdminLayout({ me, title, children }) {
                 <IconUser size={18} color={UI.title} />
               </span>
               <div>
-                <div style={{ color: UI.title, fontWeight:700, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                <div style={{ color: UI.title, fontWeight:700, maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                   {me?.name || 'Администратор'}
                 </div>
                 <div style={{ color: UI.text, fontSize:12, opacity:.8 }}>ID: {me?.user_code || '—'}</div>
@@ -73,13 +71,13 @@ export default function AdminLayout({ me, title, children }) {
             <div style={{ height:1, background: UI.menuBorder }} />
 
             <nav style={{ display:'grid', gap:8 }}>
-              <NavLink href="/admin/dashboard">Дешборд</NavLink>
+              <NavLink href="/admin/stats">Статистика</NavLink>
+              <NavLink href="/admin/users">Пользователи</NavLink>
               <NavLink href="/admin/admins">Администраторы</NavLink>
             </nav>
           </div>
         </aside>
 
-        {/* ПРАВАЯ колонка — контент */}
         <main>
           <h1 style={{ color: UI.title, marginBottom: 10 }}>{title}</h1>
           <div style={{ background:UI.cardBg, border:`1px solid ${UI.border}`, borderRadius:12, padding:16 }}>
@@ -100,4 +98,3 @@ function IconUser({ size = 20, color = 'currentColor' }) {
     </svg>
   );
 }
-
