@@ -120,6 +120,19 @@ function auth(req, res, next) {
   }
 }
 
+// --- admin guard ---
+async function requireAdmin(req, res, next) {
+  try {
+    const { rows } = await query('SELECT role FROM users WHERE id = $1', [req.user.sub]);
+    if (rows[0]?.role === 'admin') return next();
+    return res.status(403).json({ error: 'admin only' });
+  } catch (e) {
+    console.error('requireAdmin error:', e);
+    return res.status(500).json({ error: 'internal' });
+  }
+}
+
+
 function admin(req, res, next) {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   next();
@@ -127,6 +140,23 @@ function admin(req, res, next) {
 
 // ===== Служебный =====
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Публичный трекер посещений (1 раз за сессию с фронта)
+app.post('/api/track/visit', async (req, res) => {
+  try {
+    await query(
+      `INSERT INTO visits_daily(day, cnt)
+         VALUES (CURRENT_DATE, 1)
+       ON CONFLICT (day)
+       DO UPDATE SET cnt = visits_daily.cnt + 1, updated_at = now()`
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('track visit error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 
 // Публичная статистика платформы
 app.get('/api/public-stats', async (req, res) => {
@@ -426,6 +456,72 @@ app.patch('/api/me', auth, async (req, res) => {
   }
   res.json({ ok: true, user: u, token });
 });
+
+// === Admin API ===
+
+// список админов
+app.get('/api/admin/admins', auth, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT user_code, name, phone, email, created_at
+         FROM users
+        WHERE role = 'admin'
+        ORDER BY created_at ASC`
+    );
+    res.json({ items: rows });
+  } catch (e) {
+    console.error('admins list error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// добавить админа по ID (6 цифр user_code)
+app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
+  const code = String(req.body?.user_code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
+
+  try {
+    const { rows } = await query(
+      `UPDATE users
+          SET role = 'admin', updated_at = now()
+        WHERE user_code = $1
+        RETURNING id, user_code, name, phone, role`,
+      [code]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json({ ok: true, user: rows[0] });
+  } catch (e) {
+    console.error('add admin error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// статистика для дешборда
+app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
+  try {
+    const [{ rows: [{ c: users }] }, { rows: visits }] = await Promise.all([
+      query(`SELECT count(*)::int c FROM users`),
+      query(
+        `SELECT day, cnt
+           FROM visits_daily
+          WHERE day >= CURRENT_DATE - INTERVAL '29 days'
+          ORDER BY day ASC`
+      ),
+    ]);
+    const map = new Map(visits.map(v => [String(v.day), v.cnt]));
+    const out = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0,10);
+      out.push({ day: iso, cnt: map.get(iso) || 0 });
+    }
+    res.json({ users, visits: out });
+  } catch (e) {
+    console.error('admin stats error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 
 // Пополнение баланса (временный dev-эндпоинт)
 app.post('/api/me/balance-add', auth, async (req, res) => {
