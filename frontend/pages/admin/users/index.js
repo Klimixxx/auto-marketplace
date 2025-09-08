@@ -7,6 +7,10 @@ export default function AdminUsers() {
   const [list, setList] = useState([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 20;
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -19,17 +23,23 @@ export default function AdminUsers() {
 
   useEffect(() => {
     if (!me) return;
-    load();
-  }, [me]);
+    load(page);
+  }, [me, page]);
 
-  async function load(qStr='') {
+  async function load(pageNum=1, qStr='') {
     setLoading(true);
     const token = localStorage.getItem('token');
-    const url = qStr ? `${API}/api/admin/users?q=${encodeURIComponent(qStr)}` : `${API}/api/admin/users`;
-    fetch(url, { headers: { Authorization:'Bearer '+token } })
-      .then(r=>r.json())
-      .then(d=>setList(d.items || []))
-      .finally(()=>setLoading(false));
+    const params = new URLSearchParams();
+    params.set('page', pageNum);
+    params.set('limit', limit);
+    if (qStr) params.set('q', qStr);
+    const url = `${API}/api/admin/users?` + params.toString();
+    const r = await fetch(url, { headers: { Authorization:'Bearer '+token } });
+    const d = await r.json();
+    setList(d.items || []);
+    setPages(d.pages || 1);
+    setTotal(d.total || 0);
+    setLoading(false);
   }
 
   function submit(e){
@@ -38,8 +48,29 @@ export default function AdminUsers() {
     if (/^\d{6}$/.test(id)) {
       location.href = `/admin/users/${id}`;
     } else {
-      load(id);
+      setPage(1);
+      load(1, id);
     }
+  }
+
+  function Pager() {
+    if (pages <= 1) return null;
+    const items = [];
+    const maxButtons = 7;
+    const start = Math.max(1, Math.min(page - 3, pages - maxButtons + 1));
+    const end = Math.min(pages, start + maxButtons - 1);
+    const go = (p) => { if (p>=1 && p<=pages) setPage(p); };
+    items.push(<button key="prev" className="button" onClick={()=>go(page-1)} disabled={page<=1}>←</button>);
+    for (let p=start; p<=end; p++) {
+      items.push(
+        <button key={p} className="button" onClick={()=>go(p)}
+          style={{ background: p===page ? 'rgba(34,197,94,0.15)' : undefined, fontWeight: p===page ? 700 : 500 }}>
+          {p}
+        </button>
+      );
+    }
+    items.push(<button key="next" className="button" onClick={()=>go(page+1)} disabled={page>=pages}>→</button>);
+    return <div style={{ display:'flex', gap:8, marginTop:12 }}>{items}</div>;
   }
 
   return (
@@ -54,54 +85,59 @@ export default function AdminUsers() {
       {!loading && list.length === 0 && <div>Пользователи не найдены.</div>}
 
       {!loading && list.length > 0 && (
-  <div>
-    {/* заголовки колонок */}
-    <div style={{
-      display:'grid',
-      gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
-      gap:12,
-      padding:'10px 0',
-      borderTop:'1px solid var(--line)',
-      borderBottom:'1px solid var(--line)',
-      fontSize:12,
-      opacity:.8
-    }}>
-      <div>Имя</div>
-      <div>ID</div>
-      <div>Номер</div>
-      <div>Почта</div>
-      <div>Дата регистрации</div>
-      <div>Статус подписки</div>
-      <div></div> {/* колонка под кнопку */}
-    </div>
-
-    {/* строки */}
-    {list.map(u => (
-      <div key={u.user_code}
-           style={{
-             display:'grid',
-             gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
-             gap:12, padding:'10px 0',
-             borderBottom:'1px solid var(--line)'
-           }}>
-        <div><b>{u.name || 'Без имени'}</b></div>
-        <div>{u.user_code}</div>
-        <div>{u.phone || '—'}</div>
-        <div>{u.email || '—'}</div>
-        <div style={{ fontSize:12, opacity:.8 }}>
-          {new Date(u.created_at).toLocaleDateString('ru-RU')}
-        </div>
-        <div style={{ fontSize:12 }}>
-          {u.subscription_status || 'free'}
-        </div>
         <div>
-          <a className="button" href={`/admin/users/${u.user_code}`}>Профиль</a>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
+          {/* заголовки колонок */}
+          <div style={{
+            display:'grid',
+            gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+            gap:12,
+            padding:'10px 0',
+            borderTop:'1px solid var(--line)',
+            borderBottom:'1px solid var(--line)',
+            fontSize:12,
+            opacity:.8
+          }}>
+            <div>Имя</div>
+            <div>ID</div>
+            <div>Номер</div>
+            <div>Почта</div>
+            <div>Дата регистрации</div>
+            <div>Статус подписки</div>
+            <div></div>
+          </div>
 
+          {/* строки */}
+          {list.map(u => (
+            <div key={u.user_code}
+              style={{
+                display:'grid',
+                gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+                gap:12, padding:'10px 0',
+                borderBottom:'1px solid var(--line)'
+              }}>
+              <div><b>{u.name || 'Без имени'}</b></div>
+              <div>{u.user_code}</div>
+              <div>{u.phone || '—'}</div>
+              <div>{u.email || '—'}</div>
+              <div style={{ fontSize:12, opacity:.8 }}>
+                {new Date(u.created_at).toLocaleDateString('ru-RU')}
+              </div>
+              <div style={{ fontSize:12 }}>
+                {u.subscription_status || 'free'}
+              </div>
+              <div>
+                <a className="button" href={`/admin/users/${u.user_code}`}>Профиль</a>
+              </div>
+            </div>
+          ))}
+
+          <Pager />
+
+          <div style={{ marginTop:6, fontSize:12, opacity:.7 }}>
+            Всего: {total.toLocaleString('ru-RU')}, страниц: {pages}
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
