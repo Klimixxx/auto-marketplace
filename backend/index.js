@@ -614,29 +614,41 @@ app.patch('/api/listings/:id', auth, admin, async (req, res) => {
 // === ADMIN: пользователи ===
 
 // список пользователей / поиск по ID (user_code)
+// список пользователей с пагинацией ?page=1&limit=20 и/или точным поиском по ID (?q=123456)
 app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
+    const offset = (page - 1) * limit;
+
+    // Если точный поиск по user_code (6 цифр) — возвращаем одного/нескольких и без пагинации
     if (/^\d{6}$/.test(q)) {
       const { rows } = await query(`
         SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
           FROM users
          WHERE user_code = $1
       `, [q]);
-      return res.json({ items: rows });
+      return res.json({ items: rows, page: 1, pages: 1, total: rows.length });
     }
-    const { rows } = await query(`
+
+    // Общий список с пагинацией
+    const { rows: [{ c: total }] } = await query(`SELECT count(*)::int c FROM users`);
+    const { rows: items } = await query(`
       SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
         FROM users
        ORDER BY created_at DESC
-       LIMIT 500
-    `);
-    res.json({ items: rows });
+       LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+
+    const pages = Math.max(1, Math.ceil(total / limit));
+    res.json({ items, page, pages, total, limit });
   } catch (e) {
     console.error('admin users list error:', e);
     res.status(500).json({ error: 'failed' });
   }
 });
+
 
 // карточка пользователя
 app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
@@ -699,6 +711,51 @@ app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req
     res.status(500).json({ error: 'failed' });
   }
 });
+
+// === ADMIN: отправить уведомление пользователю ===
+// body: { user_code: '123456', title: '...', body: '...' }
+app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.body?.user_code || '').trim();
+    const title = String(req.body?.title || '').trim();
+    const body = String(req.body?.body || '').trim();
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
+    if (!title || !body) return res.status(400).json({ error: 'Введите заголовок и описание' });
+
+    const { rows: u } = await query(`SELECT id FROM users WHERE user_code = $1`, [code]);
+    if (!u.length) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    await query(
+      `INSERT INTO user_notifications(user_id, title, body) VALUES ($1,$2,$3)`,
+      [u[0].id, title, body]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('admin notify error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// === USER: получить свои уведомления (с лимитом) ===
+// GET /api/notifications?limit=50
+app.get('/api/notifications', auth, async (req, res) => {
+  try {
+    const lim = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10)));
+    const { rows } = await query(
+      `SELECT id, title, body, created_at, read_at
+         FROM user_notifications
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [req.user.sub, lim]
+    );
+    res.json({ items: rows });
+  } catch (e) {
+    console.error('get notifications error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 
 
 // ===== Ingest для парсера (UPSERT по source_id) =====
