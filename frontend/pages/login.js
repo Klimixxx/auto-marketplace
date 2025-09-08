@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import PhoneInput, { toE164Ru } from '../components/PhoneInput';
 
-
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
 export default function Login() {
@@ -28,69 +27,76 @@ export default function Login() {
   }, [cooldown]);
 
   async function requestCode(e) {
-  e?.preventDefault?.();
-  if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
-  setErr(''); setInfo(''); setLoading(true);
-  try {
-    // <<< ВАЖНО: строим E.164 из локальных 10 цифр
-    const phone = toE164Ru(phoneLocal);
-    if (!phone) {
-      setErr('Введите номер полностью (10 цифр)');
+    e?.preventDefault?.();
+    if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
+    setErr(''); setInfo(''); setLoading(true);
+    try {
+      // номер в E.164 из локальных 10 цифр
+      const phone = toE164Ru(phoneLocal);
+      if (!phone) {
+        setErr('Введите номер полностью (10 цифр)');
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${API}/api/auth/request-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || 'Не удалось отправить SMS');
+      }
+      setStep('code');
+      setCooldown(30);
+      setInfo(data.dry ? `Код отправлен! (тест: ${data.test})` : 'Код отправлен!');
+    } catch (e) {
+      setErr(e.message || 'Ошибка');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const res = await fetch(`${API}/api/auth/request-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.ok === false) {
-      throw new Error(data.error || 'Не удалось отправить SMS');
-    }
-    setStep('code');
-    setCooldown(30);
-    setInfo(data.dry ? `Код отправлен! (тест: ${data.test})` : 'Код отправлен!');
-  } catch (e) {
-    setErr(e.message || 'Ошибка');
-  } finally {
-    setLoading(false);
   }
-}
-
 
   async function verifyCode(e) {
-  e.preventDefault();
-  if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
-  setErr(''); setLoading(true);
-  try {
-    // <<< та же логика: из 10 локальных цифр делаем +7XXXXXXXXXX
-    const phone = toE164Ru(phoneLocal);
-    if (!phone) {
-      setErr('Номер неполный');
+    e.preventDefault();
+    if (!API) return setErr('API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.');
+    setErr(''); setLoading(true);
+    try {
+      // тот же формат номера
+      const phone = toE164Ru(phoneLocal);
+      if (!phone) {
+        setErr('Номер неполный');
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${API}/api/auth/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await res.json();
+
+      // ⬇️ ключевая вставка: если аккаунт заблокирован — не логиним, показываем текст
+      if (res.status === 403 && data?.error) {
+        setStep('phone');
+        setCode('');
+        setErr(data.error); // "Ваш аккаунт заблокирован. Свяжитесь с поддержкой."
+        return;
+      }
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || 'Ошибка проверки кода');
+      }
+      localStorage.setItem('token', data.token);
+      window.location.href = '/';
+    } catch (e) {
+      setErr(e.message || 'Ошибка проверки кода');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const res = await fetch(`${API}/api/auth/verify-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.ok === false) {
-      throw new Error(data.error || 'Ошибка проверки кода');
-    }
-    localStorage.setItem('token', data.token);
-    window.location.href = '/';
-  } catch (e) {
-    setErr(e.message || 'Ошибка проверки кода');
-  } finally {
-    setLoading(false);
   }
-}
-
 
   return (
     <div className="container" style={{ maxWidth: 520, margin: '80px auto' }}>
@@ -99,16 +105,15 @@ export default function Login() {
       {step === 'phone' && (
         <form onSubmit={requestCode} className="card" style={{ display: 'grid', gap: 12 }}>
           <PhoneInput
-  value={phoneLocal}
-  onChange={setPhoneLocal}
-  autoFocus
-/>
+            value={phoneLocal}
+            onChange={setPhoneLocal}
+            autoFocus
+          />
 
           {err && <div style={{ color: 'salmon' }}>{err}</div>}
           <button className="button" disabled={loading || phoneLocal.length !== 10}>
-  {loading ? 'Отправляю…' : 'Получить код'}
-</button>
-
+            {loading ? 'Отправляю…' : 'Получить код'}
+          </button>
         </form>
       )}
 
