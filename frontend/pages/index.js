@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import FirstLoginModal from '../components/FirstLoginModal';
 
@@ -88,7 +88,7 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
   const [edit, setEdit] = useState(false);
   const [hover, setHover] = useState(null); // {x,y, code,title}
   const [drag, setDrag] = useState(null);   // {type:'vertex'|'label', rIdx, pIdx}
-  const svgRef = React.useRef(null);
+  const svgRef = useRef(null);
 
   const num = (k) => (data[k] ?? '—');
 
