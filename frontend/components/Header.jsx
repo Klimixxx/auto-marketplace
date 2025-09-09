@@ -1,3 +1,4 @@
+// components/Header.jsx
 import { useEffect, useState, useRef } from 'react';
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
@@ -15,8 +16,7 @@ function IconUser({ size = 20, color = 'currentColor' }) {
 export default function Header() {
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const UI = {
     headerBg: 'linear-gradient(90deg, #0B1220 0%, #0E1A2E 100%)',
@@ -27,8 +27,11 @@ export default function Header() {
     buttonHover: '#1A2A44',
     buttonBorder: 'rgba(255,255,255,0.10)',
     accent: '#22C55E',
+    chipBg: 'rgba(255,255,255,0.06)',
+    chipBorder: 'rgba(255,255,255,0.12)',
     menuBg: '#0F172A',
     menuBorder: 'rgba(255,255,255,0.10)',
+    line: 'rgba(255,255,255,0.08)',
   };
 
   useEffect(() => {
@@ -36,34 +39,28 @@ export default function Header() {
     setAuthed(Boolean(token));
     if (token && API) {
       fetch(`${API}/api/me`, { headers: { Authorization: 'Bearer ' + token } })
-  .then(async (r) => {
-    let d = null;
-    try { d = await r.json(); } catch {}
-
-    // ⬇️ если аккаунт заблокирован — сразу вылогиниваем и уводим на /login
-    if (r.status === 403 && d?.error === 'blocked') {
-      localStorage.removeItem('token');
-      alert('Ваш аккаунт заблокирован. Свяжитесь с поддержкой.');
-      location.href = '/login';
-      return null;
-    }
-
-    // для любых неуспешных ответов вернём null (без падения)
-    if (!r.ok) return null;
-
-    return d;
-  })
-  .then(setMe)
-  .catch(() => {});
-
+        .then(async (r) => {
+          let d = null;
+          try { d = await r.json(); } catch {}
+          // если аккаунт заблокирован — сразу вылогиниваем и уводим на /login
+          if (r.status === 403 && d?.error === 'blocked') {
+            localStorage.removeItem('token');
+            alert('Ваш аккаунт заблокирован. Свяжитесь с поддержкой.');
+            location.href = '/login';
+            return null;
+          }
+          if (!r.ok) return null;
+          return d;
+        })
+        .then(setMe)
+        .catch(() => {});
     }
   }, []);
 
-  useEffect(() => {
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('click', onDoc);
-    return () => document.removeEventListener('click', onDoc);
-  }, []);
+  function logout() {
+    localStorage.removeItem('token');
+    location.href = '/';
+  }
 
   const username = me?.name || (authed ? 'Аккаунт' : 'Войти');
   const balance = typeof me?.balance === 'number' ? me.balance : 0;
@@ -71,7 +68,6 @@ export default function Header() {
 
   return (
     <header
-      className="header"
       style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -85,23 +81,49 @@ export default function Header() {
         zIndex: 50,
       }}
     >
+      {/* ЛОГО */}
       <a href="/" style={{ display:'flex', alignItems:'center', textDecoration:'none', color: UI.text }}>
         <img src="/logo.png" alt="AuctionAfto" style={{ height: 50, width: 'auto', display:'block' }} />
       </a>
 
+      {/* НАВИГАЦИЯ */}
       <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <a href="/trades" style={{ color: UI.subtext, textDecoration: 'none' }}>Торги</a>
-          {me?.role === 'admin' && (
-    <a href="/admin" style={{ color: UI.subtext, textDecoration: 'none' }}>
-      Админ Панель
-    </a>
-  )}
+        {me?.role === 'admin' && (
+          <a href="/admin" style={{ color: UI.subtext, textDecoration: 'none' }}>
+            Админ Панель
+          </a>
+        )}
+      </nav>
 
-        
+      {/* ПРАВАЯ ПАНЕЛЬ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Баланс (виден, если залогинен) */}
+        {me && (
+          <div
+            title="Актуальный баланс"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 10px',
+              background: UI.chipBg,
+              border: `1px solid ${UI.chipBorder}`,
+              borderRadius: 10,
+              fontWeight: 700,
+            }}
+          >
+            <span style={{ opacity: .85 }}>{fmtRub.format(balance)}</span>
+          </div>
+        )}
 
-        <div ref={ref} style={{ position: 'relative' }}>
+        {/* Колокольчик уведомлений (только если залогинен) */}
+        {authed && <NotificationsBell />}
+
+        {/* Аккаунт */}
+        <div style={{ position: 'relative' }}>
           <button
-            onClick={() => (authed ? setOpen(o => !o) : (location.href = '/login'))}
+            onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
             title={authed ? 'Открыть меню' : 'Войти'}
             style={{
               display: 'flex',
@@ -146,7 +168,7 @@ export default function Header() {
           </button>
 
           {/* Выпадающее меню */}
-          {authed && open && (
+          {authed && menuOpen && (
             <div
               style={{
                 position: 'absolute',
@@ -161,7 +183,7 @@ export default function Header() {
                 overflow: 'hidden',
               }}
             >
-              {/* ВЕРХНЯЯ ПЛАШКА: баланс + иконка + имя */}
+              {/* Верхняя плашка: иконка + имя + баланс */}
               <div style={{
                 display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
                 borderBottom:`1px solid ${UI.menuBorder}`, background:'rgba(255,255,255,0.03)'
@@ -184,14 +206,14 @@ export default function Header() {
               </div>
 
               {/* Пункты меню */}
-              <MenuItem href="/trades" text="Мои Торги" />
+              <MenuItem href="/my-trades" text="Мои Торги" />
               <MenuItem href="/account" text="Личный Кабинет" />
               <MenuItem href="/inspections" text="Мои Осмотры" />
               <MenuItem href="/support" text="Поддержка" />
               <MenuItem href="/favorites" text="Избранное" />
               <hr style={{ margin: 0, border: 'none', borderTop: `1px solid ${UI.menuBorder}` }} />
               <button
-                onClick={() => { localStorage.removeItem('token'); location.href = '/'; }}
+                onClick={logout}
                 style={{
                   width: '100%',
                   textAlign: 'left',
@@ -207,11 +229,97 @@ export default function Header() {
             </div>
           )}
         </div>
-      </nav>
+      </div>
     </header>
   );
 }
 
+/* ===== Колокольчик уведомлений ===== */
+function NotificationsBell() {
+  const API = process.env.NEXT_PUBLIC_API_BASE;
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onDoc(e) {
+      if (!ref.current) return;
+      if (!ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const token = localStorage.getItem('token');
+    if (!token || !API) return;
+    fetch(`${API}/api/notifications?limit=5`, { headers: { Authorization: 'Bearer ' + token } })
+      .then((r) => r.json())
+      .then((d) => setItems(d.items || []))
+      .catch(() => {});
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Уведомления"
+        style={{
+          padding: '8px 12px',
+          background: '#152235',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderRadius: 10,
+          cursor: 'pointer',
+          color: '#E6EDF3',
+        }}
+      >
+        🔔
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: '110%',
+            width: 320,
+            background: 'rgba(15,23,42,1)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            padding: 8,
+            zIndex: 60,
+          }}
+        >
+          <div style={{ padding: '6px 8px', fontWeight: 700 }}>Уведомления</div>
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+          {items.length === 0 && <div style={{ padding: 10, opacity: .8 }}>Пока пусто</div>}
+          {items.map((n) => (
+            <a
+              key={n.id}
+              href="/notifications"
+              style={{ display: 'block', padding: '8px 10px', textDecoration: 'none', color: 'inherit', borderRadius: 8 }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{n.title}</div>
+              <div style={{ fontSize: 12, opacity: .8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {n.body}
+              </div>
+              <div style={{ fontSize: 11, opacity: .6, marginTop: 4 }}>
+                {new Date(n.created_at).toLocaleString('ru-RU')}
+              </div>
+            </a>
+          ))}
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 0' }} />
+          <a href="/notifications" className="button" style={{ width: '100%', textAlign: 'center' }}>
+            Все уведомления
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===== Вспомогалки ===== */
 function MenuItem({ href, text }) {
   return (
     <a
