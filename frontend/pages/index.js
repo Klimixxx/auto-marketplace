@@ -126,7 +126,7 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
   ];
 
   // Тултип
-  const [hover, setHover] = React.useState(null); // {x,y, code,title}
+  const [hover, setHover] = useState(null); // {x,y, code,title}
   const onMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setHover((h) => h ? { ...h, x: e.clientX - rect.left, y: e.clientY - rect.top } : h);
@@ -160,7 +160,7 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="xMidYMid meet"
           style={{
-            position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none'
+            position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1
           }}
           onMouseMove={onMove}
         >
