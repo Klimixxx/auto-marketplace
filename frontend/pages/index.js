@@ -38,99 +38,118 @@ export default function Home() {
     red: '#EF4444',
   };
 
-  // === PNG-карта России + SVG-оверлей по федеральным округам ===
+  // === PNG-карта + SVG-оверлей с режимом редактирования ===
 function RussiaImageFOOverlay({ onSelect, data = {} }) {
-  // Размер исходного PNG (важно для корректного перекрытия)
-  const W = 1120; // ширина исходника
-  const H = 639;  // высота исходника
+  const W = 1120;
+  const H = 639;
 
-  // Заглушки чисел (подставятся из data)
-  const num = (k) => (data[k] ?? '—');
-
-  // Зоны — полигоны по ФО (координаты в пикселях под viewBox 1120×639).
-  // Эти полигоны уже «лежать» поверх областей на твоей картинке (приближённо).
-  // Хочешь точнее — просто подвинь вершины (x,y) нужного полигона.
-  const regions = [
-    {
-      code: 'nwfo',
-      title: 'Северо-Западный ФО',
-      points: [
-        [80,280],[200,240],[280,260],[290,300],[250,330],[190,335],[140,320]
-      ],
-      label:[210,300],
+  // исходные зоны (как раньше)
+  const initialRegions = [
+    { code: 'nwfo', title: 'Северо-Западный ФО',
+      points: [[80,280],[200,240],[280,260],[290,300],[250,330],[190,335],[140,320]],
+      label: [210,300],
     },
-    {
-      code: 'cfo',
-      title: 'Центральный ФО',
-      points: [
-        [250,315],[330,305],[380,315],[370,345],[320,360],[275,348]
-      ],
-      label:[325,338],
+    { code: 'cfo', title: 'Центральный ФО',
+      points: [[250,315],[330,305],[380,315],[370,345],[320,360],[275,348]],
+      label: [325,338],
     },
-    {
-      code: 'mo',
-      title: 'Московская область',
-      points: [
-        [350,327],[365,327],[375,337],[368,350],[352,350],[344,338]
-      ],
-      label:[360,345],
+    { code: 'mo', title: 'Московская область',
+      points: [[350,327],[365,327],[375,337],[368,350],[352,350],[344,338]],
+      label: [360,345],
     },
-    {
-      code: 'pfo',
-      title: 'Приволжский ФО',
-      points: [
-        [370,320],[460,318],[510,322],[500,350],[430,360],[380,352]
-      ],
-      label:[440,342],
+    { code: 'pfo', title: 'Приволжский ФО',
+      points: [[370,320],[460,318],[510,322],[500,350],[430,360],[380,352]],
+      label: [440,342],
     },
-    {
-      code: 'ufo',
-      title: 'Уральский ФО',
-      points: [
-        [508,320],[600,318],[640,320],[630,346],[560,354],[515,346]
-      ],
-      label:[565,340],
+    { code: 'ufo', title: 'Уральский ФО',
+      points: [[508,320],[600,318],[640,320],[630,346],[560,354],[515,346]],
+      label: [565,340],
     },
-    {
-      code: 'sfo',
-      title: 'Сибирский ФО',
-      points: [
-        [640,320],[760,318],[825,324],[812,350],[720,362],[658,352]
-      ],
-      label:[720,344],
+    { code: 'sfo', title: 'Сибирский ФО',
+      points: [[640,320],[760,318],[825,324],[812,350],[720,362],[658,352]],
+      label: [720,344],
     },
-    {
-      code: 'dfo',
-      title: 'Дальневосточный ФО',
-      points: [
-        [820,322],[900,340],[980,376],[950,402],[880,392],[840,360]
-      ],
-      label:[900,368],
+    { code: 'dfo', title: 'Дальневосточный ФО',
+      points: [[820,322],[900,340],[980,376],[950,402],[880,392],[840,360]],
+      label: [900,368],
     },
-    {
-      code: 'yfo',
-      title: 'Южный ФО',
-      points: [
-        [265,360],[320,374],[350,384],[322,400],[278,394],[258,378]
-      ],
-      label:[310,388],
+    { code: 'yfo', title: 'Южный ФО',
+      points: [[265,360],[320,374],[350,384],[322,400],[278,394],[258,378]],
+      label: [310,388],
     },
-    {
-      code: 'nfo',
-      title: 'Северо-Кавказский ФО',
-      points: [
-        [340,388],[376,398],[392,404],[372,416],[340,414],[330,400]
-      ],
-      label:[364,408],
+    { code: 'nfo', title: 'Северо-Кавказский ФО',
+      points: [[340,388],[376,398],[392,404],[372,416],[340,414],[330,400]],
+      label: [364,408],
     },
   ];
 
-  // Тултип
+  // --- состояние для редактирования ---
+  const [regions, setRegions] = useState(initialRegions);
+  const [edit, setEdit] = useState(false);
   const [hover, setHover] = useState(null); // {x,y, code,title}
-  const onMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setHover((h) => h ? { ...h, x: e.clientX - rect.left, y: e.clientY - rect.top } : h);
+  const [drag, setDrag] = useState(null);   // {type:'vertex'|'label', rIdx, pIdx}
+  const svgRef = React.useRef(null);
+
+  const num = (k) => (data[k] ?? '—');
+
+  // конвертация координат мыши в систему SVG
+  function mouseToSvg(evt) {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const inv = svg.getScreenCTM().inverse();
+    const { x, y } = pt.matrixTransform(inv);
+    return { x: Math.max(0, Math.min(W, x)), y: Math.max(0, Math.min(H, y)) };
+  }
+
+  const onSvgMouseMove = (e) => {
+    const pos = mouseToSvg(e);
+    // перемещаем тултип
+    setHover((h) => (h ? { ...h, x: pos.x, y: pos.y } : h));
+    // тащим вершину/лейбл
+    if (edit && drag) {
+      setRegions((prev) => {
+        const copy = prev.map((r) => ({ ...r, points: r.points.map((p) => [...p]), label: [...r.label] }));
+        const r = copy[drag.rIdx];
+        if (drag.type === 'vertex') {
+          r.points[drag.pIdx] = [Math.round(pos.x), Math.round(pos.y)];
+        } else {
+          r.label = [Math.round(pos.x), Math.round(pos.y)];
+        }
+        return copy;
+      });
+    }
   };
+  const onSvgMouseUp = () => setDrag(null);
+
+  // кнопка «Сохранить координаты в консоль»
+  function dumpToConsole() {
+    const payload = regions.map(r => ({
+      code: r.code,
+      title: r.title,
+      points: r.points,
+      label: r.label,
+    }));
+    // eslint-disable-next-line no-console
+    console.log('%c=== КООРДИНАТЫ ДЛЯ regions ===', 'color:#22C55E;font-weight:bold');
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify(payload, null, 2));
+    alert('Координаты выведены в консоль (DevTools). Скопируй JSON и вставь в код.');
+  }
+
+  // бейдж со значением
+  const CountBadge = ({ x, y, value }) => (
+    <g transform={`translate(${x - 22}, ${y - 14})`} pointerEvents="none">
+      <rect width="44" height="24" rx="8" ry="8"
+            fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)"/>
+      <text x="22" y="16" textAnchor="middle"
+            fontSize="13" fontWeight="700" fill={UI.accent}>
+        {value}
+      </text>
+    </g>
+  );
 
   return (
     <div
@@ -141,66 +160,102 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
         padding: 16,
       }}
     >
-      <h2 style={{ margin:'0 0 10px', color: UI.title }}>География объявлений (демо)</h2>
-      <p style={{ margin:'0 0 14px', color: UI.text }}>
-        Наведи на округ — подсветится и покажет подсказку. Клик — перейти к торгам по округу. Пока вместо цифр — «—».
-      </p>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+        <div>
+          <h2 style={{ margin:'0 0 6px', color: UI.title }}>География объявлений (демо)</h2>
+          <p style={{ margin:0, color: UI.text }}>
+            Наведи на округ — подсветка и тултип. Клик — перейти к торгам. В «режиме редактирования» перетаскивай точки и бейджи.
+          </p>
+        </div>
 
-      {/* Контейнер с картой и SVG-оверлеем */}
-      <div style={{ position:'relative', width:'100%' }}>
-        {/* PNG — фоном (резиново) */}
+        {/* Переключатель режима */}
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <label style={{ color: UI.text, fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={edit}
+              onChange={(e) => setEdit(e.target.checked)}
+              style={{ marginRight:8 }}
+            />
+            Режим редактирования
+          </label>
+          {edit && (
+            <button
+              onClick={dumpToConsole}
+              style={{
+                background: UI.btnBg, color: UI.btnText, border: `1px solid ${UI.inputBorder}`,
+                borderRadius: 10, padding: '8px 12px', fontWeight: 700, cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = UI.btnHover)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = UI.btnBg)}
+            >
+              Сохранить в консоль
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* контейнер */}
+      <div style={{ position:'relative', width:'100%', marginTop:12 }}>
         <img
           src="/russia-map.png"
           alt="Карта России"
-          style={{ width:'100%', height:'auto', display:'block', borderRadius:8 }}
+          style={{ width:'100%', height:'auto', display:'block', borderRadius:8, zIndex:0 }}
         />
 
-        {/* SVG-слой поверх, во всю ширину контейнера */}
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="xMidYMid meet"
-          style={{
-            position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1
-          }}
-          onMouseMove={onMove}
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1 }}
+          onMouseMove={onSvgMouseMove}
+          onMouseUp={onSvgMouseUp}
         >
-          {regions.map((r) => {
+          {regions.map((r, rIdx) => {
             const d = r.points.map(p => p.join(',')).join(' ');
             const isHover = hover?.code === r.code;
             return (
               <g key={r.code}>
-                {/* активная зона – отдельный, кликабельный путь */}
                 <polygon
                   points={d}
                   fill={isHover ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.01)'}
                   stroke={isHover ? UI.accent : 'rgba(255,255,255,0.18)'}
                   strokeWidth={isHover ? 2 : 1}
-                  style={{ transition:'all .15s ease', cursor:'pointer', pointerEvents:'auto' }}
-                  onMouseEnter={(e) =>
-                    setHover({
-                      code: r.code,
-                      title: r.title,
-                      x: 0, y: 0
-                    })
-                  }
+                  style={{ transition:'all .15s ease', cursor: edit ? 'crosshair' : 'pointer', pointerEvents:'auto' }}
+                  onMouseEnter={(e) => setHover({ code: r.code, title: r.title, x: 0, y: 0 })}
                   onMouseLeave={() => setHover(null)}
-                  onClick={() => onSelect && onSelect(r.code)}
+                  onClick={() => !edit && onSelect && onSelect(r.code)}
                 />
+
                 {/* бейдж со значением */}
-                <g transform={`translate(${r.label[0]-22}, ${r.label[1]-14})`} pointerEvents="none">
-                  <rect width="44" height="24" rx="8" ry="8"
-                        fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)"/>
-                  <text x="22" y="16" textAnchor="middle"
-                        fontSize="13" fontWeight="700" fill={UI.accent}>
-                    {num(r.code)}
-                  </text>
-                </g>
+                <CountBadge x={r.label[0]} y={r.label[1]} value={num(r.code)} />
+
+                {/* режим редактирования: вершины + перетаскивание бейджа */}
+                {edit && (
+                  <>
+                    {/* вершины */}
+                    {r.points.map(([x,y], pIdx) => (
+                      <circle key={pIdx} cx={x} cy={y} r="6"
+                              fill="#22C55E" stroke="white" strokeWidth="1.5"
+                              style={{ cursor:'grab' }}
+                              onMouseDown={(e) => { e.preventDefault(); setDrag({ type:'vertex', rIdx, pIdx }); }}
+                      />
+                    ))}
+                    {/* ручка для перемещения бейджа */}
+                    <rect
+                      x={r.label[0]-10} y={r.label[1]-10} width="20" height="20" rx="4" ry="4"
+                      fill="rgba(255,255,255,0.8)" stroke="#22C55E" strokeWidth="1.2"
+                      style={{ cursor:'grab' }}
+                      onMouseDown={(e) => { e.preventDefault(); setDrag({ type:'label', rIdx }); }}
+                    />
+                  </>
+                )}
               </g>
             );
           })}
 
           {/* тултип */}
-          {hover && (
+          {hover && !edit && (
             <g transform={`translate(${hover.x + 12}, ${hover.y + 12})`} pointerEvents="none">
               <rect x="0" y="0" width="220" height="54" rx="10" ry="10"
                     fill="rgba(15,23,42,0.95)" stroke="rgba(255,255,255,0.15)"/>
@@ -213,9 +268,9 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
         </svg>
       </div>
 
-      {/* Легенда */}
-      <div style={{ marginTop:12, color: UI.text, fontSize:13 }}>
-        Подсветка — приближённые области по федеральным округам. При необходимости легко «подогнать» точки.
+      <div style={{ marginTop:10, color: UI.text, fontSize:13 }}>
+        Подгонка: включи «Режим редактирования» → тяни зелёные точки (контур) и белый квадратик (положение счётчика).  
+        Нажми «Сохранить в консоль» — получишь JSON с координатами для вставки в код.
       </div>
     </div>
   );
