@@ -38,189 +38,190 @@ export default function Home() {
     red: '#EF4444',
   };
 
- // === PNG-карта + SVG-оверлей: расширенный редактор ===
-function RussiaImageFOOverlay({ onSelect, data = {} }) {
+// === PNG-карта + SVG-оверлей: Рисование границ мышкой (brush) ===
+function RussiaDrawOverlay({ onSelect, data = {} }) {
   const W = 1120, H = 639;
 
-  // Вкл/выкл редактора одной переменной (потом просто поставишь false)
-  const EDITOR_ENABLED = true; // ← когда всё выровняешь — поменяй на false
+  // Когда всё настроишь — поставь false (и панель редактора исчезнет)
+  const EDITOR_ENABLED = true;
 
-  // Начальные зоны (как у тебя были)
-  const initialRegions = [
-    { code: 'nwfo', title: 'Северо-Западный ФО',
-      points: [[80,280],[200,240],[280,260],[290,300],[250,330],[190,335],[140,320]],
-      label: [210,300], value: data.nwfo ?? '—',
-    },
-    { code: 'cfo', title: 'Центральный ФО',
-      points: [[250,315],[330,305],[380,315],[370,345],[320,360],[275,348]],
-      label: [325,338], value: data.cfo ?? '—',
-    },
-    { code: 'mo', title: 'Московская область',
-      points: [[350,327],[365,327],[375,337],[368,350],[352,350],[344,338]],
-      label: [360,345], value: data.mo ?? '—',
-    },
-    { code: 'pfo', title: 'Приволжский ФО',
-      points: [[370,320],[460,318],[510,322],[500,350],[430,360],[380,352]],
-      label: [440,342], value: data.pfo ?? '—',
-    },
-    { code: 'ufo', title: 'Уральский ФО',
-      points: [[508,320],[600,318],[640,320],[630,346],[560,354],[515,346]],
-      label: [565,340], value: data.ufo ?? '—',
-    },
-    { code: 'sfo', title: 'Сибирский ФО',
-      points: [[640,320],[760,318],[825,324],[812,350],[720,362],[658,352]],
-      label: [720,344], value: data.sfo ?? '—',
-    },
-    { code: 'dfo', title: 'Дальневосточный ФО',
-      points: [[820,322],[900,340],[980,376],[950,402],[880,392],[840,360]],
-      label: [900,368], value: data.dfo ?? '—',
-    },
-    { code: 'yfo', title: 'Южный ФО',
-      points: [[265,360],[320,374],[350,384],[322,400],[278,394],[258,378]],
-      label: [310,388], value: data.yfo ?? '—',
-    },
-    { code: 'nfo', title: 'Северо-Кавказский ФО',
-      points: [[340,388],[376,398],[392,404],[372,416],[340,414],[330,400]],
-      label: [364,408], value: data.nfo ?? '—',
-    },
-  ];
+  // Начальные регионы можешь оставить пустым массивом — будешь рисовать с нуля
+  const [regions, setRegions] = useState([
+    // Пример стартового (можно удалить в редакторе):
+    { code: 'cfo', title: 'Центральный ФО', points: [], label: [560, 300], value: data.cfo ?? '—' },
+  ]);
 
-  const [regions, setRegions] = useState(initialRegions);
-  const [hover, setHover] = useState(null);           // {code,title,x,y}
-  const [selected, setSelected] = useState(0);        // индекс выбранного региона в редакторе
-  const [drag, setDrag] = useState(null);             // {type:'vertex'|'label', rIdx, pIdx}
-  const [selectedVertex, setSelectedVertex] = useState(null); // {rIdx,pIdx}
+  // Выбор региона, ховер, рисование
+  const [selected, setSelected] = useState(0);     // индекс выбранного региона
+  const [hover, setHover] = useState(null);        // {code,title,x,y}
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawPoints, setDrawPoints] = useState([]);  // временная линия кисти
+  const [lastPush, setLastPush] = useState(null);    // для порога записи точек
   const svgRef = useRef(null);
 
-  // утилиты
-  const num = (k) => regions.find(r=>r.code===k)?.value ?? '—';
+  const num = (k) => regions.find(r => r.code === k)?.value ?? '—';
 
+  // ——— утилиты координат ———
   function mouseToSvg(evt) {
     const svg = svgRef.current; if (!svg) return {x:0,y:0};
     const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
     const inv = svg.getScreenCTM().inverse(); const {x,y} = pt.matrixTransform(inv);
     return { x: Math.max(0, Math.min(W, x)), y: Math.max(0, Math.min(H, y)) };
   }
+  function dist(a,b){ return Math.hypot(a[0]-b[0], a[1]-b[1]); }
 
-  function polygonInsertPoint(rIdx, pos) {
-    setRegions(prev => {
-      const copy = prev.map(r => ({...r, points: r.points.map(p=>[...p])}));
-      const pts = copy[rIdx].points;
-      if (pts.length < 2) { pts.push([Math.round(pos.x), Math.round(pos.y)]); return copy; }
-      // Вставляем в ближайший клик-отрезок
-      let bestI = 0, bestDist = Infinity;
-      for (let i=0;i<pts.length;i++){
-        const a = pts[i], b = pts[(i+1)%pts.length];
-        const d = distPointToSegment(pos, {x:a[0],y:a[1]}, {x:b[0],y:b[1]});
-        if (d<bestDist){bestDist=d; bestI=i;}
+  // ——— упрощение полилинии (RDP) ———
+  function simplifyRDP(points, epsilon = 2.5){
+    if (points.length < 3) return points;
+    const lineDist = (p, a, b) => {
+      const [x, y] = p, [x1, y1] = a, [x2, y2] = b;
+      const A = x - x1, B = y - y1, C = x2 - x1, D = y2 - y1;
+      const dot = A*C + B*D, lenSq = C*C + D*D;
+      let t = lenSq ? dot / lenSq : 0; t = Math.max(0, Math.min(1, t));
+      const xx = x1 + t*C, yy = y1 + t*D;
+      return Math.hypot(x - xx, y - yy);
+    };
+    const rdp = (pts, first, last, eps, out) => {
+      let idx = -1, maxD = 0;
+      for (let i = first + 1; i < last; i++){
+        const d = lineDist(pts[i], pts[first], pts[last]);
+        if (d > maxD){ idx = i; maxD = d; }
       }
-      pts.splice(bestI+1, 0, [Math.round(pos.x), Math.round(pos.y)]);
-      return copy;
-    });
+      if (maxD > eps && idx !== -1){
+        rdp(pts, first, idx, eps, out);
+        rdp(pts, idx, last, eps, out);
+      } else {
+        out.push(pts[first]);
+        out.push(pts[last]);
+      }
+    };
+    const out = [];
+    rdp(points, 0, points.length - 1, epsilon, out);
+    // rdp дублирует точки на стыках — уберём повторы
+    const result = [out[0]];
+    for (let i = 1; i < out.length; i++){
+      const prev = result[result.length - 1];
+      if (prev[0] !== out[i][0] || prev[1] !== out[i][1]) result.push(out[i]);
+    }
+    return result;
   }
 
-  function polygonRemovePoint(rIdx, pIdx) {
-    setRegions(prev => {
-      const copy = prev.map(r => ({...r, points: r.points.map(p=>[...p])}));
-      const pts = copy[rIdx].points;
-      if (pts.length > 3) { pts.splice(pIdx,1); }
-      return copy;
-    });
-    setSelectedVertex(null);
+  // ——— рисование кистью ———
+  function startDraw(e){
+    if (!EDITOR_ENABLED) return;
+    if (selected == null) return;
+    const p = mouseToSvg(e);
+    setIsDrawing(true);
+    setDrawPoints([[Math.round(p.x), Math.round(p.y)]]);
+    setLastPush([p.x, p.y]);
   }
+  function moveDraw(e){
+    const p = mouseToSvg(e);
+    setHover(h => h ? { ...h, x:p.x, y:p.y } : h);
+    if (!isDrawing) return;
 
-  // расстояние от точки до отрезка
-  function distPointToSegment(p, a, b){
-    const A = {x:a.x, y:a.y}, B = {x:b.x, y:b.y};
-    const ABx = B.x - A.x, ABy = B.y - A.y;
-    const APx = p.x - A.x, APy = p.y - A.y;
-    const ab2 = ABx*ABx + ABy*ABy;
-    const t = Math.max(0, Math.min(1, (APx*ABx + APy*ABy) / (ab2||1)));
-    const cx = A.x + t*ABx, cy = A.y + t*ABy;
-    const dx = p.x - cx, dy = p.y - cy;
-    return Math.hypot(dx, dy);
-  }
-
-  function onSvgMouseMove(e){
-    const pos = mouseToSvg(e);
-    setHover(h => h ? {...h, x:pos.x, y:pos.y} : h);
-    if (drag){
-      setRegions(prev => {
-        const copy = prev.map(r => ({...r, points: r.points.map(p=>[...p]), label:[...r.label]}));
-        const r = copy[drag.rIdx];
-        if (drag.type === 'vertex') { r.points[drag.pIdx] = [Math.round(pos.x), Math.round(pos.y)]; }
-        else { r.label = [Math.round(pos.x), Math.round(pos.y)]; }
-        return copy;
-      });
+    // записываем точку, если мышь реально прошла расстояние (чтобы линия была аккуратной)
+    const last = lastPush || [p.x, p.y];
+    const threshold = 4.5; // px — регулируй плавность
+    if (Math.hypot(p.x - last[0], p.y - last[1]) >= threshold){
+      setDrawPoints(prev => [...prev, [Math.round(p.x), Math.round(p.y)]]);
+      setLastPush([p.x, p.y]);
     }
   }
-  function onSvgMouseUp(){ setDrag(null); }
-
-  // Добавить новый регион (пустышку в центре)
-  function addRegion(){
-    const idx = regions.length + 1;
-    const newR = {
-      code: `r${idx}`,
-      title: `Регион ${idx}`,
-      points: [[W/2-40,H/2-20],[W/2+40,H/2-20],[W/2+40,H/2+20],[W/2-40,H/2+20]],
-      label: [W/2, H/2],
-      value: '—',
-    };
-    setRegions(prev => [...prev, newR]);
-    setSelected(regions.length);
+  function endDraw(){
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    setLastPush(null);
+    setRegions(prev => {
+      const copy = prev.map(r => ({...r, points: r.points.map(p=>[...p]), label: r.label ? [...r.label] : undefined}));
+      const pts = drawPoints;
+      if (pts.length >= 3){
+        // чуть упростим, чтобы линия стала «ровнее»
+        const simplified = simplifyRDP(pts, 2.2);
+        // закрыть полигон (соединить конец с началом, если не совпадает)
+        const first = simplified[0], last = simplified[simplified.length - 1];
+        const closed = dist(first, last) > 2 ? [...simplified, [...first]] : simplified;
+        copy[selected].points = closed;
+        // если нет бейджа — поставим в центр масс
+        if (!copy[selected].label){
+          const c = centroid(closed);
+          copy[selected].label = [Math.round(c[0]), Math.round(c[1])];
+        }
+      }
+      return copy;
+    });
+    setDrawPoints([]);
   }
 
-  // Добавить подпись/бейдж для выбранного (ставим в центр полигона)
-  function addLabelToSelected(){
-    const i = selected ?? 0;
+  function centroid(pts){
+    let x = 0, y = 0, n = pts.length;
+    for (let i = 0; i < n; i++){ x += pts[i][0]; y += pts[i][1]; }
+    return [x / n, y / n];
+  }
+
+  // ——— действия редактора ———
+  function addRegion(){
+    setRegions(prev => [
+      ...prev,
+      {
+        code: `r${prev.length + 1}`,
+        title: `Регион ${prev.length + 1}`,
+        points: [],
+        label: [W/2, H/2],
+        value: '—',
+      }
+    ]);
+    setSelected(regions.length);
+  }
+  function addBadgeToSelected(){
     setRegions(prev => {
-      const copy = prev.map(r => ({...r, points: r.points.map(p=>[...p]), label:[...r.label]}));
-      const r = copy[i];
-      const c = centroid(r.points);
+      const copy = prev.map(r => ({...r}));
+      const r = copy[selected];
+      if (!r) return copy;
+      const c = r.points.length ? centroid(r.points) : r.label || [W/2, H/2];
       r.label = [Math.round(c[0]), Math.round(c[1])];
       return copy;
     });
   }
-  function centroid(pts){
-    // простой центр масс
-    let x=0,y=0; pts.forEach(p=>{x+=p[0]; y+=p[1];}); return [x/pts.length,y/pts.length];
-  }
-
-  // Экспорт
   function dumpToConsole(){
     const payload = regions.map(({code,title,points,label,value}) => ({code,title,points,label,value}));
-    console.log('%c=== MAP JSON ===','color:#22C55E;font-weight:bold');
-    console.log(JSON.stringify(payload,null,2));
-    alert('JSON выведен в консоль. Скопируй и вставь в код/БД.');
+    // eslint-disable-next-line no-console
+    console.log('%c=== MAP JSON (regions) ===','color:#22C55E;font-weight:bold');
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify(payload, null, 2));
+    alert('JSON выведен в консоль. Скопируй и вставь в код/БД. После этого поставь EDITOR_ENABLED=false');
   }
 
-  // Рендер бейджа + подписи
-  const Badge = ({r}) => (
-    <g transform={`translate(${r.label[0]-22}, ${r.label[1]-36})`} pointerEvents="none">
-      <rect width="44" height="24" rx="8" ry="8"
-            fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)"/>
-      <text x="22" y="16" textAnchor="middle" fontSize="13" fontWeight="700" fill={UI.accent}>
-        {r.value ?? '—'}
-      </text>
-      {/* название под плашкой */}
-      <text x="22" y="36" textAnchor="middle" fontSize="11" fill={UI.title} style={{opacity:.9}}>
-        {r.title}
-      </text>
-    </g>
-  );
+  // ——— перетаскивание бейджа мышью ———
+  const [dragBadgeIdx, setDragBadgeIdx] = useState(null);
+  function onMouseMoveSvg(e){
+    moveDraw(e);
+    if (dragBadgeIdx != null){
+      const p = mouseToSvg(e);
+      setRegions(prev => {
+        const copy = prev.map(r => ({...r}));
+        copy[dragBadgeIdx].label = [Math.round(p.x), Math.round(p.y)];
+        return copy;
+      });
+    }
+  }
+  function onMouseUpSvg(){
+    endDraw();
+    setDragBadgeIdx(null);
+  }
 
   return (
     <div style={{ background: UI.cardBg, border:`1px solid ${UI.border}`, borderRadius:12, padding:16 }}>
-      {/* Хедер */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
         <div>
           <h2 style={{ margin:'0 0 6px', color: UI.title }}>География объявлений</h2>
           <p style={{ margin:0, color: UI.text }}>
-            Наведи — подсветка; клик (вне редактора) — перейти к торгам по региону.
+            {EDITOR_ENABLED
+              ? 'Режим редактора: жми «+Граница», веди мышью по контуру региона. Двойной клик не нужен.'
+              : 'Наведи — подсветка; клик — переход к торгам по региону.'}
           </p>
         </div>
 
-        {/* Панель редактора (прячется, когда EDITOR_ENABLED=false) */}
         {EDITOR_ENABLED && (
           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
             <button onClick={addRegion}
@@ -229,7 +230,16 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
               onMouseLeave={(e)=>e.currentTarget.style.background=UI.btnBg}
             >+ Регион</button>
 
-            <button onClick={addLabelToSelected}
+            <button
+              onMouseDown={(e)=>{ e.preventDefault(); /* просто чтобы кнопка не снимала фокус */ }}
+              onClick={()=>setIsDrawing(s => !s)}
+              style={{ background: isDrawing ? UI.accent : UI.btnBg, color: isDrawing ? '#0B1220' : UI.btnText,
+                       border:`1px solid ${UI.inputBorder}`, borderRadius:10, padding:'8px 12px', fontWeight:700, cursor:'pointer' }}
+            >
+              {isDrawing ? 'Идёт рисование…' : '+ Граница'}
+            </button>
+
+            <button onClick={addBadgeToSelected}
               style={{ background: UI.btnBg, color: UI.btnText, border:`1px solid ${UI.inputBorder}`, borderRadius:10, padding:'8px 12px', fontWeight:700, cursor:'pointer' }}
               onMouseEnter={(e)=>e.currentTarget.style.background=UI.btnHover}
               onMouseLeave={(e)=>e.currentTarget.style.background=UI.btnBg}
@@ -253,66 +263,69 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1 }}
-          onMouseMove={onSvgMouseMove} onMouseUp={onSvgMouseUp}
+          onMouseMove={onMouseMoveSvg}
+          onMouseUp={onMouseUpSvg}
+          onMouseLeave={onMouseUpSvg}
+          onMouseDown={(e)=>{ if (isDrawing) startDraw(e); }}
         >
-          {regions.map((r, rIdx) => {
-            const d = r.points.map(p => p.join(',')).join(' ');
+          {regions.map((r, i) => {
+            const isSel = i === selected;
+            const hasPoly = r.points && r.points.length >= 3;
+            const d = hasPoly ? r.points.map(p => p.join(',')).join(' ') : '';
             const isHover = hover?.code === r.code;
+
             return (
               <g key={r.code}>
-                <polygon
-                  points={d}
-                  fill={isHover ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.01)'}
-                  stroke={isHover ? UI.accent : 'rgba(255,255,255,0.18)'}
-                  strokeWidth={isHover ? 2 : 1}
-                  style={{ transition:'all .15s ease', cursor: EDITOR_ENABLED ? 'crosshair' : 'pointer', pointerEvents:'auto' }}
-                  onMouseEnter={() => setHover({ code:r.code, title:r.title, x:0, y:0 })}
-                  onMouseLeave={() => setHover(null)}
-                  onDoubleClick={(e) => { // ДВОЙНОЙ КЛИК по полигону → ДОБАВИТЬ ТОЧКУ
-                    if (!EDITOR_ENABLED) return;
-                    const pos = mouseToSvg(e);
-                    polygonInsertPoint(rIdx, pos);
-                    setSelected(rIdx);
-                  }}
-                  onClick={() => { // обычный клик вне редактора — перейти
-                    if (!EDITOR_ENABLED && onSelect) onSelect(r.code);
-                    if (EDITOR_ENABLED) setSelected(rIdx);
-                  }}
-                />
+                {/* Полигон региона */}
+                {hasPoly && (
+                  <polygon
+                    points={d}
+                    fill={isHover ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.02)'}
+                    stroke={isHover ? UI.accent : 'rgba(255,255,255,0.18)'}
+                    strokeWidth={isHover ? 2 : 1}
+                    style={{ transition:'all .15s ease', cursor: EDITOR_ENABLED ? 'crosshair' : 'pointer', pointerEvents:'auto' }}
+                    onMouseEnter={() => setHover({ code:r.code, title:r.title, x:0, y:0 })}
+                    onMouseLeave={() => setHover(null)}
+                    onClick={() => { if (!EDITOR_ENABLED && onSelect) onSelect(r.code); if (EDITOR_ENABLED) setSelected(i); }}
+                  />
+                )}
 
-                {/* Бейдж + подпись */}
-                <Badge r={r} />
+                {/* «живой» контур при рисовании по выбранному региону */}
+                {isDrawing && isSel && drawPoints.length > 1 && (
+                  <polyline
+                    points={drawPoints.map(p => p.join(',')).join(' ')}
+                    fill="none" stroke={UI.accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                    pointerEvents="none"
+                  />
+                )}
 
-                {/* Редактор: вершины и перетаскивание бейджа */}
-                {EDITOR_ENABLED && (
-                  <>
-                    {/* Вершины */}
-                    {r.points.map(([x,y], pIdx) => {
-                      const selectedThis = selectedVertex && selectedVertex.rIdx===rIdx && selectedVertex.pIdx===pIdx;
-                      return (
-                        <circle key={pIdx} cx={x} cy={y} r={selectedThis?7:6}
-                                fill={selectedThis? '#16A34A' : '#22C55E'} stroke="white" strokeWidth="1.6"
-                                style={{ cursor:'grab' }}
-                                onMouseDown={(e)=>{ e.preventDefault(); setDrag({type:'vertex', rIdx, pIdx}); setSelected(rIdx); setSelectedVertex({rIdx,pIdx}); }}
-                                onContextMenu={(e)=>{ // ПКМ по точке → удалить
-                                  e.preventDefault(); polygonRemovePoint(rIdx, pIdx);
-                                }}
-                        />
-                      );
-                    })}
-                    {/* Перетаскивание бейджа */}
-                    <rect x={r.label[0]-10} y={r.label[1]-10} width="20" height="20" rx="4" ry="4"
-                          fill="rgba(255,255,255,0.8)" stroke="#22C55E" strokeWidth="1.2"
-                          style={{ cursor:'grab' }}
-                          onMouseDown={(e)=>{ e.preventDefault(); setDrag({type:'label', rIdx}); setSelected(rIdx); }}
-                    />
-                  </>
+                {/* Бейдж + название (если есть label) */}
+                {r.label && (
+                  <g transform={`translate(${r.label[0]-22}, ${r.label[1]-36})`}>
+                    <rect width="44" height="24" rx="8" ry="8"
+                          fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)"/>
+                    <text x="22" y="16" textAnchor="middle" fontSize="13" fontWeight="700" fill={UI.accent}>
+                      {r.value ?? '—'}
+                    </text>
+                    <text x="22" y="36" textAnchor="middle" fontSize="11" fill={UI.title} style={{opacity:.9}}>
+                      {r.title}
+                    </text>
+
+                    {/* захват для перетаскивания бейджа (только в редакторе) */}
+                    {EDITOR_ENABLED && (
+                      <rect x="12" y="-10" width="20" height="20" rx="4" ry="4"
+                            fill="rgba(255,255,255,0.9)" stroke="#22C55E" strokeWidth="1.2"
+                            style={{ cursor:'grab' }}
+                            onMouseDown={(e)=>{ e.preventDefault(); setDragBadgeIdx(i); setSelected(i); }}
+                      />
+                    )}
+                  </g>
                 )}
               </g>
             );
           })}
 
-          {/* тултип (только когда редактор выключен) */}
+          {/* тултип (только в прод-режиме) */}
           {hover && !EDITOR_ENABLED && (
             <g transform={`translate(${hover.x + 12}, ${hover.y + 12})`} pointerEvents="none">
               <rect x="0" y="0" width="240" height="58" rx="10" ry="10"
@@ -326,78 +339,81 @@ function RussiaImageFOOverlay({ onSelect, data = {} }) {
         </svg>
       </div>
 
-      {/* Правая панель редактирования выбранного региона */}
-      {EDITOR_ENABLED && (
-        <div style={{
-          marginTop:12, display:'grid', gridTemplateColumns:'1fr 320px', gap:12, alignItems:'start'
-        }}>
+      {/* Правая панель настройки выбранного региона (видна только в редакторе) */}
+      {EDITOR_ENABLED && regions[selected] && (
+        <div style={{ marginTop:12, display:'grid', gridTemplateColumns:'1fr 320px', gap:12 }}>
           <div style={{ color: UI.text, fontSize:13 }}>
-            <div>Подсказки: двойной клик по области — добавить точку на ближайший отрезок; ПКМ по точке — удалить; тянуть точки/белый квадратик — перетаскивать.</div>
+            <div>Как рисовать: нажми «+ Граница» → зажми ЛКМ в начале очертания → веди мышью вдоль границы → отпусти ЛКМ.</div>
+            <div style={{ opacity:.85, marginTop:6 }}>Совет: рисуй контур непрерывно; если ошибся — снова нажми «+ Граница» и перерисуй регион — старый контур заменится.</div>
           </div>
 
-          <div style={{
-            background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)',
-            borderRadius:12, padding:12
-          }}>
+          <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:12 }}>
             <div style={{ color:UI.title, fontWeight:700, marginBottom:8 }}>Выбранный регион</div>
+
+            <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:6 }}>Выбрать</label>
             <select
               value={selected}
               onChange={(e)=>setSelected(Number(e.target.value))}
               style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8, marginBottom:10 }}
             >
-              {regions.map((r,i)=>(<option key={r.code} value={i}>{i+1}. {r.title}</option>))}
+              {regions.map((r,i)=>(<option key={r.code || i} value={i}>{i+1}. {r.title || r.code}</option>))}
             </select>
 
-            {regions[selected] && (
-              <>
-                <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:6 }}>Код (url-параметр)</label>
-                <input
-                  value={regions[selected].code}
-                  onChange={(e)=>setRegions(prev=>{
-                    const copy=[...prev]; copy[selected]={...copy[selected], code:e.target.value.trim()||'region'};
-                    return copy;
-                  })}
-                  style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8 }}
-                />
+            <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:6 }}>Код (url-параметр)</label>
+            <input
+              value={regions[selected].code}
+              onChange={(e)=>setRegions(prev=>{ const c=[...prev]; c[selected]={...c[selected], code:e.target.value.trim()||'region'}; return c; })}
+              style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8 }}
+            />
 
-                <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:10 }}>Название</label>
-                <input
-                  value={regions[selected].title}
-                  onChange={(e)=>setRegions(prev=>{
-                    const copy=[...prev]; copy[selected]={...copy[selected], title:e.target.value};
-                    return copy;
-                  })}
-                  style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8 }}
-                />
+            <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:10 }}>Название</label>
+            <input
+              value={regions[selected].title}
+              onChange={(e)=>setRegions(prev=>{ const c=[...prev]; c[selected]={...c[selected], title:e.target.value}; return c; })}
+              style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8 }}
+            />
 
-                <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:10 }}>Количество объявлений</label>
-                <input
-                  value={regions[selected].value}
-                  onChange={(e)=>setRegions(prev=>{
-                    const copy=[...prev]; copy[selected]={...copy[selected], value:e.target.value};
-                    return copy;
-                  })}
-                  style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8, marginBottom:10 }}
-                />
+            <label style={{ display:'block', fontSize:12, opacity:.9, marginTop:10 }}>Количество объявлений</label>
+            <input
+              value={regions[selected].value}
+              onChange={(e)=>setRegions(prev=>{ const c=[...prev]; c[selected]={...c[selected], value:e.target.value}; return c; })}
+              style={{ width:'100%', background:UI.inputBg, color:UI.inputText, border:`1px solid ${UI.inputBorder}`, borderRadius:8, padding:8, marginBottom:10 }}
+            />
 
-                <button
-                  onClick={()=>{
-                    setRegions(prev=>prev.filter((_,i)=>i!==selected));
-                    setSelected(0); setSelectedVertex(null);
-                  }}
-                  style={{ background:'transparent', color:'#ff8b8b', border:'1px solid rgba(255,0,0,0.35)', borderRadius:10, padding:'8px 12px', fontWeight:700, width:'100%' }}
-                >
-                  Удалить регион
-                </button>
-              </>
-            )}
+            <button
+              onClick={()=>{
+                setRegions(prev=>prev.filter((_,i)=>i!==selected));
+                setSelected(0);
+              }}
+              style={{ background:'transparent', color:'#ff8b8b', border:'1px solid rgba(255,0,0,0.35)', borderRadius:10, padding:'8px 12px', fontWeight:700, width:'100%' }}
+            >
+              Удалить регион
+            </button>
+
+            <button
+              onClick={()=>{
+                setRegions(prev=>{
+                  const c = [...prev];
+                  if (c[selected]) c[selected] = { ...c[selected], points: [] };
+                  return c;
+                });
+              }}
+              style={{ marginTop:8, background:'transparent', color:'#ffcf8b', border:'1px solid rgba(255,187,0,0.35)', borderRadius:10, padding:'8px 12px', fontWeight:700, width:'100%' }}
+            >
+              Очистить границу
+            </button>
           </div>
+        </div>
+      )}
+
+      {!EDITOR_ENABLED && (
+        <div style={{ marginTop:10, color: UI.text, fontSize:13 }}>
+          Чтобы снова включить редактор — временно поставь EDITOR_ENABLED=true в компоненте.
         </div>
       )}
     </div>
   );
 }
-
 
  
   const fmt = new Intl.NumberFormat('ru-RU');
