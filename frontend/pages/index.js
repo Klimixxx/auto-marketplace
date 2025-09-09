@@ -123,6 +123,39 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+
+            {/* Карта регионов (PNG) */}
+      <section style={{ margin: '26px 0' }}>
+        <div
+          style={{
+            background: UI.cardBg,
+            border: `1px solid ${UI.border}`,
+            borderRadius: 12,
+            padding: 16,
+            textAlign: 'center',
+          }}
+        >
+          <h2 style={{ margin: '0 0 12px 0', color: UI.title }}>
+            География объявлений (демо)
+          </h2>
+          <p style={{ margin: '0 0 16px 0', color: UI.text }}>
+            Здесь будет карта России с разделением на регионы и цифрами.
+            Пока просто картинка.
+          </p>
+          <img
+            src="/russia-map.png"
+            alt="Карта России"
+            style={{
+              width: '100%',
+              height: 'auto',
+              borderRadius: 8,
+              boxShadow: '0 0 12px rgba(0,0,0,0.3)',
+            }}
+          />
+        </div>
+      </section>
+
            
 
 
