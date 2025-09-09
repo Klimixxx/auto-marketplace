@@ -756,6 +756,39 @@ app.get('/api/notifications', auth, async (req, res) => {
   }
 });
 
+// кол-во непрочитанных
+app.get('/api/notifications/unread-count', auth, async (req, res) => {
+  try {
+    const { rows: [{ c }] } = await query(
+      `SELECT count(*)::int c
+         FROM user_notifications
+        WHERE user_id = $1 AND read_at IS NULL`,
+      [req.user.sub]
+    );
+    res.json({ count: c });
+  } catch (e) {
+    console.error('unread count error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+// пометить все прочитанными
+app.post('/api/notifications/mark-read', auth, async (req, res) => {
+  try {
+    await query(
+      `UPDATE user_notifications
+          SET read_at = now()
+        WHERE user_id = $1 AND read_at IS NULL`,
+      [req.user.sub]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('mark read error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+
 
 
 // ===== Ingest для парсера (UPSERT по source_id) =====
