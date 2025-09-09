@@ -38,262 +38,228 @@ export default function Home() {
     red: '#EF4444',
   };
 
-    // === Карта России (тайловая, по федеральным округам + МО) ===
-  // === Карта России (SVG по федеральным округам + МО) ===
-  function RussiaSvgMap({ onSelect }) {
-    // Заглушки-числа для каждого региона (потом подставим реальные)
-    const numbers = {
-      nwfo: '—', // Северо-Западный ФО
-      cfo:  '—', // Центральный ФО
-      mo:   '—', // Московская область (отдельно)
-      pfo:  '—', // Приволжский ФО
-      ufo:  '—', // Уральский ФО
-      sfo:  '—', // Сибирский ФО
-      dfo:  '—', // Дальневосточный ФО
-      yfo:  '—', // Южный ФО
-      nfo:  '—', // Северо-Кавказский ФО
-    };
+  // === Карта России: силуэт + разделение по федеральным округам (SVG) ===
+function RussiaSvgFO({ onSelect }) {
+  // заглушки-числа
+  const numbers = {
+    nwfo: '—', // Северо-Запад
+    cfo:  '—', // Центр
+    mo:   '—', // Московская область
+    pfo:  '—', // Приволжье
+    ufo:  '—', // Урал
+    sfo:  '—', // Сибирь
+    dfo:  '—', // Дальний Восток
+    yfo:  '—', // Юг
+    nfo:  '—', // Северный Кавказ
+  };
 
-    // Универсальный стилевой хелпер для регионов
-    const regionBase = {
-      fill: UI.cardBg,
-      stroke: UI.border,
-      strokeWidth: 1.2,
-      transition: 'transform 160ms ease, fill 160ms ease, stroke 160ms ease',
-      cursor: 'pointer',
-    };
+  const baseStroke = UI.border;
+  const hoverStroke = UI.accent;
 
-    // Ховер-эффекты через обработчики (чтобы не тащить CSS)
-    const onEnter = (e) => {
-      e.currentTarget.style.transform = 'scale(1.04)';
-      e.currentTarget.style.stroke = UI.accent;
-      e.currentTarget.style.fill = UI.btnHover;
-    };
-    const onLeave = (e) => {
-      e.currentTarget.style.transform = 'scale(1.0)';
-      e.currentTarget.style.stroke = UI.border;
-      e.currentTarget.style.fill = UI.cardBg;
-    };
+  const onEnter = (e) => {
+    e.currentTarget.style.filter = 'brightness(1.1)';
+    e.currentTarget.style.stroke = hoverStroke;
+  };
+  const onLeave = (e) => {
+    e.currentTarget.style.filter = 'brightness(1.0)';
+    e.currentTarget.style.stroke = baseStroke;
+  };
 
-    // Вспомогательная плашка-число
-    const CountBadge = ({ x, y, value }) => (
-      <g transform={`translate(${x - 22}, ${y - 14})`}>
-        <rect width="44" height="24" rx="8" ry="8"
-          fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)" />
-        <text x="22" y="16" textAnchor="middle"
-          fontSize="13" fontWeight="700" fill={UI.accent}
-          style={{ userSelect: 'none' }}>
-          {value}
-        </text>
-      </g>
-    );
+  const CountBadge = ({ x, y, value }) => (
+    <g transform={`translate(${x - 22}, ${y - 14})`}>
+      <rect width="44" height="24" rx="8" ry="8"
+        fill="rgba(34,197,94,0.10)" stroke="rgba(34,197,94,0.35)"/>
+      <text x="22" y="16" textAnchor="middle" fontSize="13" fontWeight="700"
+        fill={UI.accent} style={{ userSelect: 'none' }}>{value}</text>
+    </g>
+  );
 
-    return (
-      <div
-        style={{
-          background: UI.cardBg,
-          border: `1px solid ${UI.border}`,
-          borderRadius: 12,
-          padding: 16,
-        }}
-      >
-        <h2 style={{ margin: '0 0 10px 2px', color: UI.title }}>
-          География объявлений (демо)
-        </h2>
-        <p style={{ margin: '0 0 14px 2px', color: UI.text }}>
-          Наведи курсор — регион слегка увеличится. Клик — переход к торгам по региону. Пока вместо цифр — «—».
-        </p>
+  return (
+    <div style={{
+      background: UI.cardBg, border: `1px solid ${UI.border}`,
+      borderRadius: 12, padding: 16
+    }}>
+      <h2 style={{ margin:'0 0 10px 2px', color: UI.title }}>Карта России (демо)</h2>
+      <p style={{ margin:'0 0 14px 2px', color: UI.text }}>
+        Наведи — подсветка, клик — перейти к торгам по округу. Цифры пока «—».
+      </p>
 
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          {/* ВАЖНО: это стилизованная упрощённая карта по ФО — контуры подобраны так,
-             чтобы визуально напоминать РФ и не выглядели «квадратами». */}
-          <svg
-            viewBox="0 0 1200 560"
-            width="100%"
-            height="auto"
-            role="img"
-            aria-label="Карта России по федеральным округам"
-          >
-            {/* —— СЕВЕРО-ЗАПАДНЫЙ ФО —— */}
-            <g transform="translate(150,170)" onClick={() => onSelect && onSelect('nwfo')}>
-              <path
-                d="M 0 40
-                   C 10 10, 70 0, 110 10
-                   C 160 20, 150 60, 120 80
-                   C 95 98, 60 95, 35 85
-                   C 10 75, -8 62, 0 40 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              {/* Подпись */}
-              <text x="70" y="60" textAnchor="middle" fontSize="12" fill={UI.title}>СЗФО</text>
-              <CountBadge x={70} y={78} value={numbers.nwfo} />
+      <div style={{ width:'100%', overflowX:'auto' }}>
+        {/* Стилевой градиент под фирстиль */}
+        <svg viewBox="0 0 1200 560" width="100%" height="auto" role="img"
+             aria-label="Карта России по федеральным округам">
+          <defs>
+            <linearGradient id="ruGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopOpacity="1" stopColor="#0B1220"/>
+              <stop offset="100%" stopOpacity="1" stopColor="#152235"/>
+            </linearGradient>
+          </defs>
+
+          {/* 1) СИЛУЭТ РОССИИ — упрощённый, но узнаваемый контур */}
+          <g transform="translate(8,6) scale(1.02)">
+            <path
+              d="
+                M 30 310
+                C 90 290, 150 280, 210 295
+                C 250 305, 280 320, 300 330
+                C 330 348, 360 350, 390 342
+                C 430 330, 470 330, 520 340
+                C 560 348, 610 350, 650 340
+                C 700 328, 760 320, 820 330
+                C 860 336, 900 350, 930 370
+                C 950 382, 980 388, 1008 384
+                C 1040 378, 1075 392, 1096 410
+                C 1118 428, 1132 450, 1144 468
+                C 1128 470, 1112 472, 1096 470
+                C 1064 466, 1042 466, 1016 472
+                C 1000 476, 984 490, 972 504
+                C 952 526, 920 532, 888 528
+                C 844 522, 810 506, 770 498
+                C 736 492, 700 496, 664 504
+                C 624 512, 594 516, 560 510
+                C 528 504, 504 488, 476 474
+                C 452 462, 424 456, 396 456
+                C 360 454, 322 460, 286 470
+                C 244 482, 210 488, 180 480
+                C 152 472, 122 454, 108 428
+                C 88 392, 60 360, 38 334
+                C 26 320, 24 314, 30 310 Z
+              "
+              fill="url(#ruGrad)" stroke={baseStroke} strokeWidth="1.5" />
+
+            {/* 2) РАЗДЕЛИТЕЛИ ФЕДЕРАЛЬНЫХ ОКРУГОВ (упрощённые линии), 
+                  подобраны так, чтобы визуально соответствовать карте */}
+            <g stroke={baseStroke} strokeWidth="1.2" strokeDasharray="6 6" opacity="0.9">
+              {/* СЗФО / ЦФО */}
+              <path d="M 210 300 C 250 315, 280 328, 300 335" fill="none"/>
+              {/* ЦФО / ПФО */}
+              <path d="M 330 340 C 360 350, 390 352, 420 346" fill="none"/>
+              {/* ПФО / УФО */}
+              <path d="M 470 344 C 510 352, 545 354, 580 350" fill="none"/>
+              {/* УФО / СФО */}
+              <path d="M 620 346 C 660 344, 700 338, 736 336" fill="none"/>
+              {/* СФО / ДФО */}
+              <path d="M 800 336 C 850 344, 900 360, 940 378" fill="none"/>
+              {/* ЮФО / СКФО (юг) */}
+              <path d="M 300 360 C 330 372, 350 384, 372 392" fill="none"/>
+              {/* ЮФО / ПФО */}
+              <path d="M 280 352 C 310 360, 340 364, 360 362" fill="none"/>
             </g>
 
-            {/* —— ЦЕНТРАЛЬНЫЙ ФО —— */}
-            <g transform="translate(260,215)" onClick={() => onSelect && onSelect('cfo')}>
-              <path
-                d="M 0 40
-                   C 18 12, 70 6, 108 18
-                   C 148 30, 150 66, 118 86
-                   C 88 104, 42 104, 20 90
-                   C -2 76, -8 62, 0 40 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="76" y="62" textAnchor="middle" fontSize="12" fill={UI.title}>ЦФО</text>
-              <CountBadge x={76} y={80} value={numbers.cfo} />
+            {/* 3) ИНТЕРАКТИВНЫЕ “ХИТЗОНЫ” ФО + МО (поверх силуэта) */}
+            {/* СЗФО */}
+            <g onClick={() => onSelect && onSelect('nwfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 120 315 C 170 300, 210 300, 250 315 C 230 340, 190 350, 150 340 C 130 335, 118 326, 120 315 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={180} y={330} value={numbers.nwfo}/>
+              <text x="180" y="318" textAnchor="middle" fontSize="12" fill={UI.title}>СЗФО</text>
             </g>
 
-            {/* —— МОСКОВСКАЯ ОБЛАСТЬ (как отдельная точка) —— */}
-            <g transform="translate(360,258)" onClick={() => onSelect && onSelect('mo')}>
-              <path
-                d="M 0 0
-                   c 14 -4, 28 4, 28 18
-                   c 0 12, -12 20, -24 16
-                   c -12 -4, -18 -18, -4 -34 Z"
-                style={{ ...regionBase, strokeDasharray: '2 2' }}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="18" y="-8" textAnchor="middle" fontSize="11" fill={UI.title}>МО</text>
-              <CountBadge x={18} y="12" value={numbers.mo} />
+            {/* ЦФО */}
+            <g onClick={() => onSelect && onSelect('cfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 250 315 C 290 330, 330 340, 370 336 C 350 362, 300 368, 270 354 C 258 348, 248 336, 250 315 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={320} y={342} value={numbers.cfo}/>
+              <text x="320" y="330" textAnchor="middle" fontSize="12" fill={UI.title}>ЦФО</text>
             </g>
 
-            {/* —— ПРИВОЛЖСКИЙ ФО —— */}
-            <g transform="translate(370,235)" onClick={() => onSelect && onSelect('pfo')}>
-              <path
-                d="M 0 48
-                   C 30 20, 90 10, 140 26
-                   C 170 36, 190 60, 168 84
-                   C 148 106, 100 110, 60 102
-                   C 32 96, 12 78, 0 48 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="98" y="70" textAnchor="middle" fontSize="12" fill={UI.title}>ПФО</text>
-              <CountBadge x={98} y={90} value={numbers.pfo} />
+            {/* МО */}
+            <g onClick={() => onSelect && onSelect('mo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 350 334 c 10 -4 22 2 24 12 c 2 10 -6 18 -18 20 c -10 2 -18 -6 -16 -16 c 2 -8 4 -12 10 -16 Z"
+                    fill="transparent" stroke="transparent"/>
+              <text x="362" y="326" textAnchor="middle" fontSize="11" fill={UI.title}>МО</text>
+              <CountBadge x={362} y={344} value={numbers.mo}/>
             </g>
 
-            {/* —— ЮЖНЫЙ ФО —— */}
-            <g transform="translate(300,300)" onClick={() => onSelect && onSelect('yfo')}>
-              <path
-                d="M 0 30
-                   C 22 10, 70 6, 96 16
-                   C 118 24, 118 48, 98 64
-                   C 78 80, 40 82, 18 70
-                   C -2 58, -6 44, 0 30 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="62" y="52" textAnchor="middle" fontSize="12" fill={UI.title}>ЮФО</text>
-              <CountBadge x={62} y={70} value={numbers.yfo} />
+            {/* ПФО */}
+            <g onClick={() => onSelect && onSelect('pfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 370 336 C 410 350, 450 350, 490 346 C 476 370, 430 378, 396 370 C 380 366, 368 354, 370 336 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={440} y={352} value={numbers.pfo}/>
+              <text x="440" y="340" textAnchor="middle" fontSize="12" fill={UI.title}>ПФО</text>
             </g>
 
-            {/* —— СЕВЕРО-КАВКАЗСКИЙ ФО —— */}
-            <g transform="translate(380,310)" onClick={() => onSelect && onSelect('nfo')}>
-              <path
-                d="M 0 22
-                   C 14 8, 38 6, 56 12
-                   C 70 16, 72 32, 58 42
-                   C 44 52, 22 52, 8 44
-                   C -2 36, -4 28, 0 22 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="36" y="36" textAnchor="middle" fontSize="11" fill={UI.title}>СКФО</text>
-              <CountBadge x={36} y={54} value={numbers.nfo} />
+            {/* УФО */}
+            <g onClick={() => onSelect && onSelect('ufo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 500 344 C 540 350, 580 350, 620 346 C 610 366, 566 374, 536 368 C 516 364, 500 356, 500 344 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={560} y={352} value={numbers.ufo}/>
+              <text x="560" y="340" textAnchor="middle" fontSize="12" fill={UI.title}>УФО</text>
             </g>
 
-            {/* —— УРАЛЬСКИЙ ФО —— */}
-            <g transform="translate(540,210)" onClick={() => onSelect && onSelect('ufo')}>
-              <path
-                d="M 0 54
-                   C 20 24, 70 8, 112 20
-                   C 146 30, 162 64, 138 88
-                   C 116 110, 70 116, 36 106
-                   C 16 100, 6 78, 0 54 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="88" y="72" textAnchor="middle" fontSize="12" fill={UI.title}>УФО</text>
-              <CountBadge x={88} y={92} value={numbers.ufo} />
+            {/* СФО */}
+            <g onClick={() => onSelect && onSelect('sfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 630 346 C 680 340, 730 336, 780 338 C 770 360, 710 370, 664 366 C 644 364, 632 356, 630 346 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={712} y={354} value={numbers.sfo}/>
+              <text x="712" y="342" textAnchor="middle" fontSize="12" fill={UI.title}>СФО</text>
             </g>
 
-            {/* —— СИБИРСКИЙ ФО —— */}
-            <g transform="translate(660,210)" onClick={() => onSelect && onSelect('sfo')}>
-              <path
-                d="M 0 60
-                   C 30 26, 110 10, 190 30
-                   C 246 44, 258 86, 218 112
-                   C 182 136, 108 140, 54 126
-                   C 24 118, 6 92, 0 60 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="138" y="84" textAnchor="middle" fontSize="12" fill={UI.title}>СФО</text>
-              <CountBadge x={138} y={104} value={numbers.sfo} />
+            {/* ДФО */}
+            <g onClick={() => onSelect && onSelect('dfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 800 338 C 860 350, 910 368, 952 388 C 920 410, 874 412, 840 398 C 822 390, 806 366, 800 338 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={884} y={372} value={numbers.dfo}/>
+              <text x="884" y="360" textAnchor="middle" fontSize="12" fill={UI.title}>ДФО</text>
             </g>
 
-            {/* —— ДАЛЬНЕВОСТОЧНЫЙ ФО —— */}
-            <g transform="translate(900,200)" onClick={() => onSelect && onSelect('dfo')}>
-              <path
-                d="M 0 50
-                   C 40 18, 110 0, 170 16
-                   C 210 26, 226 60, 198 86
-                   C 168 114, 104 124, 56 114
-                   C 20 106, 4 80, 0 50 Z"
-                style={regionBase}
-                onMouseEnter={onEnter}
-                onMouseLeave={onLeave}
-              />
-              <text x="120" y="74" textAnchor="middle" fontSize="12" fill={UI.title}>ДФО</text>
-              <CountBadge x={120} y={96} value={numbers.dfo} />
+            {/* ЮФО */}
+            <g onClick={() => onSelect && onSelect('yfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 250 352 C 286 366, 314 374, 336 380 C 310 392, 276 392, 260 382 C 248 374, 244 364, 250 352 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={300} y={376} value={numbers.yfo}/>
+              <text x="300" y="364" textAnchor="middle" fontSize="12" fill={UI.title}>ЮФО</text>
             </g>
-          </svg>
-        </div>
 
-        {/* Легенда */}
-        <div
-          style={{
-            marginTop: 12,
-            display: 'flex',
-            gap: 10,
-            alignItems: 'center',
-            color: UI.text,
-            fontSize: 13,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: 12,
-                height: 12,
-                borderRadius: 4,
-                background: 'rgba(34,197,94,0.10)',
-                border: '1px solid rgba(34,197,94,0.35)',
-              }}
-            />
-            Количество объявлений
-          </span>
-          <span>•</span>
-          <span>Клик = перейти к лотам по региону</span>
-        </div>
+            {/* СКФО */}
+            <g onClick={() => onSelect && onSelect('nfo')}
+               onMouseEnter={onEnter} onMouseLeave={onLeave}
+               style={{ cursor:'pointer' }}>
+              <path d="M 332 384 C 350 392, 366 398, 380 402 C 360 410, 336 410, 326 402 C 320 396, 320 390, 332 384 Z"
+                    fill="transparent" stroke="transparent"/>
+              <CountBadge x={356} y={404} value={numbers.nfo}/>
+              <text x="356" y="392" textAnchor="middle" fontSize="11" fill={UI.title}>СКФО</text>
+            </g>
+          </g>
+        </svg>
       </div>
-    );
-  }
 
+      {/* легенда */}
+      <div style={{
+        marginTop:12, display:'flex', gap:10, alignItems:'center',
+        color: UI.text, fontSize:13, flexWrap:'wrap'
+      }}>
+        <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+          <span style={{
+            display:'inline-block', width:12, height:12, borderRadius:4,
+            background:'rgba(34,197,94,0.10)',
+            border:'1px solid rgba(34,197,94,0.35)'
+          }}/>
+          Количество объявлений
+        </span>
+        <span>•</span>
+        <span>Клик = перейти к лотам по округу</span>
+      </div>
+    </div>
+  );
+}
 
-  
 
   const fmt = new Intl.NumberFormat('ru-RU');
 
@@ -381,7 +347,7 @@ export default function Home() {
       </section>
             {/* Карта регионов (демо) */}
       <section style={{ margin: '26px 0' }}>
-       <RussiaSvgMap onSelect={(code) => router.push(`/trades?region=${encodeURIComponent(code)}`)} />
+       <RussiaSvgFO onSelect={(code) => router.push(`/trades?region=${encodeURIComponent(code)}`)} />
       </section>
 
 
