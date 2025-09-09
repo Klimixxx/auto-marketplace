@@ -38,6 +38,171 @@ export default function Home() {
     red: '#EF4444',
   };
 
+    // === Карта России (тайловая, по федеральным округам + МО) ===
+  function RussiaTileMap({ onSelect }) {
+    // Набор «регионов» (округа + МО) c координатами для расстановки тайлов в SVG
+    const TILE_W = 150;
+    const TILE_H = 84;
+    const GAP = 14;
+
+    // Координатная сетка (чтобы напоминало форму РФ, но без точной географии)
+    const regions = [
+      { code: 'nwfo', title: 'Северо-Западный ФО', row: 0, col: 0 },
+      { code: 'cfo',  title: 'Центральный ФО',     row: 0, col: 1 },
+      { code: 'mo',   title: 'Московская обл.',    row: 0, col: 2 },
+      { code: 'sfo',  title: 'Сибирский ФО',       row: 0, col: 4 },
+      { code: 'dfo',  title: 'Дальневосточный ФО', row: 0, col: 5 },
+
+      { code: 'nfo',  title: 'Северо-Кавказский ФО', row: 1, col: 0 },
+      { code: 'pfo',  title: 'Приволжский ФО',       row: 1, col: 1 },
+      { code: 'ufo',  title: 'Уральский ФО',         row: 1, col: 3 },
+      { code: 'yfo',  title: 'Южный ФО',             row: 2, col: 0 },
+    ];
+
+    // Цвета/стили – используем палитру UI с главной
+    const tileStyle = {
+      fill: UI.cardBg,
+      stroke: UI.border,
+    };
+
+    // Общий размер SVG по сетке
+    const maxCol = Math.max(...regions.map(r => r.col));
+    const maxRow = Math.max(...regions.map(r => r.row));
+    const width  = (maxCol + 1) * TILE_W + maxCol * GAP;
+    const height = (maxRow + 1) * TILE_H + maxRow * GAP;
+
+    return (
+      <div
+        style={{
+          background: UI.cardBg,
+          border: `1px solid ${UI.border}`,
+          borderRadius: 12,
+          padding: 16,
+        }}
+      >
+        <h2 style={{ margin: '0 0 12px 2px', color: UI.title }}>
+          География объявлений (демо)
+        </h2>
+        <p style={{ margin: '0 0 16px 2px', color: UI.text }}>
+          Наведи на регион — он подсветится. Клик откроет список лотов по региону. Пока вместо цифр — «—».
+        </p>
+
+        <div style={{ overflowX: 'auto' }}>
+          <svg
+            width={Math.max(700, width)}
+            height={height + 10}
+            viewBox={`0 0 ${Math.max(700, width)} ${height + 10}`}
+            role="img"
+            aria-label="Карта России по федеральным округам"
+          >
+            {regions.map((r) => {
+              const x = r.col * (TILE_W + GAP);
+              const y = r.row * (TILE_H + GAP);
+              const rx = 14;
+
+              return (
+                <g
+                  key={r.code}
+                  transform={`translate(${x}, ${y})`}
+                  style={{ cursor: 'pointer', transition: 'transform 160ms ease' }}
+                  onClick={() => onSelect && onSelect(r.code)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                    e.currentTarget.querySelector('rect').style.stroke = UI.accent;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.0)';
+                    e.currentTarget.querySelector('rect').style.stroke = UI.border;
+                  }}
+                >
+                  {/* Форма тайла */}
+                  <rect
+                    x="0"
+                    y="0"
+                    width={TILE_W}
+                    height={TILE_H}
+                    rx={rx}
+                    ry={rx}
+                    fill={tileStyle.fill}
+                    stroke={tileStyle.stroke}
+                    strokeWidth="1.2"
+                  />
+
+                  {/* Заголовок региона */}
+                  <text
+                    x={TILE_W / 2}
+                    y={TILE_H / 2 - 8}
+                    textAnchor="middle"
+                    fontSize="14"
+                    fontWeight="600"
+                    fill={UI.title}
+                    style={{ userSelect: 'none' }}
+                  >
+                    {r.title}
+                  </text>
+
+                  {/* Счётчик (пока заглушка) */}
+                  <g transform={`translate(${TILE_W / 2 - 24}, ${TILE_H / 2 + 12})`}>
+                    <rect
+                      width="48"
+                      height="22"
+                      rx="8"
+                      ry="8"
+                      fill="rgba(34,197,94,0.10)"
+                      stroke="rgba(34,197,94,0.35)"
+                    />
+                    <text
+                      x="24"
+                      y="15"
+                      textAnchor="middle"
+                      fontSize="13"
+                      fontWeight="700"
+                      fill={UI.accent}
+                      style={{ userSelect: 'none' }}
+                    >
+                      —
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Легенда */}
+        <div
+          style={{
+            marginTop: 12,
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            color: UI.text,
+            fontSize: 13,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 12,
+                height: 12,
+                borderRadius: 4,
+                background: 'rgba(34,197,94,0.10)',
+                border: '1px solid rgba(34,197,94,0.35)',
+              }}
+            />
+            Количество объявлений
+          </span>
+          <span>•</span>
+          <span>Клик = перейти к лотам по региону</span>
+        </div>
+      </div>
+    );
+  }
+
+  
+
   const fmt = new Intl.NumberFormat('ru-RU');
 
   return (
@@ -122,6 +287,11 @@ export default function Home() {
           </div>
         </div>
       </section>
+            {/* Карта регионов (демо) */}
+      <section style={{ margin: '26px 0' }}>
+        <RussiaTileMap onSelect={(code) => router.push(`/trades?region=${encodeURIComponent(code)}`)} />
+      </section>
+
 
       {/* Обучение */}
       <section style={{ margin: '28px 0' }}>
