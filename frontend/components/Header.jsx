@@ -13,6 +13,16 @@ function IconUser({ size = 20, color = 'currentColor' }) {
   );
 }
 
+function IconBell({ size = 18, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z" fill={color} opacity="0.9"/>
+      <path d="M6 9a6 6 0 1 1 12 0c0 3 1.5 4.5 2 5H4c.5-.5 2-2 2-5Z"
+            fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function Header() {
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
@@ -32,6 +42,9 @@ export default function Header() {
     menuBg: '#0F172A',
     menuBorder: 'rgba(255,255,255,0.10)',
     line: 'rgba(255,255,255,0.08)',
+    bellBg: '#152235',
+    bellBorder: 'rgba(255,255,255,0.10)',
+    badgeBg: '#EF4444', // красный бейдж непрочитанных
   };
 
   useEffect(() => {
@@ -42,7 +55,6 @@ export default function Header() {
         .then(async (r) => {
           let d = null;
           try { d = await r.json(); } catch {}
-          // если аккаунт заблокирован — сразу вылогиниваем и уводим на /login
           if (r.status === 403 && d?.error === 'blocked') {
             localStorage.removeItem('token');
             alert('Ваш аккаунт заблокирован. Свяжитесь с поддержкой.');
@@ -200,7 +212,7 @@ export default function Header() {
                     {username}
                   </div>
                   <div style={{ fontSize:12, opacity:.8 }}>
-                    Баланс: <span style={{ color: UI.accent, fontWeight:700 }}>{fmtRub.format(balance)}</span>
+                    Баланс: <span style={{ color: '#22C55E', fontWeight:700 }}>{fmtRub.format(balance)}</span>
                   </div>
                 </div>
               </div>
@@ -234,13 +246,20 @@ export default function Header() {
   );
 }
 
-/* ===== Колокольчик уведомлений ===== */
+/* ===== Колокольчик уведомлений с бейджем ===== */
 function NotificationsBell() {
   const API = process.env.NEXT_PUBLIC_API_BASE;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
+  const [unread, setUnread] = useState(0);
   const ref = useRef(null);
 
+  function cap(n) {
+    if (!n) return 0;
+    return n > 99 ? '99+' : n;
+  }
+
+  // клик вне — закрыть
   useEffect(() => {
     function onDoc(e) {
       if (!ref.current) return;
@@ -250,11 +269,30 @@ function NotificationsBell() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  // слушаем событие «прочитано» со страницы /notifications
+  useEffect(() => {
+    function onRead() { refreshUnread(); }
+    window.addEventListener('notifications-read', onRead);
+    return () => window.removeEventListener('notifications-read', onRead);
+  }, []);
+
+  useEffect(() => { refreshUnread(); }, []); // стартовая подгрузка счётчика
+
+  function refreshUnread() {
+    const token = localStorage.getItem('token');
+    if (!token || !API) return;
+    fetch(`${API}/api/notifications/unread-count`, { headers: { Authorization:'Bearer '+token } })
+      .then(r => r.json())
+      .then(d => setUnread(d.count || 0))
+      .catch(() => {});
+  }
+
+  // при открытии — загрузим последние уведомления
   useEffect(() => {
     if (!open) return;
     const token = localStorage.getItem('token');
     if (!token || !API) return;
-    fetch(`${API}/api/notifications?limit=5`, { headers: { Authorization: 'Bearer ' + token } })
+    fetch(`${API}/api/notifications?limit=5`, { headers: { Authorization:'Bearer '+token } })
       .then((r) => r.json())
       .then((d) => setItems(d.items || []))
       .catch(() => {});
@@ -263,11 +301,15 @@ function NotificationsBell() {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
-        className="button"
         onClick={() => setOpen((o) => !o)}
         title="Уведомления"
         style={{
-          padding: '8px 12px',
+          position:'relative',
+          display:'inline-flex',
+          alignItems:'center',
+          justifyContent:'center',
+          width: 40,
+          height: 40,
           background: '#152235',
           border: '1px solid rgba(255,255,255,0.10)',
           borderRadius: 10,
@@ -275,8 +317,32 @@ function NotificationsBell() {
           color: '#E6EDF3',
         }}
       >
-        🔔
+        <IconBell />
+        {unread ? (
+          <span
+            style={{
+              position:'absolute',
+              top: -4,
+              right: -4,
+              minWidth: 18,
+              height: 18,
+              padding: '0 4px',
+              borderRadius: 9,
+              background: '#EF4444',
+              color: 'white',
+              fontSize: 11,
+              fontWeight: 800,
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'center',
+              boxShadow:'0 0 0 2px #0E1A2E', // обводка под фон шапки
+            }}
+          >
+            {cap(unread)}
+          </span>
+        ) : null}
       </button>
+
       {open && (
         <div
           style={{
