@@ -504,12 +504,11 @@ function RussiaDrawOverlay({ onSelect, data = {} }) {
 
            {/* Карта регионов (PNG + overlay) */}
 <section style={{ margin: '26px 0' }}>
-  <RussiaImageFOOverlay
+  <RussiaDrawOverlay
     onSelect={(code) => router.push(`/trades?region=${encodeURIComponent(code)}`)}
-    // когда появятся реальные данные, просто передай объект:
-    // data={{ nwfo: 12, cfo: 31, mo: 7, pfo: 18, ufo: 9, sfo: 22, dfo: 4, yfo: 8, nfo: 5 }}
   />
 </section>
+
 
            
 
