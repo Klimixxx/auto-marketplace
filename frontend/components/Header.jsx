@@ -20,6 +20,16 @@ const UI = {
   yellow: '#FACC15',
 };
 
+function IconUser({ size = 16, color = '#E6EDF3' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 12c2.761 0 5-2.686 5-6s-2.239-6-5-6-5 2.686-5 6 2.239 6 5 6Z"
+        transform="translate(0,4)" fill="none" stroke={color} strokeWidth="1.5"/>
+      <path d="M3 20c1.5-3.5 5-5 9-5s7.5 1.5 9 5" fill="none" stroke={color} strokeWidth="1.5"/>
+    </svg>
+  );
+}
+
 export default function Header({ user }) {
   const router = useRouter();
 
@@ -34,9 +44,8 @@ export default function Header({ user }) {
   const notifRef = useRef(null);
   const moreRef = useRef(null);
 
-  const displayName =
-    (user?.fullName || user?.name || user?.username || user?.email || null);
-  const initials = displayName ? displayName.trim()[0]?.toUpperCase() : 'U';
+  const displayName = (user?.fullName || user?.name || user?.username || user?.email || null);
+  const authed = !!user; // ключевое поведение: если есть user — считаем авторизованным
 
   useEffect(() => {
     const update = () => setWidth(typeof window !== 'undefined' ? window.innerWidth : 0);
@@ -105,44 +114,69 @@ export default function Header({ user }) {
               )}
             </div>
 
+            {/* ИКОНКА АККАУНТА — как раньше: если не залогинен → /login, иначе открывает меню */}
             <div ref={acctRef} style={{ position: 'relative' }}>
-              <AccountButton
-                onClick={() => setAcctOpen(o => !o)}
-                initials={initials}
-                name={displayName || 'Войти'}
-              />
-              {acctOpen && (
+              <button
+                onClick={() => (authed ? setAcctOpen(o => !o) : go('/login'))}
+                title={authed ? (displayName || 'Аккаунт') : 'Войти'}
+                style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  background:UI.pillBg, border:`1px solid ${UI.border}`,
+                  borderRadius:999, padding:'6px 10px',
+                  color:UI.topText, cursor:'pointer'
+                }}
+              >
+                <span style={{
+                  display:'inline-flex', width:26, height:26, borderRadius:'50%',
+                  background:'rgba(255,255,255,0.06)',
+                  alignItems:'center', justifyContent:'center',
+                  border:`1px solid ${UI.border}`
+                }}>
+                  <IconUser />
+                </span>
+                <span style={{
+                  fontSize:13, maxWidth:140, overflow:'hidden',
+                  textOverflow:'ellipsis', whiteSpace:'nowrap'
+                }}>
+                  {authed ? (displayName || 'Аккаунт') : 'Войти'}
+                </span>
+                <ChevronDownIcon />
+              </button>
+
+              {acctOpen && authed && (
                 <Dropdown style={{ right: 0, minWidth: 220 }}>
                   {/* аватарка + имя сверху */}
-                  {displayName && (
-                    <div style={{
-                      display:'flex', alignItems:'center', gap:10,
-                      padding:'10px 12px',
-                      borderBottom:`1px solid ${UI.border}`
+                  <div style={{
+                    display:'flex', alignItems:'center', gap:10,
+                    padding:'10px 12px',
+                    borderBottom:`1px solid ${UI.border}`
+                  }}>
+                    <span style={{
+                      width:32, height:32, borderRadius:999,
+                      background:'rgba(255,255,255,0.06)',
+                      display:'grid', placeItems:'center', color:'#fff', fontWeight:800,
+                      border:`1px solid ${UI.border}`
                     }}>
-                      <span style={{
-                        width:32, height:32, borderRadius:999, background:UI.yellow,
-                        display:'grid', placeItems:'center', color:'#111', fontWeight:800
-                      }}>{initials}</span>
-                      <span style={{ color:'#fff', fontWeight:700 }}>{displayName}</span>
-                    </div>
-                  )}
+                      <IconUser />
+                    </span>
+                    <span style={{ color:'#fff', fontWeight:700 }}>
+                      {displayName || 'Аккаунт'}
+                    </span>
+                  </div>
 
-                  {!displayName && (
-                    <DropdownItem onClick={() => go('/login')}>Войти</DropdownItem>
-                  )}
+                  <DropdownItem onClick={() => go('/account')}>Личный кабинет</DropdownItem>
+                  <DropdownItem onClick={() => go('/inspections')}>Мои осмотры</DropdownItem>
+                  <DropdownItem onClick={() => go('/favorites')}>Избранное</DropdownItem>
+                  <DropdownDivider />
+                  <DropdownItem onClick={() => go('/admin')}>Админ-панель</DropdownItem>
+                  <DropdownDivider />
+                  <DropdownItem onClick={logoutUser}>Выйти</DropdownItem>
+                </Dropdown>
+              )}
 
-                  {displayName && (
-                    <>
-                      <DropdownItem onClick={() => go('/account')}>Личный кабинет</DropdownItem>
-                      <DropdownItem onClick={() => go('/inspections')}>Мои осмотры</DropdownItem>
-                      <DropdownItem onClick={() => go('/favorites')}>Избранное</DropdownItem>
-                      <DropdownDivider />
-                      <DropdownItem onClick={() => go('/admin')}>Админ-панель</DropdownItem>
-                      <DropdownDivider />
-                      <DropdownItem onClick={logoutUser}>Выйти</DropdownItem>
-                    </>
-                  )}
+              {!authed && acctOpen && (
+                <Dropdown style={{ right: 0, minWidth: 200 }}>
+                  <DropdownItem onClick={() => go('/login')}>Войти</DropdownItem>
                 </Dropdown>
               )}
             </div>
@@ -269,28 +303,6 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
           display:'grid', placeItems:'center', border:'2px solid ' + UI.topBg
         }}>{badge}</span>
       )}
-    </button>
-  );
-}
-
-function AccountButton({ onClick, initials, name }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display:'flex', alignItems:'center', gap:8,
-        background:UI.pillBg, border:`1px solid ${UI.border}`,
-        borderRadius:999, padding:'4px 8px', color:UI.topText, cursor:'pointer'
-      }}
-    >
-      <span style={{
-        width:26, height:26, borderRadius:999, background:UI.yellow,
-        display:'grid', placeItems:'center', color:'#111', fontWeight:800
-      }}>{initials}</span>
-      <span style={{
-        fontSize:13, maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'
-      }}>{name}</span>
-      <ChevronDownIcon />
     </button>
   );
 }
