@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import FirstLoginModal from '../components/FirstLoginModal';
+import Image from 'next/image';
+
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -87,6 +89,7 @@ export default function Home() {
         </form>
       </section>
 
+
       {/* Статистика платформы */}
       <section style={{ margin: '22px 0' }}>
         <h2 style={{ margin: '0 0 12px 2px', color: UI.title, letterSpacing: .2 }}>Статистика платформы</h2>
@@ -126,7 +129,54 @@ export default function Home() {
       </section>
 
 
-          
+       {/* Карта России (статичное изображение) */}
+<section style={{ margin: '26px 0' }}>
+  <div
+    style={{
+      background: UI.cardBg,
+      border: `1px solid ${UI.border}`,
+      borderRadius: 12,
+      padding: 16,
+    }}
+  >
+    <h2 style={{ margin: '0 0 12px', color: UI.title }}>
+      География объявлений
+    </h2>
+    <p style={{ margin: '0 0 16px', color: UI.text }}>
+      Пока это просто карта. Позже добавим подсветку и цифры по регионам.
+    </p>
+
+    {/* Контейнер с фиксированным соотношением сторон картинки */}
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1527 / 768', // соотношение сторон твоей картинки
+        borderRadius: 8,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Вариант с next/image (предпочтительно на Vercel) */}
+      <Image
+        src="/fo-map.png"
+        alt="Карта России по федеральным округам"
+        fill
+        sizes="(max-width: 1100px) 100vw, 1100px"
+        priority
+        style={{ objectFit: 'contain' }}
+      />
+
+      {/* Если не используешь next/image — замени на обычный <img>:
+      <img
+        src="/fo-map.png"
+        alt="Карта России по федеральным округам"
+        style={{ width:'100%', height:'100%', objectFit:'contain' }}
+      />
+      */}
+    </div>
+  </div>
+</section>
+   
 
            
 
