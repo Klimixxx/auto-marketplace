@@ -24,7 +24,7 @@ export default function Header({ user }) {
   const router = useRouter();
 
   const [q, setQ] = useState('');
-  const [notif] = useState(0); // непрочитанных по умолчанию нет
+  const [notif] = useState(0); // по умолчанию непрочитанных нет
   const [menuOpen, setMenuOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -34,9 +34,9 @@ export default function Header({ user }) {
   const notifRef = useRef(null);
   const moreRef = useRef(null);
 
-  // имя/инициалы из реального пользователя
-  const displayName = (user?.fullName || user?.name || user?.username || user?.email || 'Профиль') + '';
-  const initials = displayName.trim()[0]?.toUpperCase() || 'U';
+  const displayName =
+    (user?.fullName || user?.name || user?.username || user?.email || null);
+  const initials = displayName ? displayName.trim()[0]?.toUpperCase() : 'U';
 
   useEffect(() => {
     const update = () => setWidth(typeof window !== 'undefined' ? window.innerWidth : 0);
@@ -63,6 +63,15 @@ export default function Header({ user }) {
   };
 
   const isNarrow = width && width < 980;
+
+  async function logoutUser() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/';
+    } catch (e) {
+      console.error('Ошибка выхода', e);
+    }
+  }
 
   return (
     <header style={{ width: '100%' }}>
@@ -97,17 +106,43 @@ export default function Header({ user }) {
             </div>
 
             <div ref={acctRef} style={{ position: 'relative' }}>
-              <AccountButton onClick={() => setAcctOpen(o => !o)} initials={initials} name={displayName} />
+              <AccountButton
+                onClick={() => setAcctOpen(o => !o)}
+                initials={initials}
+                name={displayName || 'Войти'}
+              />
               {acctOpen && (
                 <Dropdown style={{ right: 0, minWidth: 220 }}>
-                  <DropdownHeader title={displayName} />
-                  <DropdownItem onClick={() => go('/account')}>Личный кабинет</DropdownItem>
-                  <DropdownItem onClick={() => go('/inspections')}>Мои осмотры</DropdownItem>
-                  <DropdownItem onClick={() => go('/favorites')}>Избранное</DropdownItem>
-                  <DropdownDivider />
-                  <DropdownItem onClick={() => go('/admin')}>Админ-панель</DropdownItem>
-                  <DropdownDivider />
-                  <DropdownItem onClick={() => go('/logout')}>Выйти</DropdownItem>
+                  {/* аватарка + имя сверху */}
+                  {displayName && (
+                    <div style={{
+                      display:'flex', alignItems:'center', gap:10,
+                      padding:'10px 12px',
+                      borderBottom:`1px solid ${UI.border}`
+                    }}>
+                      <span style={{
+                        width:32, height:32, borderRadius:999, background:UI.yellow,
+                        display:'grid', placeItems:'center', color:'#111', fontWeight:800
+                      }}>{initials}</span>
+                      <span style={{ color:'#fff', fontWeight:700 }}>{displayName}</span>
+                    </div>
+                  )}
+
+                  {!displayName && (
+                    <DropdownItem onClick={() => go('/login')}>Войти</DropdownItem>
+                  )}
+
+                  {displayName && (
+                    <>
+                      <DropdownItem onClick={() => go('/account')}>Личный кабинет</DropdownItem>
+                      <DropdownItem onClick={() => go('/inspections')}>Мои осмотры</DropdownItem>
+                      <DropdownItem onClick={() => go('/favorites')}>Избранное</DropdownItem>
+                      <DropdownDivider />
+                      <DropdownItem onClick={() => go('/admin')}>Админ-панель</DropdownItem>
+                      <DropdownDivider />
+                      <DropdownItem onClick={logoutUser}>Выйти</DropdownItem>
+                    </>
+                  )}
                 </Dropdown>
               )}
             </div>
@@ -120,7 +155,7 @@ export default function Header({ user }) {
         <div style={{
           maxWidth: MAXW, margin: '0 auto',
           height: 64, display: 'grid',
-          gridTemplateColumns: 'auto 1fr', // две колонки — убрали кнопку справа
+          gridTemplateColumns: 'auto 1fr',
           alignItems: 'center', gap: 16, padding: '0 12px'
         }}>
           <Logo onClick={() => go('/')} />
@@ -165,7 +200,7 @@ export default function Header({ user }) {
   );
 }
 
-/* ────────────── подкомпоненты ────────────── */
+/* ────────────── Подкомпоненты ────────────── */
 
 function TopLeftNav({ isNarrow, onGo, menuOpen, setMenuOpen, moreRef }) {
   const links = [
@@ -222,7 +257,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       style={{
         position:'relative', width:34, height:34, borderRadius:10,
         background:UI.pillBg, border:`1px solid ${UI.border}`,
-        display:'grid', placeItems:'center', cursor:'pointer'
+        display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'
       }}
     >
       {children}
