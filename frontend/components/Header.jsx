@@ -94,21 +94,25 @@ export default function Header() {
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
           {/* Навигация */}
-          <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
-            <a href="/trades">Торги</a>
-            {me?.role === 'admin' && <a href="/admin">Админ Панель</a>}
-          </nav>
+         <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
+  <a href="/trades">Торги</a>
+  <a href="/inspections">Мои Осмотры</a>
+  <a href="/support">Поддержка</a>
+  {me?.role === 'admin' && <a href="/admin">Админ Панель</a>}
+</nav>
+
 
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             {/* Баланс */}
             {me && (
-              <div style={{
-                padding:'6px 10px', borderRadius:10,
-                background: UI.chipBg, border:`1px solid ${UI.chipBorder}`, fontWeight:700
-              }}>
-                {fmtRub.format(balance)}
-              </div>
-            )}
+  <div style={{
+    padding:'6px 10px', borderRadius:10,
+    background: UI.chipBg, border:`1px solid ${UI.chipBorder}`, fontWeight:700
+  }}>
+    Баланс: {fmtRub.format(balance)}
+  </div>
+)}
+
 
             {/* Уведомления */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
@@ -242,7 +246,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       aria-label={ariaLabel}
       onClick={onClick}
       style={{
-        position:'relative', width:34, height:34, borderRadius:10,
+        position:'relative', width:40, height:40, borderRadius:10,
         background:'rgba(255,255,255,0.06)', border:`1px solid rgba(255,255,255,0.10)`,
         display:'flex', alignItems:'center', justifyContent:'center',
         cursor:'pointer'
@@ -286,7 +290,7 @@ function Logo({ onClick }) {
 }
 function BellIcon(){
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <svg width="22" height="18" viewBox="0 0 24 24" fill="none">
       <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
