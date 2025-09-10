@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import FirstLoginModal from '../components/FirstLoginModal';
 import Image from 'next/image';
+import Header from '../components/Header';
+
 
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
@@ -45,6 +47,7 @@ export default function Home() {
   const fmt = new Intl.NumberFormat('ru-RU');
 
   return (
+    <Header />
     <div className="container" style={{ maxWidth: 1100 }}>
       <FirstLoginModal />
 
