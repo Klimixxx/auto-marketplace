@@ -114,8 +114,6 @@ export default function Home() {
 
   return (
     <>
-      <Header />
-
       <div className="container" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 12px' }}>
         <FirstLoginModal />
 
