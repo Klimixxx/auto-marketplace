@@ -150,7 +150,7 @@ export default function Home() {
               }}
             >
               <Image
-  src="/fo-map@2x.png"               // 2× файл
+  src="/fo-map.png"
   alt="Карта России по федеральным округам"
   width={1527}                        // «логическая» ширина макета
   height={768}
