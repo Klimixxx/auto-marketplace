@@ -1,10 +1,10 @@
 // components/Header.jsx
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import Router from 'next/router'; // для отслеживания перехода
+import Router from 'next/router';
 
 const MAXW = 1100;
-const API = process.env.NEXT_PUBLIC_API_BASE;
+const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — будет относительный путь
 
 function IconUser({ size = 20, color = 'currentColor' }) {
   return (
@@ -21,7 +21,7 @@ export default function Header() {
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notif, setNotif] = useState(0);   // теперь управляемое состояние
+  const [notif, setNotif] = useState(0);
   const menuRef = useRef(null);
 
   const UI = {
@@ -44,23 +44,25 @@ export default function Header() {
     menuBorder: 'rgba(255,255,255,0.10)',
   };
 
-  // Грузим профиль
+  // ====== AUTH / PROFILE ======
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     setAuthed(Boolean(token));
     if (token) {
-      fetch(`${API || ''}/api/me`, { headers: { Authorization: 'Bearer ' + token } })
-        .then(async r => {
-          let d = null; try { d = await r.json(); } catch {}
-          if (!r.ok) return null;
-          return d;
-        })
+      fetch(join('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
+        .then(async r => (r.ok ? r.json() : null))
         .then(d => { if (d) setMe(d); })
+        .catch(() => {});
+    } else {
+      // если у тебя сессии в cookie — можно добрать профиль без токена:
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(async r => (r.ok ? r.json() : null))
+        .then(d => { if (d?.user) { setMe(d.user); setAuthed(true); }})
         .catch(() => {});
     }
   }, []);
 
-  // Закрывать меню по клику вне
+  // закрывать меню по клику вне
   useEffect(() => {
     function onDocClick(e) {
       if (!menuRef.current) return;
@@ -70,76 +72,85 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-useEffect(() => {
-  let aborted = false;
+  // ====== UNREAD BADGE ======
+  useEffect(() => {
+    let aborted = false;
 
-  async function fetchUnread() {
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const endpoint = `${API || ''}/api/notifications/unread`;
-      const r = await fetch(endpoint, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
+    async function fetchUnread() {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const headers = {
           'Accept': 'application/json',
           ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        },
-      });
-      if (!r.ok) { if (!aborted) setNotif(0); return; }
-      const d = await r.json();
+        };
+        const opts = { method: 'GET', credentials: 'include', headers };
 
-      // Универсальный парсер ответа
-      let c = 0;
-      if (typeof d === 'number') c = d;
-      else if (Array.isArray(d)) c = d.length;
-      else if (d && typeof d === 'object') c = d.count ?? d.unread ?? d.unreadCount ?? 0;
+        // пробуем несколько эндпоинтов
+        const paths = [
+          '/api/notifications/unread',
+          '/api/notifications/unread-count',
+          '/api/notifications/count',
+          '/api/notifications?status=unread',
+          '/api/notifications',
+        ];
 
-      if (!aborted) setNotif(Number(c) || 0);
-    } catch {
-      if (!aborted) setNotif(0);
+        let count = 0;
+        for (const p of paths) {
+          const res = await safeGet(join(p), opts);
+          if (!res) continue;
+          const c = parseUnreadCount(res);
+          if (typeof c === 'number') { count = c; break; }
+        }
+
+        if (!aborted) setNotif(Number(count) || 0);
+      } catch {
+        if (!aborted) setNotif(0);
+      }
     }
-  }
 
-  fetchUnread();
+    fetchUnread();
 
-  // при возврате во вкладку и таймер
-  const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread(); };
-  document.addEventListener('visibilitychange', onVisible);
-  const id = setInterval(fetchUnread, 60000);
+    // обновлять при возвращении во вкладку
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread(); };
+    document.addEventListener('visibilitychange', onVisible);
 
-  return () => {
-    aborted = true;
-    clearInterval(id);
-    document.removeEventListener('visibilitychange', onVisible);
-  };
-}, []);
+    // периодически, раз в 60с
+    const id = setInterval(fetchUnread, 60000);
 
+    return () => {
+      aborted = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
-
-useEffect(() => {
-  const onRoute = async (url) => {
-    if (url.startsWith('/notifications')) {
+  // при переходе на /notifications — пометить прочитанными (пробуем несколько маршрутов)
+  useEffect(() => {
+    const onRoute = async (url) => {
+      if (!url.startsWith('/notifications')) return;
       setNotif(0);
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const endpoint = `${API || ''}/api/notifications/mark-all-read`;
-        await fetch(endpoint, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: 'Bearer ' + token } : {}),
-          },
-        });
+        const headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        };
+        const opts = { method: 'POST', credentials: 'include', headers };
+
+        const markPaths = [
+          '/api/notifications/mark-all-read',
+          '/api/notifications/mark_read_all',
+          '/api/notifications/read-all',
+        ];
+        for (const p of markPaths) {
+          await fetch(join(p), opts).catch(() => {});
+        }
       } catch {}
-    }
-  };
-  Router.events.on('routeChangeComplete', onRoute);
-  return () => Router.events.off('routeChangeComplete', onRoute);
-}, []);
-
-
+    };
+    Router.events.on('routeChangeComplete', onRoute);
+    return () => Router.events.off('routeChangeComplete', onRoute);
+  }, []);
 
   function logout() {
     localStorage.removeItem('token');
@@ -286,7 +297,7 @@ useEffect(() => {
   );
 }
 
-/* вспомогательные */
+/* helpers */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const badgeText = badge > 99 ? '99+' : String(badge || '');
   return (
@@ -294,38 +305,25 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       aria-label={ariaLabel}
       onClick={onClick}
       style={{
-        position:'relative',
-        width:40, height:40, borderRadius:10,
-        background:'rgba(255,255,255,0.06)',
-        border:'1px solid rgba(255,255,255,0.10)',
+        position:'relative', width:40, height:40, borderRadius:10,
+        background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
         display:'flex', alignItems:'center', justifyContent:'center',
         cursor:'pointer'
       }}
     >
       {children}
       {badge > 0 && (
-        <span
-          style={{
-            position:'absolute',
-            top:-6, right:-6,
-            minWidth:18, height:18,
-            padding:'0 5px',
-            background:'#FF4D4F',     // красный фон
-            color:'#fff',
-            borderRadius:999,
-            fontSize:11, fontWeight:800,
-            display:'grid', placeItems:'center',
-            border:'2px solid #1A1C20',
-            lineHeight: '18px'
-          }}
-        >
-          {badgeText}
-        </span>
+        <span style={{
+          position:'absolute', top:-6, right:-6,
+          minWidth:18, height:18, padding:'0 5px',
+          background:'#FF4D4F', color:'#fff', borderRadius:999,
+          fontSize:11, fontWeight:800, display:'grid', placeItems:'center',
+          border:'2px solid #1A1C20', lineHeight:'18px'
+        }}>{badgeText}</span>
       )}
     </button>
   );
 }
-
 function MenuItem({ href, text }) {
   return (
     <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
@@ -349,7 +347,7 @@ function Logo({ onClick }) {
 }
 function BellIcon(){
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
@@ -357,7 +355,7 @@ function BellIcon(){
 }
 function SearchSmallIcon(){
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <circle cx="11" cy="11" r="7" stroke="#E6EDF3" strokeWidth="1.6" />
       <path d="M20 20L17 17" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
@@ -365,8 +363,49 @@ function SearchSmallIcon(){
 }
 function ChevronDownIcon(){
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M6 9l6 6 6-6" stroke="#E6EDF3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
+}
+
+/* ===== utils: безопасные запросы и парсинг ===== */
+function join(path){ return (API ? API.replace(/\/+$/,'') : '') + path; }
+async function safeGet(url, opts){
+  try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
+  catch { return null; }
+}
+function parseUnreadCount(d){
+  if (typeof d === 'number') return d;
+  if (Array.isArray(d)) return d.length;
+  if (!d || typeof d !== 'object') return 0;
+  // прямые ключи
+  if (isFiniteNum(d.count)) return d.count;
+  if (isFiniteNum(d.unread)) return d.unread;
+  if (isFiniteNum(d.unreadCount)) return d.unreadCount;
+  // вложенные data
+  if (d.data){
+    if (isFiniteNum(d.data.count)) return d.data.count;
+    if (isFiniteNum(d.data.unread)) return d.data.unread;
+    if (isFiniteNum(d.data.unreadCount)) return d.data.unreadCount;
+    const arr = d.data.items || d.data.rows || d.data.results;
+    const byData = countUnreadInArray(arr);
+    if (byData != null) return byData;
+  }
+  // массивы под другими ключами
+  const arr = d.items || d.rows || d.results || d.notifications;
+  const byArr = countUnreadInArray(arr);
+  if (byArr != null) return byArr;
+  return 0;
+}
+function isFiniteNum(x){ return typeof x === 'number' && isFinite(x); }
+function countUnreadInArray(arr){
+  if (!Array.isArray(arr)) return null;
+  let n = 0;
+  for (const it of arr){
+    const read = it?.read ?? it?.is_read ?? it?.isRead;
+    if (read === false || read === 0 || read === '0') n++;
+    else if (read === undefined) n++; // если это endpoint «только непрочитанные»
+  }
+  return n;
 }
