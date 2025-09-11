@@ -1,6 +1,7 @@
 // frontend/pages/index.js
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import Hero from '../components/Hero'; // ← добавили приветственный блок
 
 // UI цвета в синхроне со стилем
 const UI = {
@@ -104,127 +105,132 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="container">
-      <FirstLoginModal />
+    <>
+      {/* Приветственный блок (без фото) */}
+      <Hero />
 
-      {/* Статистика + карта */}
-      <section style={{ margin: '22px 0' }}>
-        <h2 style={{ margin: '0 0 12px 2px', color: UI.title, letterSpacing: 0.2 }}>Статистика платформы</h2>
+      <div className="container">
+        <FirstLoginModal />
 
-        <div
-          style={{
-            background: UI.cardBg,
-            border: `1px solid ${UI.border}`,
-            borderRadius: 12,
-            padding: 16,
-          }}
-        >
-          {/* сетка статов */}
+        {/* Статистика + карта */}
+        <section style={{ margin: '22px 0' }}>
+          <h2 style={{ margin: '0 0 12px 2px', color: UI.title, letterSpacing: 0.2 }}>Статистика платформы</h2>
+
           <div
             style={{
+              background: UI.cardBg,
+              border: `1px solid ${UI.border}`,
+              borderRadius: 12,
+              padding: 16,
+            }}
+          >
+            {/* сетка статов */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
+              <StatCard title="Пользователей" value={stats ? fmt.format(stats.users) : '—'} Icon={UsersIcon} />
+              <StatCard title="Публичные предложения" value="—" Icon={OffersIcon} />
+              <StatCard title="Открытых аукционов" value="—" Icon={AuctionsIcon} />
+              <StatCard title="Стоимость имущества в торгах" value="—" Icon={MoneyBagIcon} />
+            </div>
+
+            {/* карта без заголовка */}
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '1527 / 768',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
+              <Image
+                src="/fo-map.png"         /* положи файл в frontend/public/fo-map.png */
+                alt="Карта России по федеральным округам"
+                fill
+                sizes="(max-width: 1100px) 100vw, 1100px"
+                priority
+                style={{ objectFit: 'contain', background: 'transparent' }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Обучение */}
+        <section style={{ margin: '28px 0' }}>
+          <div
+            style={{
+              background: UI.cardBg,
+              border: `1px solid ${UI.border}`,
+              borderRadius: 12,
+              padding: 18,
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
-            <StatCard title="Пользователей" value={stats ? fmt.format(stats.users) : '—'} Icon={UsersIcon} />
-            <StatCard title="Публичные предложения" value="—" Icon={OffersIcon} />
-            <StatCard title="Открытых аукционов" value="—" Icon={AuctionsIcon} />
-            <StatCard title="Стоимость имущества в торгах" value="—" Icon={MoneyBagIcon} />
-          </div>
-
-          {/* карта без заголовка */}
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              aspectRatio: '1527 / 768',
-              borderRadius: 8,
-              overflow: 'hidden',
-            }}
-          >
-            <Image
-              src="/fo-map.png"         /* положи файл в frontend/public/fo-map.png */
-              alt="Карта России по федеральным округам"
-              fill
-              sizes="(max-width: 1100px) 100vw, 1100px"
-              priority
-              style={{ objectFit: 'contain', background: 'transparent' }}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Обучение */}
-      <section style={{ margin: '28px 0' }}>
-        <div
-          style={{
-            background: UI.cardBg,
-            border: `1px solid ${UI.border}`,
-            borderRadius: 12,
-            padding: 18,
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: 16,
-            alignItems: 'center',
-          }}
-        >
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 14,
-              background: 'rgba(34,197,94,0.08)',
-              border: '1px solid rgba(34,197,94,0.25)',
-              display: 'flex',
+              gridTemplateColumns: 'auto 1fr',
+              gap: 16,
               alignItems: 'center',
-              justifyContent: 'center',
             }}
           >
-            {/* иконка обучения */}
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 3l9 5-9 5-9-5 9-5z" stroke="#22C55E" strokeWidth="1.8" />
-              <path d="M21 10v4l-9 5-9-5v-4" stroke="#22C55E" strokeWidth="1.8" />
-            </svg>
-          </div>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: 'rgba(34,197,94,0.08)',
+                border: '1px solid rgba(34,197,94,0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {/* иконка обучения */}
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M12 3l9 5-9 5-9-5 9-5z" stroke="#22C55E" strokeWidth="1.8" />
+                <path d="M21 10v4l-9 5-9-5v-4" stroke="#22C55E" strokeWidth="1.8" />
+              </svg>
+            </div>
 
-          <div>
-            <h2 style={{ margin: '0 0 6px', color: UI.title }}>
-              Обучение от платформы{' '}
-              <span style={{ color: '#fff' }}>
-                AuctionA<span style={{ color: UI.red }}>f</span>to
-              </span>
-            </h2>
-            <p style={{ margin: 0, color: UI.text, lineHeight: 1.6 }}>
-              Мы готовим серию практических материалов по работе с публичными торгами…
+            <div>
+              <h2 style={{ margin: '0 0 6px', color: UI.title }}>
+                Обучение от платформы{' '}
+                <span style={{ color: '#fff' }}>
+                  AuctionA<span style={{ color: UI.red }}>f</span>to
+                </span>
+              </h2>
+              <p style={{ margin: 0, color: UI.text, lineHeight: 1.6 }}>
+                Мы готовим серию практических материалов по работе с публичными торгами…
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Инфо-блок */}
+        <section style={{ margin: '24px 0' }}>
+          <div
+            className="card"
+            style={{
+              background: UI.cardBg,
+              border: `1px solid ${UI.border}`,
+              borderRadius: 12,
+              padding: 16,
+            }}
+          >
+            <h2 style={{ marginTop: 0, color: UI.title }}>Все торги — в одном месте</h2>
+            <p style={{ color: UI.text }}>
+              Мы агрегируем объявления с разных источников и показываем удобную выдачу по фильтрам.
+            </p>
+            <p>
+              <a className="button" href="/trades" style={{ color: '#fff', background: '#1E90FF', padding: '8px 12px', borderRadius: 8 }}>
+                Перейти в каталог →
+              </a>
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Инфо-блок */}
-      <section style={{ margin: '24px 0' }}>
-        <div
-          className="card"
-          style={{
-            background: UI.cardBg,
-            border: `1px solid ${UI.border}`,
-            borderRadius: 12,
-            padding: 16,
-          }}
-        >
-          <h2 style={{ marginTop: 0, color: UI.title }}>Все торги — в одном месте</h2>
-          <p style={{ color: UI.text }}>
-            Мы агрегируем объявления с разных источников и показываем удобную выдачу по фильтрам.
-          </p>
-          <p>
-            <a className="button" href="/trades" style={{ color: '#fff', background: '#1E90FF', padding: '8px 12px', borderRadius: 8 }}>
-              Перейти в каталог →
-            </a>
-          </p>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   );
 }
