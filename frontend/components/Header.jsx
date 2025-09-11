@@ -70,48 +70,81 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  // Логика загрузки количества непрочитанных уведомлений
-  useEffect(() => {
-    let aborted = false;
+useEffect(() => {
+  let aborted = false;
 
-    async function fetchUnread() {
+  async function fetchUnread() {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const endpoint = `${API || ''}/api/notifications/unread`;
+      const r = await fetch(endpoint, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        },
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+
+      // Универсально вытаскиваем число из разных форматов ответа
+      let c = 0;
+      if (typeof d === 'number') c = d;
+      else if (Array.isArray(d)) c = d.length;
+      else if (d && typeof d === 'object') {
+        c = d.count ?? d.unread ?? d.unreadCount ?? 0;
+      }
+      c = Number(c) || 0;
+
+      if (!aborted) setNotif(c);
+    } catch {
+      if (!aborted) setNotif(0);
+    }
+  }
+
+  fetchUnread();
+
+  // обновлять при возврате во вкладку
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') fetchUnread();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+
+  // обновлять каждые 60 сек (можно убрать, если не нужно)
+  const id = setInterval(fetchUnread, 60000);
+
+  return () => {
+    aborted = true;
+    clearInterval(id);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
+}, []);
+
+
+ useEffect(() => {
+  const onRoute = async (url) => {
+    if (url.startsWith('/notifications')) {
+      setNotif(0);
       try {
-        const r = await fetch('/api/notifications/unread', { credentials: 'include' });
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!aborted) setNotif(Number(d.count || 0));
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const endpoint = `${API || ''}/api/notifications/mark-all-read`;
+        await fetch(endpoint, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+        });
       } catch {}
     }
+  };
+  Router.events.on('routeChangeComplete', onRoute);
+  return () => Router.events.off('routeChangeComplete', onRoute);
+}, []);
 
-    fetchUnread();
-
-    // обновлять при возврате во вкладку
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchUnread();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-
-    // обновлять каждые 60 сек
-    const id = setInterval(fetchUnread, 60000);
-
-    return () => {
-      aborted = true;
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, []);
-
-  // Обнулять при заходе на страницу уведомлений
-  useEffect(() => {
-    const onRoute = (url) => {
-      if (url.startsWith('/notifications')) {
-        setNotif(0);
-        fetch('/api/notifications/mark-all-read', { method: 'POST', credentials: 'include' }).catch(() => {});
-      }
-    };
-    Router.events.on('routeChangeComplete', onRoute);
-    return () => Router.events.off('routeChangeComplete', onRoute);
-  }, []);
 
   function logout() {
     localStorage.removeItem('token');
