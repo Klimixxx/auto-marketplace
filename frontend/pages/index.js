@@ -141,19 +141,20 @@ export default function Home() {
 
             {/* карта без заголовка */}
             <div
-              style={{
-                position: 'relative',
-                width: '100%',
-                aspectRatio: '1527 / 768',
-                borderRadius: 8,
-                overflow: 'hidden',
-              }}
-            >
-             <img
-  src="/Group15.svg"
-  alt="Карта России по федеральным округам"
-  style={{ width: '100%', height: 'auto' }}
-/>
+  style={{
+    position: 'relative',
+    width: '100%',
+    aspectRatio: '1527 / 768',
+    borderRadius: 8,
+    overflow: 'hidden',
+  }}
+>
+  <img
+    src="/maps/russia-fo.svg"
+    alt="Карта России по федеральным округам"
+    style={{ width: '100%', height: 'auto', display: 'block', background: 'transparent' }}
+    loading="eager"
+  />
 
 
 
