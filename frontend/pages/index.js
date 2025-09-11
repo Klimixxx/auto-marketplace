@@ -150,14 +150,14 @@ export default function Home() {
               }}
             >
               <Image
-  src="/fo-map.png"
+  src="/Group15.svg"
   alt="Карта России по федеральным округам"
-  width={1527}                        // «логическая» ширина макета
-  height={768}
-  quality={100}                       // максимум для webp/avif, если будет конверсия
+  fill
+  sizes="(max-width: 1100px) 100vw, 1100px"
   priority
-  style={{ width: '100%', height: 'auto', background: 'transparent' }}
+  style={{ objectFit: 'contain', background: 'transparent' }}
 />
+
 
             </div>
           </div>
