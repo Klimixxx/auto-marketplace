@@ -59,3 +59,42 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .footer { opacity: .6; font-size: 12px; margin-top: 32px; background: transparent; }
+
+/* =========================
+   ДОБАВЛЕНО: переменные и классы для шапки/меню
+   ========================= */
+
+/* дополнительные переменные под фон шапки и градиенты */
+:root{
+  --bg-deep:#0b1220;
+  --bg-deeper:#0a0f1a;
+  --border:rgba(255,255,255,0.12);
+  --grad-from:#67e8f9; /* как в Hero "прозрачно и удобно" */
+  --grad-to:#c4b5fd;
+}
+
+/* сплошной фон шапки (без прозрачности при скролле) */
+.header-solid{
+  background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-deeper) 100%);
+  border-bottom:1px solid var(--border);
+}
+
+/* фон нижней части шапки (полоса с поиском) */
+.header-searchbar{
+  background: rgba(255,255,255,0.05);
+  border:1px solid var(--border);
+  border-radius:12px;
+}
+
+/* градиентный текст ссылок в меню */
+.gradtext{
+  background: linear-gradient(90deg, var(--grad-from), var(--grad-to));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+
+/* (необязательно) эффект при наведении на пункт меню */
+.nav-link:hover{
+  text-shadow: 0 0 12px rgba(103,232,249,0.35);
+}
