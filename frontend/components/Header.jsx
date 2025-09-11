@@ -1,6 +1,7 @@
 // components/Header.jsx
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
+import Router from 'next/router'; // для отслеживания перехода
 
 const MAXW = 1100;
 const API = process.env.NEXT_PUBLIC_API_BASE;
@@ -20,7 +21,7 @@ export default function Header() {
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notif] = useState(0);
+  const [notif, setNotif] = useState(0);   // теперь управляемое состояние
   const menuRef = useRef(null);
 
   const UI = {
@@ -59,6 +60,7 @@ export default function Header() {
     }
   }, []);
 
+  // Закрывать меню по клику вне
   useEffect(() => {
     function onDocClick(e) {
       if (!menuRef.current) return;
@@ -66,6 +68,49 @@ export default function Header() {
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  // Логика загрузки количества непрочитанных уведомлений
+  useEffect(() => {
+    let aborted = false;
+
+    async function fetchUnread() {
+      try {
+        const r = await fetch('/api/notifications/unread', { credentials: 'include' });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!aborted) setNotif(Number(d.count || 0));
+      } catch {}
+    }
+
+    fetchUnread();
+
+    // обновлять при возврате во вкладку
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchUnread();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // обновлять каждые 60 сек
+    const id = setInterval(fetchUnread, 60000);
+
+    return () => {
+      aborted = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  // Обнулять при заходе на страницу уведомлений
+  useEffect(() => {
+    const onRoute = (url) => {
+      if (url.startsWith('/notifications')) {
+        setNotif(0);
+        fetch('/api/notifications/mark-all-read', { method: 'POST', credentials: 'include' }).catch(() => {});
+      }
+    };
+    Router.events.on('routeChangeComplete', onRoute);
+    return () => Router.events.off('routeChangeComplete', onRoute);
   }, []);
 
   function logout() {
@@ -85,7 +130,7 @@ export default function Header() {
   };
 
   return (
-    (<header style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
+    <header style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
       {/* Верхняя шапка */}
       <div style={{ width:'100%', background: UI.topBg, borderBottom: `1px solid ${UI.border}` }}>
         <div style={{
@@ -94,32 +139,30 @@ export default function Header() {
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
           {/* Навигация */}
-         <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
-  <a href="/trades">Торги</a>
-  <a href="/inspections">Мои Осмотры</a>
-  <a href="/support">Поддержка</a>
-  {me?.role === 'admin' && <a href="/admin">Админ Панель</a>}
-</nav>
-
+          <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
+            <a href="/trades">Торги</a>
+            <a href="/inspections">Мои Осмотры</a>
+            <a href="/support">Поддержка</a>
+            {me?.role === 'admin' && <a href="/admin">Админ Панель</a>}
+          </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             {/* Баланс */}
             {me && (
-  <div style={{
-    padding:'6px 10px', borderRadius:10,
-    background: UI.chipBg, border:`1px solid ${UI.chipBorder}`, fontWeight:700
-  }}>
-    Баланс: {fmtRub.format(balance)}
-  </div>
-)}
-
+              <div style={{
+                padding:'6px 10px', borderRadius:10,
+                background: UI.chipBg, border:`1px solid ${UI.chipBorder}`, fontWeight:700
+              }}>
+                Баланс: {fmtRub.format(balance)}
+              </div>
+            )}
 
             {/* Уведомления */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
               <BellIcon />
             </IconButton>
 
-            {/* Аккаунт — твой блок */}
+            {/* Аккаунт */}
             <div style={{ position:'relative' }} ref={menuRef}>
               <button
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
@@ -152,27 +195,6 @@ export default function Header() {
                   background: UI.menuBg, border:`1px solid ${UI.menuBorder}`, borderRadius:12,
                   boxShadow:'0 12px 28px rgba(0,0,0,0.25)', minWidth:260, zIndex:60, overflow:'hidden'
                 }}>
-                  <div style={{
-                    display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
-                    borderBottom:`1px solid ${UI.menuBorder}`, background:'rgba(255,255,255,0.03)'
-                  }}>
-                    <span style={{
-                      display:'inline-flex', width:34, height:34, borderRadius:'50%',
-                      background:'rgba(255,255,255,0.06)', alignItems:'center', justifyContent:'center',
-                      border:`1px solid ${UI.menuBorder}`
-                    }}>
-                      <IconUser size={18} color={UI.topText} />
-                    </span>
-                    <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                        {me?.name || 'Аккаунт'}
-                      </div>
-                      <div style={{ fontSize:12, opacity:.8 }}>
-                        Баланс: <span style={{ color: UI.yellow, fontWeight:700 }}>{fmtRub.format(balance)}</span>
-                      </div>
-                    </div>
-                  </div>
-
                   <MenuItem href="/my-trades" text="Мои Торги" />
                   <MenuItem href="/account" text="Личный Кабинет" />
                   <MenuItem href="/inspections" text="Мои Осмотры" />
@@ -199,7 +221,6 @@ export default function Header() {
           alignItems:'center', gap:16, padding:'0 12px'
         }}>
           <Logo onClick={() => router.push('/')} />
-
           <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
             <button
               type="button" onClick={() => router.push('/trades')}
@@ -212,7 +233,6 @@ export default function Header() {
             >
               <SearchSmallIcon /> Все категории <ChevronDownIcon />
             </button>
-
             <input
               value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
               style={{
@@ -221,7 +241,6 @@ export default function Header() {
                 color:UI.inputText, minWidth:200
               }}
             />
-
             <button type="submit"
               style={{
                 height:44, padding:'0 16px', borderRadius:10,
@@ -239,7 +258,7 @@ export default function Header() {
   );
 }
 
-/* вспомогательные компоненты */
+/* вспомогательные */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   return (
     <button
@@ -267,9 +286,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
 }
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{
-      display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none'
-    }}>
+    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
       {text}
     </a>
   );
@@ -290,7 +307,7 @@ function Logo({ onClick }) {
 }
 function BellIcon(){
   return (
-    <svg width="22" height="18" viewBox="0 0 24 24" fill="none">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
       <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
