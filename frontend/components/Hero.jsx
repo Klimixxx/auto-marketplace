@@ -7,7 +7,8 @@ const UI = {
   text: 'rgba(255,255,255,0.80)',
   border: 'rgba(255,255,255,0.12)',
   glass: 'rgba(255,255,255,0.05)',
-  button: '#67e8f9', // cyan-300
+  button: '#67e8f9',     // цвет кнопки (и в Hero, и в шапке)
+  buttonHover: '#a5f3fc',
 };
 
 export default function Hero() {
@@ -22,16 +23,14 @@ export default function Hero() {
 
   return (
     <section style={styles.wrap}>
-      {/* Фон без фото: два градиента (стационарные) */}
-      <div style={styles.bg}>
-        <div style={styles.gradientA} />
-        <div style={styles.gradientB} />
-      </div>
+      {/* Фон: теперь такой же, как у всего сайта (var(--app-bg)) */}
+      <div style={styles.bg} />
 
       <div style={styles.inner}>
+        {/* Badge — новый текст, чуть крупнее и с более толстой рамкой */}
         <div style={styles.badge}>
           <span style={styles.pulse} />
-          <span>Бета-версия • сделки из аукционов</span>
+          <span>15 Торговых площадок в одном месте</span>
         </div>
 
         <h1 style={styles.title}>
@@ -54,7 +53,7 @@ export default function Hero() {
           <button type="submit" style={styles.button}>Найти</button>
         </form>
 
-        {/* Мини-фичи (оставили) */}
+        {/* Мини-фичи */}
         <div style={styles.features} className="features">
           <Feature icon="🔎" title="Честные данные" text="Источники и история авто — в одном месте."/>
           <Feature icon="⚡" title="Быстрый старт" text="Фильтры и поиск без лишних шагов."/>
@@ -68,7 +67,6 @@ export default function Hero() {
           .hero-form { flex-direction: column; align-items: stretch; }
           .hero-form button { width: 100%; }
         }
-
         @keyframes pulseKey {
           0% { box-shadow: 0 0 0 0 rgba(52,211,153,0.7); }
           70% { box-shadow: 0 0 0 12px rgba(52,211,153,0); }
@@ -99,16 +97,11 @@ const styles = {
     padding: '56px 0 28px',
     margin: '0 calc(50% - 50vw)', // full-bleed
   },
-  bg: { position:'absolute', inset:0 },
-  gradientA: {
-    position:'absolute', inset:0,
-    background: 'radial-gradient(900px 600px at 20% -10%, #0b1220 0%, #0b1220 35%, #0a0f1a 60%, #0a0f1a 100%)',
-  },
-  gradientB: {
-    position:'absolute', inset:0,
-    background: 'radial-gradient(700px 400px at 85% 20%, rgba(103,232,249,0.25), rgba(103,232,249,0) 60%)',
-    filter: 'blur(20px)',
-    opacity: 0.7,
+  bg: {
+    position:'absolute',
+    inset:0,
+    // тот же фон, что в globals.css :root --app-bg
+    background: 'var(--app-bg)',
   },
   inner: {
     position:'relative',
@@ -119,13 +112,13 @@ const styles = {
   badge: {
     display: 'inline-flex',
     alignItems:'center',
-    gap: 8,
-    padding: '6px 10px',
+    gap: 10,
+    padding: '8px 12px',                 // было 6px 10px
     borderRadius: 999,
-    background: 'rgba(255,255,255,0.05)',
-    border: `1px solid ${'rgba(255,255,255,0.12)'}`,
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    background: UI.glass,
+    border: `1.5px solid ${UI.border}`,  // рамка чуть толще
+    color: UI.text,
+    fontSize: 13.5,                      // текст чуть больше
     backdropFilter: 'blur(6px)',
   },
   pulse: {
@@ -161,7 +154,7 @@ const styles = {
     padding: '14px 14px',
     borderRadius: 14,
     background: 'rgba(255,255,255,0.06)',
-    border: `1px solid rgba(255,255,255,0.12)`,
+    border: `1px solid ${UI.border}`,
     outline: 'none',
     color: '#fff',
     fontSize: 16,
@@ -169,7 +162,7 @@ const styles = {
   button: {
     padding: '14px 16px',
     borderRadius: 14,
-    background: '#67e8f9',
+    background: UI.button,
     color: '#000',
     fontWeight: 600,
     border: 'none',
@@ -188,13 +181,13 @@ const styles = {
     padding: 12,
     borderRadius: 14,
     background: 'rgba(255,255,255,0.04)',
-    border: `1px solid rgba(255,255,255,0.12)`,
+    border: `1px solid ${UI.border}`,
   },
   featureIcon: {
     width: 40, height: 40, borderRadius: 10,
     display: 'grid', placeItems: 'center',
     background: 'rgba(255,255,255,0.06)',
-    border: `1px solid rgba(255,255,255,0.12)`,
+    border: `1px solid ${UI.border}`,
     fontSize: 20,
   },
   featureTitle: { color:'#fff', fontWeight:600, fontSize:14, lineHeight:1.2 },
