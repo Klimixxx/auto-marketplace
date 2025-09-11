@@ -200,19 +200,19 @@ export default function Header() {
   };
 
   return (
-    <header style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
+    <header className="header-solid" style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
       {/* Верхняя шапка */}
-      <div style={{ width:'100%', background: UI.topBg, borderBottom: `1px solid ${UI.border}` }}>
+      <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}` }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:44,
           display:'grid', gridTemplateColumns:'1fr auto',
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
-          <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
-            <a href="/trades">Торги</a>
-            <a href="/inspections">Мои Осмотры</a>
-            <a href="/support">Поддержка</a>
-            {me?.role === 'admin' && <a href="/admin">Админ Панель</a>}
+          <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
+            <a href="/trades" className="nav-link gradtext">Торги</a>
+            <a href="/inspections" className="nav-link gradtext">Мои Осмотры</a>
+            <a href="/support" className="nav-link gradtext">Поддержка</a>
+            {me?.role === 'admin' && <a href="/admin" className="nav-link gradtext">Админ Панель</a>}
           </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
@@ -281,44 +281,48 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%', background: UI.baseBg }}>
+      <div style={{ width:'100%' }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
           alignItems:'center', gap:16, padding:'0 12px'
         }}>
           <Logo onClick={() => router.push('/')} />
-          <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
-            <button
-              type="button" onClick={() => router.push('/trades')}
-              style={{
-                display:'inline-flex', alignItems:'center', gap:8,
-                height:44, padding:'0 12px', borderRadius:10,
-                background:UI.pillBg, border:`1px solid ${UI.inputBorder}`,
-                color:UI.topText, cursor:'pointer', whiteSpace:'nowrap'
-              }}
-            >
-              <SearchSmallIcon /> Все категории <ChevronDownIcon />
-            </button>
-            <input
-              value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
-              style={{
-                height:44, borderRadius:10, padding:'0 12px',
-                background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
-                color:UI.inputText, minWidth:200
-              }}
-            />
-            <button type="submit"
-              style={{
-                height:44, padding:'0 16px', borderRadius:10,
-                background:UI.blue, color:'#fff', fontWeight:800, cursor:'pointer', border:'none'
-              }}
-              onMouseEnter={(e)=>e.currentTarget.style.background = UI.blueHover}
-              onMouseLeave={(e)=>e.currentTarget.style.background = UI.blue}
-            >
-              Найти
-            </button>
-          </form>
+
+          {/* Обёртка нижней панели с поиском — единый фон/рамка */}
+          <div className="header-searchbar" style={{ padding:'8px' }}>
+            <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
+              <button
+                type="button" onClick={() => router.push('/trades')}
+                style={{
+                  display:'inline-flex', alignItems:'center', gap:8,
+                  height:44, padding:'0 12px', borderRadius:10,
+                  background:UI.pillBg, border:`1px solid ${UI.inputBorder}`,
+                  color:UI.topText, cursor:'pointer', whiteSpace:'nowrap'
+                }}
+              >
+                <SearchSmallIcon /> Все категории <ChevronDownIcon />
+              </button>
+              <input
+                value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
+                style={{
+                  height:44, borderRadius:10, padding:'0 12px',
+                  background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
+                  color:UI.inputText, minWidth:200
+                }}
+              />
+              <button type="submit"
+                style={{
+                  height:44, padding:'0 16px', borderRadius:10,
+                  background:UI.blue, color:'#fff', fontWeight:800, cursor:'pointer', border:'none'
+                }}
+                onMouseEnter={(e)=>e.currentTarget.style.background = UI.blueHover}
+                onMouseLeave={(e)=>e.currentTarget.style.background = UI.blue}
+              >
+                Найти
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </header>
