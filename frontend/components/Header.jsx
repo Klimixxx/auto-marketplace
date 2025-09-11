@@ -206,12 +206,12 @@ export default function Header() {
               </div>
             )}
 
-            {/* уведомления — уменьшили «рамку» (контейнер 36x36, иконка прежняя) */}
+            {/* уведомления — компактнее контейнер */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
               <BellIcon />
             </IconButton>
 
-            {/* Аккаунт — убрали лишнюю «рамку»: меньше паддинги и круг 24px */}
+            {/* Аккаунт */}
             <div style={{ position:'relative' }} ref={menuRef}>
               <button
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
@@ -269,12 +269,12 @@ export default function Header() {
           display:'grid', gridTemplateColumns:'auto 1fr',
           alignItems:'center', gap:16, padding:'0 12px'
         }}>
-          {/* ЛОГО: убрал зелёный квадрат с буквой A, оставил только текст */}
+          {/* ЛОГО: только текст, сделали чуть крупнее */}
           <Logo onClick={() => router.push('/')} />
 
-          {/* Поисковая группа без внешней рамки-контейнера */}
+          {/* Поисковая группа: input и «Найти» соединены */}
           <div style={{ padding: 0 }}>
-            <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
+            <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:10 }}>
               <button
                 type="button" onClick={() => router.push('/trades')}
                 style={{
@@ -285,25 +285,37 @@ export default function Header() {
               >
                 Все категории
               </button>
-              <input
-                value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
-                style={{
-                  height:44, borderRadius:10, padding:'0 12px',
-                  background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
-                  color:UI.inputText, minWidth:200
-                }}
-              />
-              <button
-                type="submit"
-                style={{
-                  height:44, padding:'0 16px', borderRadius:10,
-                  background:UI.heroBtn, color:'#000', fontWeight:800, cursor:'pointer', border:'none'
-                }}
-                onMouseEnter={(e)=>e.currentTarget.style.background = UI.heroBtnHover}
-                onMouseLeave={(e)=>e.currentTarget.style.background = UI.heroBtn}
-              >
-                Найти
-              </button>
+
+              {/* обёртка для связки input + button без зазора */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:0 }}>
+                <input
+                  value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
+                  style={{
+                    height:44, padding:'0 12px',
+                    background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
+                    color:UI.inputText, minWidth:200,
+                    borderTopLeftRadius:10, borderBottomLeftRadius:10,
+                    borderTopRightRadius:0, borderBottomRightRadius:0,
+                    borderRight:'none' // чтобы рамка была общей с кнопкой
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    height:44, padding:'0 16px',
+                    background:UI.heroBtn, color:'#000',
+                    cursor:'pointer', border:'1px solid ' + UI.inputBorder,
+                    borderLeft:'none',
+                    borderTopRightRadius:10, borderBottomRightRadius:10,
+                    borderTopLeftRadius:0, borderBottomLeftRadius:0,
+                    fontWeight:600 /* вместо 800 — убрали жирный */
+                  }}
+                  onMouseEnter={(e)=>e.currentTarget.style.background = UI.heroBtnHover}
+                  onMouseLeave={(e)=>e.currentTarget.style.background = UI.heroBtn}
+                >
+                  Найти
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -319,7 +331,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
     <button
       aria-label={ariaLabel}
       onClick={onClick}
-      // контейнер поменьше (36х36), сама иконка остаётся прежней
+      // компактный контейнер под иконку
       style={{
         position:'relative', width:36, height:36, borderRadius:10,
         background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
@@ -350,8 +362,7 @@ function MenuItem({ href, text }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-      {/* квадрат с "A" удалён — оставляем только название */}
-      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3 }}>
+      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
         AuctionA<span style={{ color:'#EF4444' }}>f</span>to
       </div>
     </div>
