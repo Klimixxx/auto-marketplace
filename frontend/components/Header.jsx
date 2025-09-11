@@ -85,19 +85,16 @@ useEffect(() => {
           ...(token ? { Authorization: 'Bearer ' + token } : {}),
         },
       });
-      if (!r.ok) return;
+      if (!r.ok) { if (!aborted) setNotif(0); return; }
       const d = await r.json();
 
-      // Универсально вытаскиваем число из разных форматов ответа
+      // Универсальный парсер ответа
       let c = 0;
       if (typeof d === 'number') c = d;
       else if (Array.isArray(d)) c = d.length;
-      else if (d && typeof d === 'object') {
-        c = d.count ?? d.unread ?? d.unreadCount ?? 0;
-      }
-      c = Number(c) || 0;
+      else if (d && typeof d === 'object') c = d.count ?? d.unread ?? d.unreadCount ?? 0;
 
-      if (!aborted) setNotif(c);
+      if (!aborted) setNotif(Number(c) || 0);
     } catch {
       if (!aborted) setNotif(0);
     }
@@ -105,13 +102,9 @@ useEffect(() => {
 
   fetchUnread();
 
-  // обновлять при возврате во вкладку
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') fetchUnread();
-  };
+  // при возврате во вкладку и таймер
+  const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread(); };
   document.addEventListener('visibilitychange', onVisible);
-
-  // обновлять каждые 60 сек (можно убрать, если не нужно)
   const id = setInterval(fetchUnread, 60000);
 
   return () => {
@@ -122,7 +115,8 @@ useEffect(() => {
 }, []);
 
 
- useEffect(() => {
+
+useEffect(() => {
   const onRoute = async (url) => {
     if (url.startsWith('/notifications')) {
       setNotif(0);
@@ -144,6 +138,7 @@ useEffect(() => {
   Router.events.on('routeChangeComplete', onRoute);
   return () => Router.events.off('routeChangeComplete', onRoute);
 }, []);
+
 
 
   function logout() {
@@ -293,30 +288,44 @@ useEffect(() => {
 
 /* вспомогательные */
 function IconButton({ ariaLabel, onClick, children, badge }) {
+  const badgeText = badge > 99 ? '99+' : String(badge || '');
   return (
     <button
       aria-label={ariaLabel}
       onClick={onClick}
       style={{
-        position:'relative', width:40, height:40, borderRadius:10,
-        background:'rgba(255,255,255,0.06)', border:`1px solid rgba(255,255,255,0.10)`,
+        position:'relative',
+        width:40, height:40, borderRadius:10,
+        background:'rgba(255,255,255,0.06)',
+        border:'1px solid rgba(255,255,255,0.10)',
         display:'flex', alignItems:'center', justifyContent:'center',
         cursor:'pointer'
       }}
     >
       {children}
       {badge > 0 && (
-        <span style={{
-          position:'absolute', top:-6, right:-6,
-          minWidth:18, height:18, padding:'0 5px',
-          background:'#FF4D4F', color:'#fff', borderRadius:999,
-          fontSize:11, fontWeight:800, display:'grid', placeItems:'center',
-          border:'2px solid #1A1C20'
-        }}>{badge}</span>
+        <span
+          style={{
+            position:'absolute',
+            top:-6, right:-6,
+            minWidth:18, height:18,
+            padding:'0 5px',
+            background:'#FF4D4F',     // красный фон
+            color:'#fff',
+            borderRadius:999,
+            fontSize:11, fontWeight:800,
+            display:'grid', placeItems:'center',
+            border:'2px solid #1A1C20',
+            lineHeight: '18px'
+          }}
+        >
+          {badgeText}
+        </span>
       )}
     </button>
   );
 }
+
 function MenuItem({ href, text }) {
   return (
     <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
