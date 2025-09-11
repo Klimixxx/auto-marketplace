@@ -85,7 +85,7 @@ export default function Header() {
   };
 
   return (
-    <header style={{ width:'100%' }}>
+    (<header style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
       {/* Верхняя шапка */}
       <div style={{ width:'100%', background: UI.topBg, borderBottom: `1px solid ${UI.border}` }}>
         <div style={{
