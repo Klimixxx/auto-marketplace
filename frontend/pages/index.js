@@ -80,13 +80,16 @@ function AuctionsIcon() {
     </svg>
   );
 }
-function ValueIcon() {
+function MoneyBagIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 1v22M5 8h14" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 3c0 1.657 1.343 3 3 3s3-1.343 3-3" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M7 9h10c1.657 0 3 1.343 3 3 0 0-1 8-8 8s-8-8-8-8c0-1.657 1.343-3 3-3Z" stroke="#22C55E" strokeWidth="1.8" />
+      <path d="M9 13h6M9 16h6" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
     </svg>
   );
 }
+
 function EducationIcon() {
   return (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
@@ -141,7 +144,7 @@ export default function Home() {
               <StatCard title="Пользователей" value={stats ? fmt.format(stats.users) : '—'} Icon={UsersIcon} />
               <StatCard title="Публичные предложения" value="—" Icon={OffersIcon} />
               <StatCard title="Открытых аукционов" value="—" Icon={AuctionsIcon} />
-              <StatCard title="Стоимость имущества в торгах" value="—" Icon={ValueIcon} />
+              <StatCard title="Стоимость имущества в торгах" value="—" Icon={MoneyBagIcon} />
             </div>
 
             {/* карта без заголовка */}
