@@ -8,7 +8,7 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 
 /* ===== helpers for UI ===== */
 const UI = {
-  topBg: '#1A1C20',
+  topBg: '#0d0d0d', // мягкий чёрный для верхней шапки (БЫЛО: #1A1C20)
   topText: '#E6EDF3',
   topMuted: 'rgba(230,237,243,0.75)',
   border: 'rgba(255,255,255,0.10)',
@@ -200,9 +200,10 @@ export default function Header() {
   };
 
   return (
-    <header className="header-solid" style={{ width: '100%', position:'sticky', top:0, zIndex:1000 }}>
-      {/* Верхняя шапка */}
-      <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}` }}>
+    // снимаем нижнюю линию у нижней шапки: borderBottom:'none' перекроет header-solid
+    <header className="header-solid" style={{ width: '100%', position:'sticky', top:0, zIndex:1000, borderBottom:'none' }}>
+      {/* Верхняя шапка — фон мягкий черный */}
+      <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:44,
           display:'grid', gridTemplateColumns:'1fr auto',
@@ -289,16 +290,16 @@ export default function Header() {
         }}>
           <Logo onClick={() => router.push('/')} />
 
-          {/* Обёртка нижней панели с поиском — единый фон/рамка */}
-          <div className="header-searchbar" style={{ padding:'8px' }}>
+          {/* УБРАЛИ «рамку»: снят класс header-searchbar и любые границы/фон у контейнера */}
+          <div style={{ padding: 0 }}>
             <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
               <button
                 type="button" onClick={() => router.push('/trades')}
                 style={{
                   display:'inline-flex', alignItems:'center', gap:8,
                   height:44, padding:'0 12px', borderRadius:10,
-                  background:UI.pillBg, border:`1px solid ${UI.inputBorder}`,
-                  color:UI.topText, cursor:'pointer', whiteSpace:'nowrap'
+                  background:UI.pillBg, /* нет внешней рамки контейнера */
+                  color:UI.topText, cursor:'pointer', whiteSpace:'nowrap', border:'none'
                 }}
               >
                 <SearchSmallIcon /> Все категории <ChevronDownIcon />
@@ -307,7 +308,8 @@ export default function Header() {
                 value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
                 style={{
                   height:44, borderRadius:10, padding:'0 12px',
-                  background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
+                  background:UI.inputBg, /* оставляем собственную четкую рамку инпута */
+                  border:`1px solid ${UI.inputBorder}`,
                   color:UI.inputText, minWidth:200
                 }}
               />
