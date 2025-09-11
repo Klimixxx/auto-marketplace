@@ -7,7 +7,7 @@ const UI = {
   text: 'rgba(255,255,255,0.80)',
   border: 'rgba(255,255,255,0.12)',
   glass: 'rgba(255,255,255,0.05)',
-  button: '#67e8f9',     // цвет кнопки (и в Hero, и в шапке)
+  button: '#67e8f9',     // один цвет с кнопкой в шапке
   buttonHover: '#a5f3fc',
 };
 
@@ -23,11 +23,9 @@ export default function Hero() {
 
   return (
     <section style={styles.wrap}>
-      {/* Фон: такой же, как у всего сайта (var(--app-bg)) */}
-      <div style={styles.bg} />
-
+      {/* без собственного бэкграунда — наследуем общий фон страницы */}
       <div style={styles.inner}>
-        {/* Badge — новый текст, чуть крупнее и с более толстой рамкой */}
+        {/* Badge */}
         <div style={styles.badge}>
           <span style={styles.pulse} />
           <span>15 Торговых площадок в одном месте</span>
@@ -94,11 +92,7 @@ const styles = {
     overflow: 'hidden',
     padding: '56px 0 28px',
     margin: '0 calc(50% - 50vw)', // full-bleed
-  },
-  bg: {
-    position:'absolute',
-    inset:0,
-    background: 'var(--app-bg)',
+    background: 'transparent',     // ⟵ фон берётся из body (var(--app-bg))
   },
   inner: {
     position:'relative',
