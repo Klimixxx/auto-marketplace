@@ -149,14 +149,12 @@ export default function Home() {
                 overflow: 'hidden',
               }}
             >
-              <Image
+             <img
   src="/Group15.svg"
   alt="Карта России по федеральным округам"
-  fill
-  sizes="(max-width: 1100px) 100vw, 1100px"
-  priority
-  style={{ objectFit: 'contain', background: 'transparent' }}
+  style={{ width: '100%', height: 'auto' }}
 />
+
 
 
             </div>
