@@ -23,7 +23,7 @@ export default function Hero() {
 
   return (
     <section style={styles.wrap}>
-      {/* Фон: теперь такой же, как у всего сайта (var(--app-bg)) */}
+      {/* Фон: такой же, как у всего сайта (var(--app-bg)) */}
       <div style={styles.bg} />
 
       <div style={styles.inner}>
@@ -38,9 +38,7 @@ export default function Hero() {
           <span style={styles.titleGradient}>прозрачно и удобно</span>
         </h1>
 
-        <p style={styles.subtitle}>
-          Собираем лоты из проверенных торговых площадок, показываем историю авто и упрощаем путь от поиска до сделки.
-        </p>
+        {/* подзаголовок убран по задаче */}
 
         <form onSubmit={onSubmit} style={styles.form} className="hero-form">
           <input
@@ -100,7 +98,6 @@ const styles = {
   bg: {
     position:'absolute',
     inset:0,
-    // тот же фон, что в globals.css :root --app-bg
     background: 'var(--app-bg)',
   },
   inner: {
@@ -113,12 +110,12 @@ const styles = {
     display: 'inline-flex',
     alignItems:'center',
     gap: 10,
-    padding: '8px 12px',                 // было 6px 10px
+    padding: '8px 12px',
     borderRadius: 999,
     background: UI.glass,
-    border: `1.5px solid ${UI.border}`,  // рамка чуть толще
+    border: `1.5px solid ${UI.border}`,
     color: UI.text,
-    fontSize: 13.5,                      // текст чуть больше
+    fontSize: 13.5,
     backdropFilter: 'blur(6px)',
   },
   pulse: {
@@ -137,11 +134,6 @@ const styles = {
     backgroundImage: 'linear-gradient(90deg, #67e8f9, #c4b5fd)',
     WebkitBackgroundClip: 'text',
     color: 'transparent',
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    maxWidth: 720,
-    fontSize: 18,
   },
   form: {
     marginTop: 18,
