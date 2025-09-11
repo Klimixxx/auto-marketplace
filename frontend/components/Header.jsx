@@ -1,14 +1,14 @@
-// components/Header.jsx
+// frontend/components/Header.jsx
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Router from 'next/router';
 
 const MAXW = 1100;
-const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — пойдём относительным путём
+const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — относительные пути
 
-/* ===== helpers for UI ===== */
+/* ===== UI tokens ===== */
 const UI = {
-  topBg: '#0d0d0d', // мягкий чёрный для верхней шапки (БЫЛО: #1A1C20)
+  topBg: '#0d0d0d', // мягкий чёрный для верхней шапки
   topText: '#E6EDF3',
   topMuted: 'rgba(230,237,243,0.75)',
   border: 'rgba(255,255,255,0.10)',
@@ -17,8 +17,9 @@ const UI = {
   inputText: '#E6EDF3',
   inputBorder: 'rgba(255,255,255,0.14)',
   pillBg: 'rgba(255,255,255,0.06)',
-  blue: '#1E90FF',
-  blueHover: '#1683ea',
+  // цвета кнопки "Найти" как в Hero
+  heroBtn: '#67e8f9',
+  heroBtnHover: '#a5f3fc',
   red: '#FF4D4F',
   yellow: '#FACC15',
   chipBg: 'rgba(255,255,255,0.06)',
@@ -37,7 +38,7 @@ function IconUser({ size = 20, color = 'currentColor' }) {
   );
 }
 
-/* ===== utils: запросы/парсинг ===== */
+/* ===== utils ===== */
 function join(path){ return (API ? API.replace(/\/+$/,'') : '') + path; }
 async function safeJson(url, opts){
   try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
@@ -50,7 +51,7 @@ function countUnreadInArray(arr){
   for (const it of arr){
     const read = it?.read ?? it?.is_read ?? it?.isRead ?? it?.seen ?? it?.is_seen;
     if (read === false || read === 0 || read === '0') n++;
-    else if (read === undefined) n++; // если эндпоинт уже отдаёт только непрочитанные
+    else if (read === undefined) n++;
   }
   return n;
 }
@@ -98,7 +99,6 @@ export default function Header() {
         .then(d => { if (d) setMe(d); })
         .catch(() => {});
     } else {
-      // fallback на куки-сессию
       fetch('/api/auth/me', { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.user) { setMe(d.user); setAuthed(true); }})
@@ -106,7 +106,7 @@ export default function Header() {
     }
   }, []);
 
-  // закрывать меню по клику вне
+  // клик вне меню
   useEffect(() => {
     const onDocClick = (e) => {
       if (!menuRef.current) return;
@@ -116,27 +116,16 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  // ===== unread badge: грузим/обновляем =====
+  // unread badge
   useEffect(() => {
     let aborted = false;
 
     async function fetchUnread() {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const headers = {
-          'Accept': 'application/json',
-          ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        };
+        const headers = { 'Accept':'application/json', ...(token ? { Authorization:'Bearer '+token } : {}) };
         const opts = { method: 'GET', credentials: 'include', headers };
-
-        // пробуем несколько путей
-        const paths = [
-          '/api/notifications/unread',
-          '/api/notifications/unread-count',
-          '/api/notifications/count',
-          '/api/notifications?status=unread',
-          '/api/notifications',
-        ];
+        const paths = ['/api/notifications/unread','/api/notifications/unread-count','/api/notifications/count','/api/notifications?status=unread','/api/notifications'];
         let count = 0;
         for (const p of paths) {
           const res = await safeJson(join(p), opts);
@@ -157,25 +146,16 @@ export default function Header() {
     return () => { aborted = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
-  // обнуляем при заходе в /notifications, помечаем прочитанными
+  // при заходе в /notifications обнуляем и помечаем прочитанными
   useEffect(() => {
     const onRoute = async (url) => {
       if (!url.startsWith('/notifications')) return;
       setNotif(0);
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const headers = {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        };
+        const headers = { 'Accept':'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization:'Bearer '+token } : {}) };
         const opts = { method: 'POST', credentials: 'include', headers };
-
-        const markPaths = [
-          '/api/notifications/mark-all-read',
-          '/api/notifications/mark_read_all',
-          '/api/notifications/read-all',
-        ];
+        const markPaths = ['/api/notifications/mark-all-read','/api/notifications/mark_read_all','/api/notifications/read-all'];
         for (const p of markPaths) { await fetch(join(p), opts).catch(() => {}); }
       } catch {}
     };
@@ -200,9 +180,9 @@ export default function Header() {
   };
 
   return (
-    // снимаем нижнюю линию у нижней шапки: borderBottom:'none' перекроет header-solid
-    <header className="header-solid" style={{ width: '100%', position:'sticky', top:0, zIndex:1000, borderBottom:'none' }}>
-      {/* Верхняя шапка — фон мягкий черный */}
+    // нижняя линия у общей шапки скрыта
+    <header className="header-solid" style={{ width:'100%', position:'sticky', top:0, zIndex:1000, borderBottom:'none' }}>
+      {/* Верхняя шапка: мягкий черный */}
       <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:44,
@@ -216,7 +196,7 @@ export default function Header() {
             {me?.role === 'admin' && <a href="/admin" className="nav-link gradtext">Админ Панель</a>}
           </nav>
 
-          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             {me && (
               <div style={{
                 padding:'6px 10px', borderRadius:10,
@@ -226,23 +206,24 @@ export default function Header() {
               </div>
             )}
 
+            {/* уведомления — уменьшили «рамку» (контейнер 36x36, иконка прежняя) */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
               <BellIcon />
             </IconButton>
 
-            {/* ТВОЙ БЛОК АККАУНТА ОСТАВЛЕН */}
+            {/* Аккаунт — убрали лишнюю «рамку»: меньше паддинги и круг 24px */}
             <div style={{ position:'relative' }} ref={menuRef}>
               <button
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
                 title={authed ? 'Открыть меню' : 'Войти'}
                 style={{
-                  display:'flex', alignItems:'center', gap:8, padding:'8px 12px',
+                  display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
                   background: UI.pillBg, border:`1px solid ${UI.border}`, borderRadius:10,
                   cursor:'pointer', color:UI.topText
                 }}
               >
                 <span style={{
-                  display:'inline-flex', width:26, height:26, borderRadius:'50%',
+                  display:'inline-flex', width:24, height:24, borderRadius:'50%',
                   background:'rgba(255,255,255,0.06)', alignItems:'center', justifyContent:'center',
                   border:`1px solid ${UI.border}`
                 }}>
@@ -288,9 +269,10 @@ export default function Header() {
           display:'grid', gridTemplateColumns:'auto 1fr',
           alignItems:'center', gap:16, padding:'0 12px'
         }}>
+          {/* ЛОГО: убрал зелёный квадрат с буквой A, оставил только текст */}
           <Logo onClick={() => router.push('/')} />
 
-          {/* УБРАЛИ «рамку»: снят класс header-searchbar и любые границы/фон у контейнера */}
+          {/* Поисковая группа без внешней рамки-контейнера */}
           <div style={{ padding: 0 }}>
             <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap:10 }}>
               <button
@@ -298,28 +280,27 @@ export default function Header() {
                 style={{
                   display:'inline-flex', alignItems:'center', gap:8,
                   height:44, padding:'0 12px', borderRadius:10,
-                  background:UI.pillBg, /* нет внешней рамки контейнера */
-                  color:UI.topText, cursor:'pointer', whiteSpace:'nowrap', border:'none'
+                  background:UI.pillBg, color:UI.topText, cursor:'pointer', whiteSpace:'nowrap', border:'none'
                 }}
               >
-                <SearchSmallIcon /> Все категории <ChevronDownIcon />
+                Все категории
               </button>
               <input
                 value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
                 style={{
                   height:44, borderRadius:10, padding:'0 12px',
-                  background:UI.inputBg, /* оставляем собственную четкую рамку инпута */
-                  border:`1px solid ${UI.inputBorder}`,
+                  background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
                   color:UI.inputText, minWidth:200
                 }}
               />
-              <button type="submit"
+              <button
+                type="submit"
                 style={{
                   height:44, padding:'0 16px', borderRadius:10,
-                  background:UI.blue, color:'#fff', fontWeight:800, cursor:'pointer', border:'none'
+                  background:UI.heroBtn, color:'#000', fontWeight:800, cursor:'pointer', border:'none'
                 }}
-                onMouseEnter={(e)=>e.currentTarget.style.background = UI.blueHover}
-                onMouseLeave={(e)=>e.currentTarget.style.background = UI.blue}
+                onMouseEnter={(e)=>e.currentTarget.style.background = UI.heroBtnHover}
+                onMouseLeave={(e)=>e.currentTarget.style.background = UI.heroBtn}
               >
                 Найти
               </button>
@@ -331,15 +312,16 @@ export default function Header() {
   );
 }
 
-/* ===== UI sub-components ===== */
+/* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const badgeText = badge > 99 ? '99+' : String(badge || '');
   return (
     <button
       aria-label={ariaLabel}
       onClick={onClick}
+      // контейнер поменьше (36х36), сама иконка остаётся прежней
       style={{
-        position:'relative', width:40, height:40, borderRadius:10,
+        position:'relative', width:36, height:36, borderRadius:10,
         background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
         display:'flex', alignItems:'center', justifyContent:'center',
         cursor:'pointer'
@@ -367,12 +349,8 @@ function MenuItem({ href, text }) {
 }
 function Logo({ onClick }) {
   return (
-    <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-      <div style={{
-        width:28, height:28, borderRadius:8,
-        background:'linear-gradient(135deg,#22C55E 0%,#10B981 100%)',
-        display:'grid', placeItems:'center', color:'#0B1220', fontWeight:900, fontSize:14
-      }}>A</div>
+    <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+      {/* квадрат с "A" удалён — оставляем только название */}
       <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3 }}>
         AuctionA<span style={{ color:'#EF4444' }}>f</span>to
       </div>
@@ -384,21 +362,6 @@ function BellIcon(){
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
-    </svg>
-  );
-}
-function SearchSmallIcon(){
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="11" cy="11" r="7" stroke="#E6EDF3" strokeWidth="1.6" />
-      <path d="M20 20L17 17" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-function ChevronDownIcon(){
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M6 9l6 6 6-6" stroke="#E6EDF3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
