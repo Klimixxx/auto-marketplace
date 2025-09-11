@@ -4,7 +4,28 @@ import { useRouter } from 'next/router';
 import Router from 'next/router';
 
 const MAXW = 1100;
-const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — будет относительный путь
+const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — пойдём относительным путём
+
+/* ===== helpers for UI ===== */
+const UI = {
+  topBg: '#1A1C20',
+  topText: '#E6EDF3',
+  topMuted: 'rgba(230,237,243,0.75)',
+  border: 'rgba(255,255,255,0.10)',
+  baseBg: 'transparent',
+  inputBg: '#0B1220',
+  inputText: '#E6EDF3',
+  inputBorder: 'rgba(255,255,255,0.14)',
+  pillBg: 'rgba(255,255,255,0.06)',
+  blue: '#1E90FF',
+  blueHover: '#1683ea',
+  red: '#FF4D4F',
+  yellow: '#FACC15',
+  chipBg: 'rgba(255,255,255,0.06)',
+  chipBorder: 'rgba(255,255,255,0.12)',
+  menuBg: '#0F172A',
+  menuBorder: 'rgba(255,255,255,0.10)',
+};
 
 function IconUser({ size = 20, color = 'currentColor' }) {
   return (
@@ -16,6 +37,49 @@ function IconUser({ size = 20, color = 'currentColor' }) {
   );
 }
 
+/* ===== utils: запросы/парсинг ===== */
+function join(path){ return (API ? API.replace(/\/+$/,'') : '') + path; }
+async function safeJson(url, opts){
+  try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
+  catch { return null; }
+}
+function isFiniteNum(x){ return typeof x === 'number' && isFinite(x); }
+function countUnreadInArray(arr){
+  if (!Array.isArray(arr)) return null;
+  let n = 0;
+  for (const it of arr){
+    const read = it?.read ?? it?.is_read ?? it?.isRead ?? it?.seen ?? it?.is_seen;
+    if (read === false || read === 0 || read === '0') n++;
+    else if (read === undefined) n++; // если эндпоинт уже отдаёт только непрочитанные
+  }
+  return n;
+}
+function parseUnreadCount(d){
+  if (typeof d === 'number') return d;
+  if (Array.isArray(d)) return d.length;
+  if (!d || typeof d !== 'object') return 0;
+
+  if (isFiniteNum(d.count)) return d.count;
+  if (isFiniteNum(d.unread)) return d.unread;
+  if (isFiniteNum(d.unreadCount)) return d.unreadCount;
+
+  if (d.data){
+    if (isFiniteNum(d.data.count)) return d.data.count;
+    if (isFiniteNum(d.data.unread)) return d.data.unread;
+    if (isFiniteNum(d.data.unreadCount)) return d.data.unreadCount;
+    const arrD = d.data.items || d.data.rows || d.data.results || d.data.notifications;
+    const byD = countUnreadInArray(arrD);
+    if (byD != null) return byD;
+  }
+
+  const arr = d.items || d.rows || d.results || d.notifications;
+  const byArr = countUnreadInArray(arr);
+  if (byArr != null) return byArr;
+
+  return 0;
+}
+
+/* ===== Header ===== */
 export default function Header() {
   const router = useRouter();
   const [me, setMe] = useState(null);
@@ -24,39 +88,19 @@ export default function Header() {
   const [notif, setNotif] = useState(0);
   const menuRef = useRef(null);
 
-  const UI = {
-    topBg: '#1A1C20',
-    topText: '#E6EDF3',
-    topMuted: 'rgba(230,237,243,0.75)',
-    border: 'rgba(255,255,255,0.10)',
-    baseBg: 'transparent',
-    inputBg: '#0B1220',
-    inputText: '#E6EDF3',
-    inputBorder: 'rgba(255,255,255,0.14)',
-    pillBg: 'rgba(255,255,255,0.06)',
-    blue: '#1E90FF',
-    blueHover: '#1683ea',
-    red: '#FF4D4F',
-    yellow: '#FACC15',
-    chipBg: 'rgba(255,255,255,0.06)',
-    chipBorder: 'rgba(255,255,255,0.12)',
-    menuBg: '#0F172A',
-    menuBorder: 'rgba(255,255,255,0.10)',
-  };
-
-  // ====== AUTH / PROFILE ======
+  // профиль
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     setAuthed(Boolean(token));
     if (token) {
       fetch(join('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
-        .then(async r => (r.ok ? r.json() : null))
+        .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) setMe(d); })
         .catch(() => {});
     } else {
-      // если у тебя сессии в cookie — можно добрать профиль без токена:
+      // fallback на куки-сессию
       fetch('/api/auth/me', { credentials: 'include' })
-        .then(async r => (r.ok ? r.json() : null))
+        .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.user) { setMe(d.user); setAuthed(true); }})
         .catch(() => {});
     }
@@ -64,15 +108,15 @@ export default function Header() {
 
   // закрывать меню по клику вне
   useEffect(() => {
-    function onDocClick(e) {
+    const onDocClick = (e) => {
       if (!menuRef.current) return;
       if (!menuRef.current.contains(e.target)) setMenuOpen(false);
-    }
+    };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  // ====== UNREAD BADGE ======
+  // ===== unread badge: грузим/обновляем =====
   useEffect(() => {
     let aborted = false;
 
@@ -85,7 +129,7 @@ export default function Header() {
         };
         const opts = { method: 'GET', credentials: 'include', headers };
 
-        // пробуем несколько эндпоинтов
+        // пробуем несколько путей
         const paths = [
           '/api/notifications/unread',
           '/api/notifications/unread-count',
@@ -93,15 +137,13 @@ export default function Header() {
           '/api/notifications?status=unread',
           '/api/notifications',
         ];
-
         let count = 0;
         for (const p of paths) {
-          const res = await safeGet(join(p), opts);
+          const res = await safeJson(join(p), opts);
           if (!res) continue;
           const c = parseUnreadCount(res);
           if (typeof c === 'number') { count = c; break; }
         }
-
         if (!aborted) setNotif(Number(count) || 0);
       } catch {
         if (!aborted) setNotif(0);
@@ -109,22 +151,13 @@ export default function Header() {
     }
 
     fetchUnread();
-
-    // обновлять при возвращении во вкладку
     const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread(); };
     document.addEventListener('visibilitychange', onVisible);
-
-    // периодически, раз в 60с
     const id = setInterval(fetchUnread, 60000);
-
-    return () => {
-      aborted = true;
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return () => { aborted = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
-  // при переходе на /notifications — пометить прочитанными (пробуем несколько маршрутов)
+  // обнуляем при заходе в /notifications, помечаем прочитанными
   useEffect(() => {
     const onRoute = async (url) => {
       if (!url.startsWith('/notifications')) return;
@@ -143,9 +176,7 @@ export default function Header() {
           '/api/notifications/mark_read_all',
           '/api/notifications/read-all',
         ];
-        for (const p of markPaths) {
-          await fetch(join(p), opts).catch(() => {});
-        }
+        for (const p of markPaths) { await fetch(join(p), opts).catch(() => {}); }
       } catch {}
     };
     Router.events.on('routeChangeComplete', onRoute);
@@ -177,7 +208,6 @@ export default function Header() {
           display:'grid', gridTemplateColumns:'1fr auto',
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
-          {/* Навигация */}
           <nav style={{ display:'flex', alignItems:'center', gap:18, color:UI.topMuted, fontSize:14 }}>
             <a href="/trades">Торги</a>
             <a href="/inspections">Мои Осмотры</a>
@@ -186,7 +216,6 @@ export default function Header() {
           </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-            {/* Баланс */}
             {me && (
               <div style={{
                 padding:'6px 10px', borderRadius:10,
@@ -196,12 +225,11 @@ export default function Header() {
               </div>
             )}
 
-            {/* Уведомления */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
               <BellIcon />
             </IconButton>
 
-            {/* Аккаунт */}
+            {/* ТВОЙ БЛОК АККАУНТА ОСТАВЛЕН */}
             <div style={{ position:'relative' }} ref={menuRef}>
               <button
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
@@ -297,7 +325,7 @@ export default function Header() {
   );
 }
 
-/* helpers */
+/* ===== UI sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const badgeText = badge > 99 ? '99+' : String(badge || '');
   return (
@@ -367,45 +395,4 @@ function ChevronDownIcon(){
       <path d="M6 9l6 6 6-6" stroke="#E6EDF3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
-}
-
-/* ===== utils: безопасные запросы и парсинг ===== */
-function join(path){ return (API ? API.replace(/\/+$/,'') : '') + path; }
-async function safeGet(url, opts){
-  try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
-  catch { return null; }
-}
-function parseUnreadCount(d){
-  if (typeof d === 'number') return d;
-  if (Array.isArray(d)) return d.length;
-  if (!d || typeof d !== 'object') return 0;
-  // прямые ключи
-  if (isFiniteNum(d.count)) return d.count;
-  if (isFiniteNum(d.unread)) return d.unread;
-  if (isFiniteNum(d.unreadCount)) return d.unreadCount;
-  // вложенные data
-  if (d.data){
-    if (isFiniteNum(d.data.count)) return d.data.count;
-    if (isFiniteNum(d.data.unread)) return d.data.unread;
-    if (isFiniteNum(d.data.unreadCount)) return d.data.unreadCount;
-    const arr = d.data.items || d.data.rows || d.data.results;
-    const byData = countUnreadInArray(arr);
-    if (byData != null) return byData;
-  }
-  // массивы под другими ключами
-  const arr = d.items || d.rows || d.results || d.notifications;
-  const byArr = countUnreadInArray(arr);
-  if (byArr != null) return byArr;
-  return 0;
-}
-function isFiniteNum(x){ return typeof x === 'number' && isFinite(x); }
-function countUnreadInArray(arr){
-  if (!Array.isArray(arr)) return null;
-  let n = 0;
-  for (const it of arr){
-    const read = it?.read ?? it?.is_read ?? it?.isRead;
-    if (read === false || read === 0 || read === '0') n++;
-    else if (read === undefined) n++; // если это endpoint «только непрочитанные»
-  }
-  return n;
 }
