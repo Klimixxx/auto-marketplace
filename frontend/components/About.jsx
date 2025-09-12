@@ -95,7 +95,7 @@ export default function About() {
                 даём данные для решений и делаем путь от поиска до сделки простым и прозрачным.
               </p>
 
-              {/* Особенности — ярче и с иконками */}
+              {/* Особенности — белым цветом и с иконками */}
               <div
                 className="about-features"
                 style={{
@@ -109,7 +109,7 @@ export default function About() {
               >
                 <FeatureItem
                   icon={<GridIcon />}
-                  text="15 торговых площадок — в одном месте"
+                  text="Все торговые площадки в одном месте"
                 />
                 <FeatureItem
                   icon={<GaugeIcon />}
@@ -117,7 +117,7 @@ export default function About() {
                 />
                 <FeatureItem
                   icon={<HandsIcon />}
-                  text="Поддержка сделки на важных этапах"
+                  text="Полностью проведем за вас сделку"
                 />
               </div>
             </div>
@@ -134,7 +134,7 @@ export default function About() {
   );
 }
 
-/* ——— Особенность с иконкой и выделением текста ——— */
+/* ——— Особенность с иконкой — белый текст ——— */
 function FeatureItem({ icon, text }) {
   return (
     <div
@@ -164,9 +164,7 @@ function FeatureItem({ icon, text }) {
           fontWeight: 800,
           fontSize: 15.5,
           lineHeight: 1.25,
-          backgroundImage: 'linear-gradient(90deg,#67e8f9,#c4b5fd)',
-          WebkitBackgroundClip: 'text',
-          color: 'transparent',
+          color: '#fff', // ← белый цвет для текста особенностей
         }}
       >
         {text}
