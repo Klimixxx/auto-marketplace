@@ -14,7 +14,6 @@ export default function About() {
 
   return (
     <section style={{ margin: '28px 0 8px' }}>
-      {/* ширина как у .container / блока статистики */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 12px' }}>
         <div
           style={{
@@ -26,7 +25,6 @@ export default function About() {
             overflow: 'hidden',
           }}
         >
-          {/* лёгкая внутреняя подсветка, как в других блоках */}
           <div
             aria-hidden
             style={{
@@ -41,7 +39,6 @@ export default function About() {
             }}
           />
 
-          {/* контент: слева фото, справа текст */}
           <div
             className="about-grid"
             style={{
@@ -61,7 +58,7 @@ export default function About() {
                   overflow: 'hidden',
                 }}
               >
-                {/* Помести файл в /public/about/car.jpg (см. ниже) */}
+                {/* Помести файл в /public/about/car.jpg */}
                 <img
                   src="/about/car.jpg"
                   alt="Спортивное авто"
@@ -71,26 +68,8 @@ export default function About() {
               </div>
             </div>
 
-            {/* Текст справа (центрировано по блоку) */}
-            <div>
-              {/* чип «О нас» */}
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  background: UI.chipBg,
-                  border: `1px solid ${UI.chipBorder}`,
-                  color: UI.text,
-                  fontSize: 12.5,
-                  marginBottom: 12,
-                }}
-              >
-                <Dot /> О нас
-              </div>
-
+            {/* Текст справа — центрируем логотип и абзац */}
+            <div style={{ textAlign: 'center' }}>
               <h2
                 style={{
                   margin: '0 0 8px',
@@ -106,21 +85,41 @@ export default function About() {
 
               <p
                 style={{
-                  margin: '0 0 12px',
+                  margin: '0 auto 14px',
                   color: UI.text,
                   lineHeight: 1.7,
+                  maxWidth: 700,
                 }}
               >
                 Площадка-агрегатор публичных торгов по автомобилям. Собираем лоты с проверенных источников,
                 даём данные для решений и делаем путь от поиска до сделки простым и прозрачным.
               </p>
 
-              {/* маркеры-ценности */}
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
-                <ValueItem>15 торговых площадок — в одном месте</ValueItem>
-                <ValueItem>История авто и ключевые показатели</ValueItem>
-                <ValueItem>Поддержка сделки на важных этапах</ValueItem>
-              </ul>
+              {/* Особенности — ярче и с иконками */}
+              <div
+                className="about-features"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr',
+                  gap: 10,
+                  maxWidth: 720,
+                  margin: '0 auto',
+                  textAlign: 'left',
+                }}
+              >
+                <FeatureItem
+                  icon={<GridIcon />}
+                  text="15 торговых площадок — в одном месте"
+                />
+                <FeatureItem
+                  icon={<GaugeIcon />}
+                  text="История авто и ключевые показатели"
+                />
+                <FeatureItem
+                  icon={<HandsIcon />}
+                  text="Поддержка сделки на важных этапах"
+                />
+              </div>
             </div>
           </div>
 
@@ -135,49 +134,82 @@ export default function About() {
   );
 }
 
-/* ——— мини-компоненты ——— */
-function Dot() {
+/* ——— Особенность с иконкой и выделением текста ——— */
+function FeatureItem({ icon, text }) {
   return (
-    <span
-      aria-hidden
+    <div
       style={{
-        width: 8,
-        height: 8,
-        background: 'linear-gradient(90deg,#67e8f9,#c4b5fd)',
-        borderRadius: 999,
-        display: 'inline-block',
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr',
+        gap: 12,
+        alignItems: 'center',
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        borderRadius: 12,
+        padding: 12,
       }}
-    />
+    >
+      <div
+        style={{
+          width: 42, height: 42, borderRadius: 10,
+          display: 'grid', placeItems: 'center',
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.12)',
+        }}
+      >
+        {icon}
+      </div>
+      <div
+        style={{
+          fontWeight: 800,
+          fontSize: 15.5,
+          lineHeight: 1.25,
+          backgroundImage: 'linear-gradient(90deg,#67e8f9,#c4b5fd)',
+          WebkitBackgroundClip: 'text',
+          color: 'transparent',
+        }}
+      >
+        {text}
+      </div>
+    </div>
   );
 }
 
-function ValueItem({ children }) {
+/* ——— Иконки с тем же градиентом, что и в Hero ——— */
+function grad(id) {
   return (
-    <li style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 10, alignItems: 'center' }}>
-      <span
-        aria-hidden
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 6,
-          background: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.14)',
-          display: 'grid',
-          placeItems: 'center',
-        }}
-      >
-        {/* галочка с градиентной обводкой под стиль Hero */}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-          <defs>
-            <linearGradient id="gradAboutTick" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#67e8f9" />
-              <stop offset="100%" stopColor="#c4b5fd" />
-            </linearGradient>
-          </defs>
-          <path d="M5 13l4 4 10-10" stroke="url(#gradAboutTick)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      <span style={{ color: 'rgba(255,255,255,0.85)' }}>{children}</span>
-    </li>
+    <defs>
+      <linearGradient id={id} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="#67e8f9" />
+        <stop offset="100%" stopColor="#c4b5fd" />
+      </linearGradient>
+    </defs>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      {grad('aboutGrid')}
+      <path d="M3 3h8v8H3V3zM13 3h8v8h-8V3zM3 13h8v8H3v-8zM13 13h8v8h-8v-8z" stroke="url(#aboutGrid)" strokeWidth="1.8" />
+    </svg>
+  );
+}
+function GaugeIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      {grad('aboutGauge')}
+      <path d="M12 20a8 8 0 100-16 8 8 0 000 16z" stroke="url(#aboutGauge)" strokeWidth="1.8" />
+      <path d="M12 12l4-2" stroke="url(#aboutGauge)" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+function HandsIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      {grad('aboutHands')}
+      <path d="M7 12l3-3 3 3 4-4" stroke="url(#aboutHands)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 12l5 5c1 1 3 1 4 0l2-2 2 2c1 1 3 1 4 0l3-3" stroke="url(#aboutHands)" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
