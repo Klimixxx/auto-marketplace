@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Hero from '../components/Hero'; // ← добавили приветственный блок
+import About from '../components/About';
 
 // UI цвета в синхроне со стилем
 const UI = {
@@ -136,6 +137,7 @@ export default function Home() {
     <>
       {/* Приветственный блок (без фото) */}
       <Hero />
+      <About />
 
       <div className="container">
         <FirstLoginModal />
