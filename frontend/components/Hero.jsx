@@ -7,7 +7,7 @@ const UI = {
   text: 'rgba(255,255,255,0.80)',
   border: 'rgba(255,255,255,0.12)',
   glass: 'rgba(255,255,255,0.05)',
-  button: '#67e8f9',     // один цвет с кнопкой в шапке
+  button: '#67e8f9',
   buttonHover: '#a5f3fc',
 };
 
@@ -23,12 +23,12 @@ export default function Hero() {
 
   return (
     <section style={styles.wrap}>
-      {/* без собственного бэкграунда — наследуем общий фон страницы */}
       <div style={styles.inner}>
-        {/* Badge */}
+        {/* Бейдж с количеством объявлений */}
         <div style={styles.badge}>
           <span style={styles.pulse} />
-          <span>15 Торговых площадок в одном месте</span>
+          <span style={styles.badgeNum}>7 839</span>
+          <span style={styles.badgeLabel}>Объявлений</span>
         </div>
 
         <h1 style={styles.title}>
@@ -36,7 +36,7 @@ export default function Hero() {
           <span style={styles.titleGradient}>прозрачно и удобно</span>
         </h1>
 
-        {/* подзаголовок убран по задаче */}
+        {/* подзаголовок убран ранее по задаче */}
 
         <form onSubmit={onSubmit} style={styles.form} className="hero-form">
           <input
@@ -49,7 +49,6 @@ export default function Hero() {
           <button type="submit" style={styles.button}>Найти</button>
         </form>
 
-        {/* Мини-фичи */}
         <div style={styles.features} className="features">
           <Feature icon="🔎" title="Честные данные" text="Источники и история авто — в одном месте."/>
           <Feature icon="⚡" title="Быстрый старт" text="Фильтры и поиск без лишних шагов."/>
@@ -91,8 +90,8 @@ const styles = {
     width: '100%',
     overflow: 'hidden',
     padding: '56px 0 28px',
-    margin: '0 calc(50% - 50vw)', // full-bleed
-    background: 'transparent',     // ⟵ фон берётся из body (var(--app-bg))
+    margin: '0 calc(50% - 50vw)',
+    background: 'transparent',
   },
   inner: {
     position:'relative',
@@ -117,6 +116,16 @@ const styles = {
     background: '#34d399',
     animation: 'pulseKey 1.8s infinite',
   },
+  badgeNum: {
+    fontWeight: 900,
+    fontSize: 15.5,
+    backgroundImage: 'linear-gradient(90deg,#67e8f9,#c4b5fd)',
+    WebkitBackgroundClip: 'text',
+    color: 'transparent',
+    letterSpacing: 0.3,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  badgeLabel: { color: 'rgba(255,255,255,0.9)' },
   title: {
     margin: '14px 0 8px',
     fontSize: '38px',
@@ -129,12 +138,7 @@ const styles = {
     WebkitBackgroundClip: 'text',
     color: 'transparent',
   },
-  form: {
-    marginTop: 18,
-    display: 'flex',
-    gap: 10,
-    alignItems: 'center',
-  },
+  form: { marginTop: 18, display: 'flex', gap: 10, alignItems: 'center' },
   input: {
     flex: 1,
     padding: '14px 14px',
