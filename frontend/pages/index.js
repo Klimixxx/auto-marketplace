@@ -1,7 +1,7 @@
 // frontend/pages/index.js
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import Hero from '../components/Hero'; // ← добавили приветственный блок
+import Hero from '../components/Hero';
 import About from '../components/About';
 
 // UI цвета в синхроне со стилем
@@ -11,7 +11,7 @@ const UI = {
   cardBg: 'rgba(255,255,255,0.03)',
   border: 'rgba(255,255,255,0.10)',
   red: '#EF4444',
-  // ↓ добавлено: градиент как в Hero ("прозрачно и удобно")
+  // градиент как в Hero ("прозрачно и удобно")
   gradFrom: '#67e8f9',
   gradTo: '#c4b5fd',
 };
@@ -41,7 +41,6 @@ function StatCard({ title, value, Icon }) {
           width: 44,
           height: 44,
           borderRadius: 10,
-          // ↓ был зелёный оттенок, сделали нейтральный
           background: 'rgba(255,255,255,0.06)',
           border: `1px solid ${UI.border}`,
           display: 'grid',
@@ -58,31 +57,34 @@ function StatCard({ title, value, Icon }) {
   );
 }
 
-/* Иконки (перекрашены в градиент Hero) */
+/* Иконки (градиент как в Hero) */
 function UsersIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
-        <linearGradient id="gradHero" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="gradHeroUsers" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="url(#gradHero)" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="url(#gradHero)" strokeWidth="1.8" />
+      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="url(#gradHeroUsers)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="url(#gradHeroUsers)" strokeWidth="1.8" />
     </svg>
   );
 }
-function OffersIcon() {
+// Листок (документ) — для "Публичные предложения"
+function DocumentIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
-        <linearGradient id="gradHero" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="gradHeroDoc" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <path d="M3 7h18M3 12h18M3 17h18" stroke="url(#gradHero)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
+      <path d="M14 3v6h6" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
+      <path d="M9 13h8M9 17h8" stroke="url(#gradHeroDoc)" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -90,52 +92,41 @@ function AuctionsIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
-        <linearGradient id="gradHero" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="gradHeroAuc" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <path d="M7 10l6-6 4 4-6 6-4-4zM3 21h10" stroke="url(#gradHero)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M7 10l6-6 4 4-6 6-4-4zM3 21h10" stroke="url(#gradHeroAuc)" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
-// иконка «денежный мешок»
-function MoneyBagIcon() {
+// Купюра — для "Стоимость имущества в торгах"
+function BanknoteIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
-        <linearGradient id="gradHero" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="gradHeroNote" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <path d="M9 3c0 1.657 1.343 3 3 3s3-1.343 3-3" stroke="url(#gradHero)" strokeWidth="1.8" strokeLinecap="round"/>
-      <path d="M7 9h10c1.657 0 3 1.343 3 3 0 0-1 8-8 8s-8-8-8-8c0-1.657 1.343-3 3-3Z" stroke="url(#gradHero)" strokeWidth="1.8" />
-      <path d="M9 13h6M9 16h6" stroke="url(#gradHero)" strokeWidth="1.8" strokeLinecap="round"/>
+      <rect x="3" y="7" width="18" height="10" rx="2" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
+      <circle cx="12" cy="12" r="2.5" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
+      <path d="M5 9h2M17 9h2M5 15h2M17 15h2" stroke="url(#gradHeroNote)" strokeWidth="1.8" strokeLinecap="round"/>
     </svg>
   );
 }
 
 export default function Home() {
+  // если где-то используешь, оставлю стейт
   const [stats, setStats] = useState(null);
-
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await fetch('/api/stats/users');
-        const data = await r.json();
-        if (alive) setStats({ users: Number(data.users) || 0 });
-      } catch {
-        if (alive) setStats({ users: 0 });
-      }
-    })();
-    return () => { alive = false; };
+    // можно оставить пустым — значения ниже статичны по задаче
   }, []);
 
   return (
     <>
-      {/* Приветственный блок (без фото) */}
       <Hero />
       <About />
 
@@ -144,7 +135,20 @@ export default function Home() {
 
         {/* Статистика + карта */}
         <section style={{ margin: '22px 0' }}>
-          <h2 style={{ margin: '0 0 12px 2px', color: UI.title, letterSpacing: 0.2 }}>Статистика платформы</h2>
+          {/* Заголовок по центру и с градиентом */}
+          <h2
+            style={{
+              margin: '0 0 12px',
+              textAlign: 'center',
+              fontWeight: 900,
+              fontSize: 22,
+              backgroundImage: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
+              WebkitBackgroundClip: 'text',
+              color: 'transparent',
+            }}
+          >
+            Статистика платформы
+          </h2>
 
           <div
             style={{
@@ -163,13 +167,13 @@ export default function Home() {
                 marginBottom: 20,
               }}
             >
-              <StatCard title="Пользователей" value={stats ? fmt.format(stats.users) : '—'} Icon={UsersIcon} />
-              <StatCard title="Публичные предложения" value="—" Icon={OffersIcon} />
-              <StatCard title="Открытых аукционов" value="—" Icon={AuctionsIcon} />
-              <StatCard title="Стоимость имущества в торгах" value="—" Icon={MoneyBagIcon} />
+              <StatCard title="Пользователей" value="18790" Icon={UsersIcon} />
+              <StatCard title="Публичные предложения" value="2163" Icon={DocumentIcon} />
+              <StatCard title="Открытых аукционов" value="5187" Icon={AuctionsIcon} />
+              <StatCard title="Стоимость имущества в торгах" value="119.860.294" Icon={BanknoteIcon} />
             </div>
 
-            {/* карта без заголовка */}
+            {/* карта */}
             <div
               style={{
                 position: 'relative',
@@ -215,7 +219,7 @@ export default function Home() {
                 justifyContent: 'center',
               }}
             >
-              {/* иконка обучения (оставил зелёной, она вне "Статистики") */}
+              {/* иконка обучения (оставлена как была) */}
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path d="M12 3l9 5-9 5-9-5 9-5z" stroke="#22C55E" strokeWidth="1.8" />
                 <path d="M21 10v4l-9 5-9-5v-4" stroke="#22C55E" strokeWidth="1.8" />
