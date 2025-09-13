@@ -145,54 +145,38 @@ function EducationFeature({ title, Icon }) {
       >
         <Icon />
       </div>
-      <div style={{ color:'#fff', fontWeight: 800, fontSize: 15.5, lineHeight: 1.25 }}>
+      {/* текст НЕ жирный */}
+      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
         {title}
       </div>
     </div>
   );
 }
+/* Естественные цвета иконок: молния — жёлтая, рассрочка — зелёная, авто — синяя */
 function LightningIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradLightning" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="url(#gradLightning)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="#FACC15" strokeWidth="1.8" strokeLinejoin="round"/>
     </svg>
   );
 }
 function InstallmentIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradInstall" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
       {/* карта + календарь как символ рассрочки */}
-      <rect x="3" y="6" width="12" height="8" rx="2" stroke="url(#gradInstall)" strokeWidth="1.8"/>
-      <path d="M5 9h8M5 12h3" stroke="url(#gradInstall)" strokeWidth="1.8" strokeLinecap="round"/>
-      <rect x="16" y="9" width="5" height="7" rx="1.5" stroke="url(#gradInstall)" strokeWidth="1.8"/>
-      <path d="M16 11h5" stroke="url(#gradInstall)" strokeWidth="1.8"/>
+      <rect x="3" y="6" width="12" height="8" rx="2" stroke="#22C55E" strokeWidth="1.8"/>
+      <path d="M5 9h8M5 12h3" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
+      <rect x="16" y="9" width="5" height="7" rx="1.5" stroke="#22C55E" strokeWidth="1.8"/>
+      <path d="M16 11h5" stroke="#22C55E" strokeWidth="1.8"/>
     </svg>
   );
 }
 function CarIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradCar" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M3 13l2-4c.5-1 1.5-2 3-2h6c1.5 0 2.5 1 3 2l2 4v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3z" stroke="url(#gradCar)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <circle cx="8" cy="16" r="2" stroke="url(#gradCar)" strokeWidth="1.8"/>
-      <circle cx="16" cy="16" r="2" stroke="url(#gradCar)" strokeWidth="1.8"/>
+      <path d="M3 13l2-4c.5-1 1.5-2 3-2h6c1.5 0 2.5 1 3 2l2 4v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3z" stroke="#60A5FA" strokeWidth="1.8" strokeLinejoin="round"/>
+      <circle cx="8" cy="16" r="2" stroke="#60A5FA" strokeWidth="1.8"/>
+      <circle cx="16" cy="16" r="2" stroke="#60A5FA" strokeWidth="1.8"/>
     </svg>
   );
 }
@@ -286,11 +270,11 @@ export default function Home() {
               alignItems: 'center',
             }}
           >
-            {/* Большая иконка из /public/education/group.png */}
+            {/* Большая иконка из /public/education/group.png — СДЕЛАЛ БОЛЬШЕ */}
             <div
               style={{
-                width: 140,
-                height: 140,
+                width: 180,
+                height: 180,
                 borderRadius: 16,
                 background: 'rgba(255,255,255,0.04)',
                 border: `1px solid ${UI.border}`,
@@ -302,15 +286,16 @@ export default function Home() {
               <img
                 src="/education/group.png"
                 alt="Иконка обучения"
-                style={{ width: '80%', height: '80%', objectFit: 'contain', display: 'block' }}
+                style={{ width: '86%', height: '86%', objectFit: 'contain', display: 'block' }}
               />
             </div>
 
-            <div>
+            {/* ЦЕНТРИРОВАЛ заголовок/описание и кнопку */}
+            <div style={{ textAlign: 'center' }}>
               <h2 style={{ margin: '0 0 6px', color: UI.title }}>
                 Обучение для покупателей авто с торгов
               </h2>
-              <p style={{ margin: '0 0 14px', color: UI.text, lineHeight: 1.65, maxWidth: 760 }}>
+              <p style={{ margin: '0 auto 14px', color: UI.text, lineHeight: 1.65, maxWidth: 760 }}>
                 Разбираем стратегию поиска и анализа лотов, оценку рисков и юридические нюансы сделки.
                 Практика на реальных кейсах и инструкции, с которыми вы уверенно проходите путь от идеи до покупки.
               </p>
@@ -322,6 +307,7 @@ export default function Home() {
                   gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
                   gap: 12,
                   marginBottom: 14,
+                  textAlign: 'left',
                 }}
               >
                 <EducationFeature title="Быстрое и эффективное обучение" Icon={LightningIcon} />
