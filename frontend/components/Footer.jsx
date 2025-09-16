@@ -44,8 +44,8 @@ export default function Footer() {
             alignItems: 'start',
           }}
         >
-          {/* ЛОГО / бренд */}
-          <div style={{ textAlign: 'center' }}>
+          {/* ЛОГО / бренд (слегка опустили, убрали цветной квадрат) */}
+          <div style={{ textAlign: 'center', marginTop: 6 }}>
             <div
               style={{
                 display: 'inline-flex',
@@ -57,13 +57,7 @@ export default function Footer() {
                 border: `1px solid ${UI.border}`,
               }}
             >
-              <div
-                aria-hidden
-                style={{
-                  width: 28, height: 28, borderRadius: 8,
-                  background: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
-                }}
-              />
+              {/* квадрат удален */}
               <div style={{ color: UI.title, fontWeight: 900, fontSize: 18 }}>
                 AuctionA<span style={{ color: UI.red }}>f</span>to
               </div>
@@ -73,15 +67,14 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Страницы (без Админ панели) */}
+          {/* Страницы (обновили список) */}
           <div style={{ textAlign: 'center' }}>
             <h4 style={headingStyle(UI)}>Страницы</h4>
             <div style={{ display: 'grid', gap: 8 }}>
+              {link('/profile', 'Личный кабинет')}
               {link('/trades', 'Торги')}
-              {link('/#about', 'О нас')}
-              {link('/education', 'Обучение')}
-              {link('/support', 'Поддержка')}
               {link('/inspections', 'Мои осмотры')}
+              {link('/support', 'Поддержка')}
             </div>
           </div>
 
@@ -105,8 +98,8 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Доп. информация */}
-          <div style={{ textAlign: 'center' }}>
+          {/* Доп. информация (слегка опустили для визуального центра) */}
+          <div style={{ textAlign: 'center', marginTop: 6 }}>
             <h4 style={headingStyle(UI)}>Дополнительно</h4>
             <div style={{ color: UI.text, fontSize: 13.5, lineHeight: 1.65 }}>
               Адрес: г. Москва, ул. Пример, 1<br/>
@@ -115,18 +108,36 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Нижняя плашка-подпись */}
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 12,
-            borderTop: `1px dashed ${UI.border}`,
-            textAlign: 'center',
-            color: UI.text,
-            fontSize: 13.5,
-          }}
-        >
-          Данную платформу разработала студия — <strong style={{ color: '#fff' }}>Timof</strong>
+        {/* Нижняя «крутая» подпись: стеклянная плашка с градиентной рамкой */}
+        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 14px',
+              borderRadius: 14,
+              background:
+                'linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.04)) padding-box,' +
+                `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo}) border-box`,
+              border: '1px solid transparent',
+              color: UI.text,
+            }}
+          >
+            <Sparkle />
+            <span>Платформу разработала студия — </span>
+            <span
+              style={{
+                backgroundImage: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
+                WebkitBackgroundClip: 'text',
+                color: 'transparent',
+                fontWeight: 900,
+                letterSpacing: 0.2,
+              }}
+            >
+              Timof
+            </span>
+          </div>
         </div>
       </div>
 
@@ -190,6 +201,21 @@ function YoutubeIcon(){
     <svg width="24" height="17" viewBox="0 0 24 17" fill="none" aria-hidden>
       <path d="M23.2 3.1a3 3 0 00-2.1-2.1C19.3.5 12 .5 12 .5s-7.3 0-9.1.5A3 3 0 00.8 3.1C.3 5 .3 8.5.3 8.5s0 3.5.5 5.4a3 3 0 002.1 2.1c1.8.5 9.1.5 9.1.5s7.3 0 9.1-.5a3 3 0 002.1-2.1c.5-1.9.5-5.4.5-5.4s0-3.5-.5-5.4z" stroke="#FF0000" strokeWidth="1.3"/>
       <path d="M9.75 12.25V4.75L15.5 8.5l-5.75 3.75z" fill="#FF0000"/>
+    </svg>
+  );
+}
+
+/* Небольшая «искра» для подписи */
+function Sparkle(){
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="gradSpark" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#67e8f9" />
+          <stop offset="100%" stopColor="#c4b5fd" />
+        </linearGradient>
+      </defs>
+      <path d="M12 3l2.2 4.8L19 10l-4.8 2.2L12 17l-2.2-4.8L5 10l4.8-2.2L12 3z" stroke="url(#gradSpark)" strokeWidth="1.6" strokeLinejoin="round"/>
     </svg>
   );
 }
