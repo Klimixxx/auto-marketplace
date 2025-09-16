@@ -8,6 +8,8 @@ import { query } from './db.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import adminParserRouter from './routes/adminParser.js';
+
 
 dotenv.config();
 
