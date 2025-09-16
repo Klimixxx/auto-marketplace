@@ -47,7 +47,7 @@ export default function AdminParserTrades() {
       const d = await r.json().catch(()=>({}));
       return alert('Ошибка публикации: '+(d?.error||'failed'));
     }
-    alert('Опубликовано! Запись доступна на /trades');
+    alert('Опубликовано! Доступно на /trades');
   }
 
   return (
