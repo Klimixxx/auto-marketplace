@@ -1,3 +1,4 @@
+// backend/src/index.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -8,13 +9,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-
-
-
-
 dotenv.config();
 
-
+// ====== УТИЛИТЫ ======
 
 // Нормализация телефона к виду +79XXXXXXXXX
 function normalizePhone(p) {
@@ -28,19 +25,18 @@ function genUserCode() {
 }
 
 // Нативный fetch + таймаут через AbortController
-async function fetchJSON(url, { timeoutMs = 15000 } = {}) {
+async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body } = {}) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { signal: ac.signal });
-    const data = await r.json().catch(() => ({}));
+    const r = await fetch(url, { signal: ac.signal, headers, method, body });
+    const ct = r.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await r.json().catch(() => ({})) : await r.text();
     return { ok: r.ok, status: r.status, data };
   } finally {
     clearTimeout(t);
   }
 }
-
-
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -73,8 +69,6 @@ async function runMigrations() {
 // ВЫПОЛНЯЕМ МИГРАЦИИ ПЕРЕД СТАРТОМ СЕРВЕРА
 await runMigrations();
 
-
-
 // CORS
 const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
 app.use(cors({
@@ -85,7 +79,6 @@ app.use(cors({
   }
 }));
 
-
 // Порт: Render сам задаёт process.env.PORT
 const PORT = process.env.PORT || 8080;
 
@@ -95,9 +88,11 @@ console.log('Starting server with env:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'MISSING',
   JWT_SECRET: !!process.env.JWT_SECRET,
   INGEST_TOKEN: !!process.env.INGEST_TOKEN,
-  CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  PARSER_BASE_URL: process.env.PARSER_BASE_URL || '(not set)',
 });
 
+// JWT
 function signToken(user) {
   return jwt.sign(
     { sub: user.id, phone: user.phone, role: user.role },
@@ -106,6 +101,7 @@ function signToken(user) {
   );
 }
 
+// ===== МИДЛВАРЫ АУТЕНТИФИКАЦИИ =====
 
 async function auth(req, res, next) {
   const h = req.headers.authorization || '';
@@ -115,7 +111,7 @@ async function auth(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload; // { sub, phone, role }
 
-    // ⬇️ ДОБАВЛЕНО: мгновенная проверка блокировки
+    // мгновенная проверка блокировки
     const { rows } = await query('SELECT is_blocked FROM users WHERE id = $1', [req.user.sub]);
     if (rows[0]?.is_blocked) {
       return res.status(403).json({ error: 'blocked' });
@@ -128,8 +124,6 @@ async function auth(req, res, next) {
   }
 }
 
-
-// --- admin guard ---
 async function requireAdmin(req, res, next) {
   try {
     const { rows } = await query('SELECT role FROM users WHERE id = $1', [req.user.sub]);
@@ -141,13 +135,12 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-
 function admin(req, res, next) {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   next();
 }
 
-// ===== Служебный =====
+// ===== СЛУЖЕБНОЕ =====
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Публичный трекер посещений (1 раз за сессию с фронта)
@@ -166,7 +159,6 @@ app.post('/api/track/visit', async (req, res) => {
   }
 });
 
-
 // Публичная статистика платформы
 app.get('/api/public-stats', async (req, res) => {
   try {
@@ -178,9 +170,7 @@ app.get('/api/public-stats', async (req, res) => {
   }
 });
 
-
 // ===== Phone auth (MVP) =====
-
 
 app.post('/api/auth/request-code', async (req, res) => {
   try {
@@ -212,12 +202,12 @@ app.post('/api/auth/request-code', async (req, res) => {
     const url    = `https://smsc.ru/sys/send.php?login=${encodeURIComponent(login)}&psw=${encodeURIComponent(pass)}&phones=${encodeURIComponent(phone)}&mes=${text}&fmt=3&charset=utf-8${sender?`&sender=${encodeURIComponent(sender)}`:''}`;
 
     const { data: d } = await fetchJSON(url, { timeoutMs: 15000 });
-console.log('SMSC response:', d);
+    console.log('SMSC response:', d);
 
-if (!d || d.error || !d.id) {
-  const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
-  return res.status(502).json({ error: `SMSC error: ${errMsg}` });
-}
+    if (!d || d.error || !d.id) {
+      const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
+      return res.status(502).json({ error: `SMSC error: ${errMsg}` });
+    }
 
     return res.json({ ok: true, attemptId: d.id });
   } catch (e) {
@@ -226,16 +216,12 @@ if (!d || d.error || !d.id) {
   }
 });
 
-
-
 app.post('/api/auth/verify-code', async (req, res) => {
   try {
-    // 1) Нормализуем телефон и код
     const phone = normalizePhone(req.body?.phone);
     const code  = String(req.body?.code || '').replace(/\s/g, '');
     if (!phone || !code) return res.status(400).json({ error: 'phone+code required' });
 
-    // 2) Ищем ровно этот код для этого номера за последние 5 минут
     const { rows } = await query(
       `SELECT id, phone, code, is_used, created_at
          FROM auth_codes
@@ -248,7 +234,6 @@ app.post('/api/auth/verify-code', async (req, res) => {
     );
 
     if (!rows[0]) {
-      // Доп. лог для отладки — последние 3 кода по номеру
       const dbg = await query(
         `SELECT code, created_at, is_used
            FROM auth_codes
@@ -264,87 +249,75 @@ app.post('/api/auth/verify-code', async (req, res) => {
     const row = rows[0];
     if (row.is_used) return res.status(400).json({ error: 'Код уже использован' });
 
-    // 3) Помечаем код использованным
     await query(
-  `UPDATE auth_codes
-      SET is_used = true,
-          used_at = now()
-    WHERE phone = $1
-      AND code  = $2
-      AND created_at = $3
-      AND is_used = false`,
-  [phone, code, row.created_at]
-);
-
-
-    // 4) Находим/создаём пользователя по телефону
-    let u = await query('SELECT id, phone, role, user_code, name, email, is_blocked FROM users WHERE phone=$1', [phone]);
-if (!u.rows[0]) {
-  // пытаемся вставить с уникальным user_code (несколько попыток на случай коллизии)
-  let userRow = null;
-  for (let i = 0; i < 5; i++) {
-    const code6 = genUserCode();
-    try {
-      const created = await query(
-        `INSERT INTO users(phone, user_code, created_at)
-         VALUES($1, $2, now())
-         RETURNING id, phone, role, user_code, name, email`,
-        [phone, code6]
-      );
-      userRow = created.rows[0];
-      break;
-    } catch (e) {
-      // если нарушена уникальность по user_code — пробуем снова
-      if (!String(e.message || '').includes('users_user_code_key')) throw e;
-    }
-  }
-  if (!userRow) {
-    // почти невозможно, но на всякий случай
-    const fallback = await query(
-      `INSERT INTO users(phone, user_code, created_at)
-       VALUES($1, $2, now())
-       RETURNING id, phone, role, user_code, name, email`,
-      [phone, genUserCode()]
+      `UPDATE auth_codes
+          SET is_used = true,
+              used_at = now()
+        WHERE phone = $1
+          AND code  = $2
+          AND created_at = $3
+          AND is_used = false`,
+      [phone, code, row.created_at]
     );
-    userRow = fallback.rows[0];
-  }
-  u = { rows: [userRow] };
-}
 
+    let u = await query('SELECT id, phone, role, user_code, name, email, is_blocked FROM users WHERE phone=$1', [phone]);
+    if (!u.rows[0]) {
+      // пытаемся вставить с уникальным user_code
+      let userRow = null;
+      for (let i = 0; i < 5; i++) {
+        const code6 = genUserCode();
+        try {
+          const created = await query(
+            `INSERT INTO users(phone, user_code, created_at)
+             VALUES($1, $2, now())
+             RETURNING id, phone, role, user_code, name, email`,
+            [phone, code6]
+          );
+          userRow = created.rows[0];
+          break;
+        } catch (e) {
+          if (!String(e.message || '').includes('users_user_code_key')) throw e;
+        }
+      }
+      if (!userRow) {
+        const fallback = await query(
+          `INSERT INTO users(phone, user_code, created_at)
+           VALUES($1, $2, now())
+           RETURNING id, phone, role, user_code, name, email`,
+          [phone, genUserCode()]
+        );
+        userRow = fallback.rows[0];
+      }
+      u = { rows: [userRow] };
+    }
 
-// 5) Проверка блокировки
-const user = u.rows[0];
-if (user?.is_blocked) {
-  return res.status(403).json({
-    ok: false,
-    error: 'Ваш аккаунт заблокирован. Свяжитесь с поддержкой.'
-  });
-}
+    const user = u.rows[0];
+    if (user?.is_blocked) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Ваш аккаунт заблокирован. Свяжитесь с поддержкой.'
+      });
+    }
 
-// 6) Логируем сессию до ответа
-try {
-  const ip = String((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')).split(',')[0].trim();
-  const device = String(req.headers['user-agent'] || '').slice(0, 300);
-  await query(
-    `INSERT INTO user_sessions(user_id, ip, device) VALUES ($1,$2,$3)`,
-    [user.id, ip || null, device || null]
-  );
-} catch (e) {
-  console.warn('session log error:', e.message);
-}
+    // лог сессии
+    try {
+      const ip = String((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')).split(',')[0].trim();
+      const device = String(req.headers['user-agent'] || '').slice(0, 300);
+      await query(
+        `INSERT INTO user_sessions(user_id, ip, device) VALUES ($1,$2,$3)`,
+        [user.id, ip || null, device || null]
+      );
+    } catch (e) {
+      console.warn('session log error:', e.message);
+    }
 
-// 7) Выдаём токен
-const token = signToken({ id: user.id, phone: user.phone, role: user.role });
-return res.json({ ok: true, token });
-
+    const token = signToken({ id: user.id, phone: user.phone, role: user.role });
+    return res.json({ ok: true, token });
   } catch (e) {
     console.error('verify-code error:', e);
     return res.status(500).json({ error: 'Ошибка проверки кода' });
   }
 });
-
-
-
 
 // ===== Listings (каталог) =====
 app.get('/api/listings', async (req, res) => {
@@ -420,20 +393,21 @@ app.delete('/api/favorites/:id', auth, async (req, res) => {
   await query('DELETE FROM favorites WHERE user_id=$1 AND listing_id=$2', [userId, id]);
   res.json({ ok: true });
 });
+
 // Профиль текущего пользователя
 app.get('/api/me', auth, async (req, res) => {
   const userId = req.user.sub;
   const { rows } = await query(
     `SELECT id, user_code, name, email, phone, role, balance
-   FROM users
-  WHERE id=$1`,
-  [userId]
+       FROM users
+      WHERE id=$1`,
+    [userId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
   res.json(rows[0]);
 });
 
-// Обновление профиля: name (обязательно при первичном заполнении), email (опц.)
+// Обновление профиля
 app.patch('/api/me', auth, async (req, res) => {
   const userId = req.user.sub;
   let { name, email, phone } = req.body || {};
@@ -475,7 +449,7 @@ app.patch('/api/me', auth, async (req, res) => {
   );
 
   const u = rows[0];
-  // если телефон изменился — выдадим новый токен с обновлённым phone
+  // если телефон изменился — выдадим новый токен
   let token;
   if (phone) {
     token = jwt.sign(
@@ -488,8 +462,6 @@ app.patch('/api/me', auth, async (req, res) => {
 });
 
 // === Admin API ===
-
-// список админов
 app.get('/api/admin/admins', auth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await query(
@@ -505,7 +477,7 @@ app.get('/api/admin/admins', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// добавить админа по ID (6 цифр user_code)
+// добавить админа по ID
 app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
   const code = String(req.body?.user_code || '').trim();
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
@@ -526,7 +498,7 @@ app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// статистика для дешборда
+// статистика дешборда
 app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
   try {
     const [{ rows: [{ c: users }] }, { rows: visits }] = await Promise.all([
@@ -552,8 +524,7 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
   }
 });
 
-
-// Пополнение баланса (временный dev-эндпоинт)
+// Пополнение баланса
 app.post('/api/me/balance-add', auth, async (req, res) => {
   const userId = req.user.sub;
   const amount = Number(req.body?.amount);
@@ -574,9 +545,6 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
   }
 });
 
-
-
-
 app.get('/api/me/favorites', auth, async (req, res) => {
   const userId = req.user.sub;
   const { rows } = await query(
@@ -595,7 +563,6 @@ app.get('/api/admin/listings-stats', auth, admin, async (req, res) => {
   res.json({ total, active });
 });
 
-
 app.patch('/api/listings/:id', auth, admin, async (req, res) => {
   const { id } = req.params; const { published } = req.body || {};
   try {
@@ -612,9 +579,6 @@ app.patch('/api/listings/:id', auth, admin, async (req, res) => {
 });
 
 // === ADMIN: пользователи ===
-
-// список пользователей / поиск по ID (user_code)
-// список пользователей с пагинацией ?page=1&limit=20 и/или точным поиском по ID (?q=123456)
 app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
@@ -622,7 +586,6 @@ app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
     const offset = (page - 1) * limit;
 
-    // Если точный поиск по user_code (6 цифр) — возвращаем одного/нескольких и без пагинации
     if (/^\d{6}$/.test(q)) {
       const { rows } = await query(`
         SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
@@ -632,7 +595,6 @@ app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
       return res.json({ items: rows, page: 1, pages: 1, total: rows.length });
     }
 
-    // Общий список с пагинацией
     const { rows: [{ c: total }] } = await query(`SELECT count(*)::int c FROM users`);
     const { rows: items } = await query(`
       SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
@@ -649,8 +611,6 @@ app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
   }
 });
 
-
-// карточка пользователя
 app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
   try {
     const code = String(req.params.code || '');
@@ -676,7 +636,6 @@ app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// блокировка/разблокировка пользователя
 app.post('/api/admin/users/:code/block', auth, requireAdmin, async (req, res) => {
   try {
     const code = String(req.params.code || '');
@@ -686,7 +645,7 @@ app.post('/api/admin/users/:code/block', auth, requireAdmin, async (req, res) =>
        WHERE user_code = $1
       RETURNING user_code, is_blocked
     `, [code, block]);
-    if (!rows.length) return res.status(404).json({ error: 'not found' });
+  if (!rows.length) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true, user: rows[0] });
   } catch (e) {
     console.error('admin block error:', e);
@@ -694,7 +653,6 @@ app.post('/api/admin/users/:code/block', auth, requireAdmin, async (req, res) =>
   }
 });
 
-// заморозка/разморозка баланса
 app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req, res) => {
   try {
     const code = String(req.params.code || '');
@@ -713,7 +671,6 @@ app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req
 });
 
 // === ADMIN: отправить уведомление пользователю ===
-// body: { user_code: '123456', title: '...', body: '...' }
 app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
   try {
     const code = String(req.body?.user_code || '').trim();
@@ -736,8 +693,7 @@ app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// === USER: получить свои уведомления (с лимитом) ===
-// GET /api/notifications?limit=50
+// === USER: уведомления ===
 app.get('/api/notifications', auth, async (req, res) => {
   try {
     const lim = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10)));
@@ -756,7 +712,6 @@ app.get('/api/notifications', auth, async (req, res) => {
   }
 });
 
-// кол-во непрочитанных
 app.get('/api/notifications/unread-count', auth, async (req, res) => {
   try {
     const { rows: [{ c }] } = await query(
@@ -772,7 +727,6 @@ app.get('/api/notifications/unread-count', auth, async (req, res) => {
   }
 });
 
-// пометить все прочитанными
 app.post('/api/notifications/mark-read', auth, async (req, res) => {
   try {
     await query(
@@ -788,10 +742,7 @@ app.post('/api/notifications/mark-read', auth, async (req, res) => {
   }
 });
 
-
-
-
-// ===== Ingest для парсера (UPSERT по source_id) =====
+// ===== Ingest сырого массива (оставляем как было) =====
 app.post('/api/ingest', async (req, res) => {
   const token = req.headers['x-ingest-token'];
   if (!token) return res.status(401).json({ error: 'No ingest token' });
@@ -837,5 +788,166 @@ app.post('/api/ingest', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`API listening on ${PORT}`));
 
+// ==================== НОВОЕ: Интеграция с Trade Parser API ====================
+
+// Базовый URL парсера и таймаут
+const PARSER_BASE = process.env.PARSER_BASE_URL || 'http://91.135.156.232:8000';
+const PARSER_TIMEOUT = Number(process.env.PARSER_API_TIMEOUT || 30000);
+
+// Безопасный парсинг числа (с пробелами/запятыми)
+function pickNumber(n) {
+  if (n == null) return null;
+  const num = Number(String(n).replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(num) ? num : null;
+}
+
+// Преобразование одного объекта парсера -> запись для таблицы listings
+function mapParsedToListing(item) {
+  // поддерживаем 2 формы: { parsed_data, fedresurs_data } или плоский объект
+  const fed = item?.fedresurs_data || {};
+  const pr  = item?.parsed_data    || item || {};
+
+  const lot = pr.lot_details || {};
+  const details = {
+    lot_details: pr.lot_details || null,
+    debtor_details: pr.debtor_details || null,
+    contact_details: pr.contact_details || null,
+    prices: pr.prices || null,
+    documents: pr.documents || null,
+    fedresurs_meta: fed || null,
+  };
+
+  const title = pr.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот';
+  const description = (pr?.lot_details?.description) || '';
+  const asset_type = lot.category || 'vehicle'; // по умолчанию считаем ТС — ты можешь скорректировать
+  const region = lot.region || null;
+
+  const start_price = pickNumber(lot.start_price);
+  // current_price можно попытаться брать из последнего периода public offer, если он есть
+  let current_price = start_price;
+  const prices = Array.isArray(pr.prices) ? pr.prices : [];
+  if (prices.length) {
+    const last = prices[prices.length - 1];
+    const p = pickNumber(last?.price ?? last?.currentPrice ?? last?.current_price);
+    if (p) current_price = p;
+  }
+
+  // статус и дата окончания: берём из fedresurs_data, если есть
+  const status = fed?.status || null;
+  const end_date = fed?.dateFinish ? new Date(fed.dateFinish) : null;
+
+  const source_url = fed?.possible_url || pr?.trade_platform_url || null;
+
+  // Уникальный source_id: пробуем fedresurs_id, иначе номер торгов, иначе fallback
+  const source_id = pr.fedresurs_id || pr.bidding_number || fed.guid || fed.number || `unknown:${(pr.title||'').slice(0,50)}`;
+
+  return {
+    source_id,
+    title,
+    description,
+    asset_type,
+    region,
+    currency: 'RUB',
+    start_price,
+    current_price,
+    status,
+    end_date,
+    source_url,
+    details
+  };
+}
+
+// UPSERT одной записи в listings
+async function upsertListing(listing) {
+  const {
+    source_id, title, description, asset_type, region,
+    currency = 'RUB', start_price = null, current_price = null, status = null,
+    end_date = null, source_url = null, details = {}
+  } = listing;
+
+  await query(
+    `INSERT INTO listings
+     (source_id, title, description, asset_type, region, currency, start_price,
+      current_price, status, end_date, source_url, details)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (source_id) DO UPDATE SET
+       title=EXCLUDED.title,
+       description=EXCLUDED.description,
+       asset_type=EXCLUDED.asset_type,
+       region=EXCLUDED.region,
+       currency=EXCLUDED.currency,
+       start_price=EXCLUDED.start_price,
+       current_price=EXCLUDED.current_price,
+       status=EXCLUDED.status,
+       end_date=EXCLUDED.end_date,
+       source_url=EXCLUDED.source_url,
+       details=EXCLUDED.details,
+       updated_at=now()`,
+    [source_id, title, description, asset_type, region, currency,
+     start_price, current_price, status, end_date, source_url, details]
+  );
+}
+
+// POST /admin/ingest/fedresurs?search=vin&limit=15&offset=0&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+app.post('/admin/ingest/fedresurs', async (req, res) => {
+  // защита по токену
+  const token = req.headers['x-ingest-token'];
+  if (!token) return res.status(401).json({ error: 'No ingest token' });
+  if (token !== process.env.INGEST_TOKEN) return res.status(403).json({ error: 'Invalid token' });
+
+  try {
+    const {
+      search = 'vin',
+      start_date,
+      end_date,
+      limit = 15,
+      offset = 0
+    } = Object.assign({}, req.query, req.body);
+
+    // собираем URL запроса к парсеру
+    const u = new URL('/parse-fedresurs-trades', PARSER_BASE);
+    u.searchParams.set('search_string', String(search));
+    if (start_date) u.searchParams.set('start_date', String(start_date));
+    if (end_date)   u.searchParams.set('end_date',   String(end_date));
+    u.searchParams.set('limit',  String(limit));
+    u.searchParams.set('offset', String(offset));
+
+    console.log('Parser request:', u.toString());
+
+    const { ok, status, data } = await fetchJSON(u.toString(), { timeoutMs: PARSER_TIMEOUT });
+    if (!ok) {
+      return res.status(502).json({ error: 'Parser error', status, data });
+    }
+
+    if (!Array.isArray(data)) {
+      return res.status(502).json({ error: 'Unexpected parser payload', sample: data });
+    }
+
+    let upserted = 0;
+    for (const item of data) {
+      try {
+        const listing = mapParsedToListing(item);
+        await upsertListing(listing);
+        upserted++;
+      } catch (e) {
+        console.error('UPSERT_FROM_PARSER_ERROR', e?.message, { fedresurs_id: item?.parsed_data?.fedresurs_id || item?.fedresurs_data?.guid });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      received: data.length,
+      upserted,
+      offset: Number(offset),
+      limit: Number(limit)
+    });
+  } catch (err) {
+    console.error('admin ingest fedresurs error:', err);
+    return res.status(500).json({ error: 'ingest failed', message: err?.message });
+  }
+});
+
+// ==================== /НОВОЕ ====================
+
+app.listen(PORT, () => console.log(`API listening on ${PORT}`));
