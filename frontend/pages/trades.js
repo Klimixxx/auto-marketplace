@@ -14,6 +14,7 @@ export default function Trades(){
 
   async function load(p=1, f=filters){
     const params = new URLSearchParams({ ...f, page: p, limit: 20 });
+    params.set('published', 'true');
     const res = await fetch(`${API}/api/listings?`+params.toString(), { cache: 'no-store' });
     const data = await res.json();
     setItems(data.items||[]); setPage(data.page||1); setPageCount(data.pageCount||1);
