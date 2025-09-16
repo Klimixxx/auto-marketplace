@@ -80,7 +80,7 @@ export default function Footer() {
 
           {/* Соц-сети + контакты */}
           <div style={{ textAlign: 'center' }}>
-            <h4 style={headingStyle(UI)}>Соц-сети</h4>
+            <h4 style={headingStyle(UI)}>Контакты</h4>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 10 }}>
               <a href="https://t.me/" aria-label="Telegram" style={iconWrap(UI, 'rgba(34, 211, 238, .15)', '#22D3EE')}>
                 <TelegramIcon />
