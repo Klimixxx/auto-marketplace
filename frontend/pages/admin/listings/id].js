@@ -3,8 +3,12 @@ const API = process.env.NEXT_PUBLIC_API_BASE;
 
 export async function getServerSideProps(ctx){
   const { id } = ctx.params;
-  const token = ctx.req.cookies?.token || ''; // если токен в cookie; если нет — сделаем позже клиентским запросом
-  const r = await fetch(`${API}/api/admin/parser-trades/${id}`, { headers:{ Authorization:'Bearer '+token } });
+const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
+fetch(`${API}/api/admin/parser-trades/${id}`, {
+  headers: { 'Authorization':'Bearer ' + token }
+})
+
+
   if (!r.ok) return { notFound: true };
   const item = await r.json();
   return { props: { item } };
