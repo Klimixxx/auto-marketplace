@@ -71,10 +71,10 @@ export default function Footer() {
           <div style={{ textAlign: 'center' }}>
             <h4 style={headingStyle(UI)}>Страницы</h4>
             <div style={{ display: 'grid', gap: 8 }}>
-              {link('/profile', 'Личный кабинет')}
-              {link('/inspections', 'Мои осмотры')}
-              {link('/support', 'Поддержка')}
               {link('/trades', 'Торги')}
+              {link('/support', 'Поддержка')}
+              {link('/inspections', 'Мои осмотры')}
+              {link('/profile', 'Личный кабинет')}
             </div>
           </div>
 
