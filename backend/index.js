@@ -463,6 +463,9 @@ app.patch('/api/me', auth, async (req, res) => {
   res.json({ ok: true, user: u, token });
 });
 
+app.use('/api/admin', auth, requireAdmin, adminParserRouter);
+
+
 // === Admin API ===
 app.get('/api/admin/admins', auth, requireAdmin, async (req, res) => {
   try {
