@@ -1,4 +1,6 @@
+// pages/trades.js
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import FilterBar from '../components/FilterBar';
 import ListingCard from '../components/ListingCard';
 
@@ -12,7 +14,7 @@ export default function Trades(){
 
   async function load(p=1, f=filters){
     const params = new URLSearchParams({ ...f, page: p, limit: 20 });
-    const res = await fetch(`${API}/api/listings?`+params.toString());
+    const res = await fetch(`${API}/api/listings?`+params.toString(), { cache: 'no-store' });
     const data = await res.json();
     setItems(data.items||[]); setPage(data.page||1); setPageCount(data.pageCount||1);
   }
@@ -32,11 +34,25 @@ export default function Trades(){
   return (
     <div className="container">
       <h1>Торги</h1>
+
       <FilterBar onSearch={(f)=>{ setFilters(f); load(1,f); }} />
 
       <div className="grid" style={{marginTop:16}}>
         {items.map(l => (
-          <ListingCard key={l.id} l={l} onFav={()=>toggleFav(l.id)} />
+          <div key={l.id} className="card-with-actions">
+            {/* Твоя карточка как была */}
+            <ListingCard l={l} onFav={()=>toggleFav(l.id)} />
+
+            {/* Кнопки действий под карточкой */}
+            <div style={{display:'flex', gap:8, marginTop:8}}>
+              <Link href={`/trades/${l.id}`} className="button">Открыть карточку</Link>
+              {l.source_url ? (
+                <a href={l.source_url} target="_blank" rel="noreferrer" className="button outline">
+                  Источник
+                </a>
+              ) : null}
+            </div>
+          </div>
         ))}
       </div>
 
@@ -48,4 +64,3 @@ export default function Trades(){
     </div>
   );
 }
-
