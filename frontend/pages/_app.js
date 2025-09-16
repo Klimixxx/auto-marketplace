@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, createContext } from 'react';
 import '../styles/globals.css'; // если файла нет — можно удалить эту строку
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import Router from 'next/router';
 
 // Дадим простой контекст, чтобы страницы/компоненты могли принудительно обновить профиль
@@ -79,6 +80,9 @@ export default function MyApp({ Component, pageProps }) {
              Если хочешь лоадер — можно добавить спиннер, ориентируясь на loaded */}
           <Component {...pageProps} />
         </main>
+
+        {/* Футер на всех страницах */}
+        <Footer />
       </div>
     </AuthContext.Provider>
   );
