@@ -71,15 +71,21 @@ async function runMigrations() {
 // ВЫПОЛНЯЕМ МИГРАЦИИ ПЕРЕД СТАРТОМ СЕРВЕРА
 await runMigrations();
 
-// CORS
+// CORS (расширенный: методы/заголовки/credentials + preflight)
 const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
 app.use(cors({
-  origin: (origin, cb) => {
+  origin(origin, cb) {
     if (!origin) return cb(null, true);
     if (allowed.includes(origin)) return cb(null, true);
-    cb(new Error('Not allowed by CORS'));
-  }
+    return cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+// обязательно! — пропускаем preflight без авторизации
+app.options('*', cors());
+
 
 // Порт: Render сам задаёт process.env.PORT
 const PORT = process.env.PORT || 8080;
@@ -106,6 +112,7 @@ function signToken(user) {
 // ===== МИДЛВАРЫ АУТЕНТИФИКАЦИИ =====
 
 async function auth(req, res, next) {
+  if (req.method === 'OPTIONS') return next();
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'No token' });
