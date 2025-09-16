@@ -12,12 +12,13 @@ export default function AdminParserTrades() {
   async function load(p=1) {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams({ page: String(p), limit: '20' });
-      if (q.trim()) params.set('q', q.trim());
-      const r = await fetch(`${API}/api/admin/parser-trades?${params.toString()}`, {
-        headers: { Authorization: 'Bearer '+token }
-      });
+      const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
+const r = await fetch(`${API}/api/admin/parser-trades?${params.toString()}`, {
+  headers: {
+    'Authorization': 'Bearer ' + token
+  }
+});
+
       const data = await r.json();
       setItems(data.items||[]); setPage(data.page||1); setPageCount(data.pageCount||1);
     } finally { setLoading(false); }
@@ -25,12 +26,14 @@ export default function AdminParserTrades() {
   useEffect(()=>{ load(1); }, []);
 
   async function runIngest() {
-    const token = localStorage.getItem('token');
-    const r = await fetch(`${API}/api/admin/actions/ingest`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token },
-      body: JSON.stringify({ search:'vin', limit:50, offset:0 })
-    });
+    const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
+const r = await fetch(`${API}/api/admin/parser-trades/${id}/publish`, {
+  method: 'POST',
+  headers: {
+    'Authorization':'Bearer ' + token
+  }
+});
+
     const d = await r.json();
     if (!r.ok) return alert('Ошибка: '+(d?.error||'ingest failed'));
     alert(`Получено: ${d.received}, сохранено/обновлено: ${d.upserted}`);
