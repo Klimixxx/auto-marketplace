@@ -1,40 +1,84 @@
-// backend/routes/adminParser.js (ESM)
 import express from 'express';
 import { query } from '../db.js';
 
 const router = express.Router();
 
-function toNumberSafe(n) {
-  if (n == null) return null;
-  const num = Number(String(n).replace(/\s/g, '').replace(',', '.'));
+const DEFAULT_LIMIT = 50;
+const DEFAULT_OFFSET = 0;
+const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
+
+function toNumberSafe(value) {
+  if (value == null) return null;
+  const num = Number(String(value).replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(num) ? num : null;
 }
 
-async function upsertParserTrade(item) {
-  // Поддерживаем { parsed_data, fedresurs_data } или плоский объект
-  const fed = item?.fedresurs_data || {};
-  const pr  = item?.parsed_data    || item || {};
-  const lot = pr.lot_details || {};
-  const debtor   = pr.debtor_details || {};
-  const contact  = pr.contact_details || {};
-  const prices   = Array.isArray(pr.prices) ? pr.prices : [];
-  const documents= Array.isArray(pr.documents) ? pr.documents : [];
+function toFinite(value) {
+  if (value === undefined || value === null) return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
 
-  const fedresursId   = pr.fedresurs_id || fed.guid || fed.number || pr.bidding_number || null;
-  const biddingNumber = pr.bidding_number || null;
+function pickResultsArray(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.list)) return payload.list;
+  return null;
+}
+
+function normalizeParserResponse(payload) {
+  if (Array.isArray(payload)) {
+    return { items: payload, meta: { total_found: payload.length } };
+  }
+
+  if (payload && typeof payload === 'object') {
+    const items = pickResultsArray(payload);
+    if (!items) {
+      throw new Error('Parser response has no results array');
+    }
+
+    const meta = {};
+    const total = toFinite(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
+    if (total !== undefined) meta.total_found = total;
+    const limit = toFinite(payload.limit ?? payload.page_size ?? payload.per_page ?? payload.size);
+    if (limit !== undefined) meta.limit = limit;
+    const offset = toFinite(payload.offset ?? payload.page ?? payload.page_number ?? payload.start);
+    if (offset !== undefined) meta.offset = offset;
+    if (typeof payload.has_more === 'boolean') meta.has_more = payload.has_more;
+
+    if (meta.total_found === undefined) meta.total_found = items.length;
+
+    return { items, meta };
+  }
+
+  throw new Error(`Unexpected parser payload type: ${typeof payload}`);
+}
+
+async function upsertParserTrade(item) {
+  const fedresurs = item?.fedresurs_data || {};
+  const parsed = item?.parsed_data || item || {};
+  const lot = parsed.lot_details || {};
+  const debtor = parsed.debtor_details || {};
+  const contact = parsed.contact_details || {};
+  const prices = Array.isArray(parsed.prices) ? parsed.prices : [];
+  const documents = Array.isArray(parsed.documents) ? parsed.documents : [];
+
+  const fedresursId = parsed.fedresurs_id || fedresurs.guid || fedresurs.number || parsed.bidding_number || null;
+  const biddingNumber = parsed.bidding_number || null;
 
   const params = {
     fedresurs_id: fedresursId,
     bidding_number: biddingNumber,
-    title: pr.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот',
-    applications_count: pr.applications_count ?? null,
+    title: parsed.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот',
+    applications_count: parsed.applications_count ?? null,
     lot_details: lot,
     debtor_details: debtor,
     contact_details: contact,
     prices,
     documents,
-    raw_payload: { fedresurs_data: fed, parsed_data: pr },
-
+    raw_payload: { fedresurs_data: fedresurs, parsed_data: parsed },
     category: lot.category || null,
     region: lot.region || null,
     brand: lot.brand || null,
@@ -42,11 +86,10 @@ async function upsertParserTrade(item) {
     year: lot.year || null,
     vin: lot.vin || null,
     start_price: toNumberSafe(lot.start_price),
-
-    date_start: fed.dateStart ? new Date(fed.dateStart) : null,
-    date_finish: fed.dateFinish ? new Date(fed.dateFinish) : null,
-    trade_place: fed.tradePlace?.name || null,
-    source_url: fed.possible_url || pr.trade_platform_url || null,
+    date_start: fedresurs.dateStart ? new Date(fedresurs.dateStart) : null,
+    date_finish: fedresurs.dateFinish ? new Date(fedresurs.dateFinish) : null,
+    trade_place: fedresurs.tradePlace?.name || null,
+    source_url: fedresurs.possible_url || parsed.trade_platform_url || null,
   };
 
   const sql = `
@@ -96,122 +139,84 @@ async function upsertParserTrade(item) {
   return rows[0]?.id;
 }
 
-function toFiniteNumber(value) {
-  if (value === undefined || value === null) return undefined;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
-}
-
-function normalizeParserResponse(payload) {
-  if (Array.isArray(payload)) {
-    return { items: payload, meta: { total_found: payload.length } };
-  }
-
-  if (payload && typeof payload === 'object') {
-    const results = Array.isArray(payload.results)
-      ? payload.results
-      : Array.isArray(payload.items)
-        ? payload.items
-        : Array.isArray(payload.data)
-          ? payload.data
-          : null;
-
-    if (!results) {
-      throw new Error('Parser payload does not contain a results array');
-    }
-
-    const meta = {};
-    const total = toFiniteNumber(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
-    if (total !== undefined) meta.total_found = total;
-    const limit = toFiniteNumber(payload.limit ?? payload.page_size ?? payload.per_page);
-    if (limit !== undefined) meta.limit = limit;
-    const offset = toFiniteNumber(payload.offset ?? payload.page ?? payload.page_number);
-    if (offset !== undefined) meta.offset = offset;
-    if (typeof payload.has_more === 'boolean') meta.has_more = payload.has_more;
-
-    if (meta.total_found === undefined) {
-      meta.total_found = results.length;
-    }
-
-    return { items: results, meta };
-  }
-
-  throw new Error(`Unexpected parser payload type: ${typeof payload}`);
-}
-
-###
 router.get('/parser-trades', async (req, res) => {
   try {
     const { q, page = 1, limit = 20 } = req.query;
-    const where = [];
+    const filters = [];
     const params = [];
 
     if (q) {
       params.push(`%${q}%`);
-      where.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
+      filters.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
     }
 
-    const pageNum = Math.max(1, parseInt(page));
-    const size    = Math.min(100, Math.max(1, parseInt(limit)));
-    const offset  = (pageNum - 1) * size;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const offset = (pageNum - 1) * pageSize;
 
-    const whereSql = where.length ? `where ${where.join(' and ')}` : '';
-    const totalSql = `select count(*)::int c from parser_trades ${whereSql}`;
-    const listSql  = `
+    const whereSql = filters.length ? `where ${filters.join(' and ')}` : '';
+    const totalSql = `select count(*)::int as c from parser_trades ${whereSql}`;
+    const listSql = `
       select id, title, region, category, brand, model, year, vin, start_price,
              date_finish, trade_place, source_url, created_at
         from parser_trades
       ${whereSql}
       order by created_at desc
-      limit $${params.length+1} offset $${params.length+2}
+      limit $${params.length + 1} offset $${params.length + 2}
     `;
 
     const [{ rows: [{ c: total }] }, { rows: items }] = await Promise.all([
       query(totalSql, params),
-      query(listSql, [...params, size, offset]),
+      query(listSql, [...params, pageSize, offset]),
     ]);
 
-    res.json({ items, total, page: pageNum, pageCount: Math.max(1, Math.ceil(total / size)) });
-  } catch (e) {
-    console.error('admin parser-trades list error:', e);
+    res.json({ items, total, page: pageNum, pageCount: Math.max(1, Math.ceil(total / pageSize)) });
+  } catch (error) {
+    console.error('admin parser-trades list error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
 
-// 2) Детальная карточка из parser_trades
 router.get('/parser-trades/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await query(`select * from parser_trades where id = $1`, [id]);
-    if (!rows[0]) return res.status(404).json({ error: 'not found' });
-    res.json(rows[0]);
-  } catch (e) {
-    console.error('admin parser-trade detail error:', e);
+    const { rows } = await query('select * from parser_trades where id = $1', [id]);
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'not found' });
+    }
+    return res.json(rows[0]);
+  } catch (error) {
+    console.error('admin parser-trade detail error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
 
-// 3) Кнопка «Спарсить»: дергаем парсер -> сохраняем в parser_trades
 router.post('/actions/ingest', async (req, res) => {
   try {
-    const { search = 'vin', start_date, end_date, limit = 50, offset = 0 } = req.body || {};
+    const { search = 'vin', start_date, end_date, limit = DEFAULT_LIMIT, offset = DEFAULT_OFFSET } = req.body || {};
+
     const limitNum = Number(limit);
     const offsetNum = Number(offset);
-    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 50;
-    const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : 0;
-    const base = process.env.PARSER_BASE_URL || 'http://91.135.156.232:8000';
-    const url  = new URL('/parse-fedresurs-trades', base);
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : DEFAULT_LIMIT;
+    const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : DEFAULT_OFFSET;
+
+    const baseUrl = process.env.PARSER_BASE_URL || PARSER_FALLBACK_BASE;
+    const url = new URL('/parse-fedresurs-trades', baseUrl);
     url.searchParams.set('search_string', String(search));
     if (start_date) url.searchParams.set('start_date', String(start_date));
-    if (end_date)   url.searchParams.set('end_date',   String(end_date));
-    url.searchParams.set('limit',  String(safeLimit));
+    if (end_date) url.searchParams.set('end_date', String(end_date));
+    url.searchParams.set('limit', String(safeLimit));
     url.searchParams.set('offset', String(safeOffset));
 
-    const r = await fetch(url.toString(), { method: 'GET', headers: { accept: 'application/json' }, cache: 'no-store' });
-    const data = await r.json().catch(() => null);
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+    const data = await response.json().catch(() => null);
 
-    if (!r.ok || data == null) {
-      return res.status(502).json({ error: 'parser failed', status: r.status, sample: data });
+    if (!response.ok || data == null) {
+      return res.status(502).json({ error: 'parser failed', status: response.status, sample: data });
     }
 
     let parsed;
@@ -219,7 +224,7 @@ router.post('/actions/ingest', async (req, res) => {
       parsed = normalizeParserResponse(data);
     } catch (error) {
       console.error('normalize parser payload failed:', error?.message);
-      return res.status(502).json({ error: 'parser failed', status: r.status, reason: error?.message, sample: data });
+      return res.status(502).json({ error: 'parser failed', status: response.status, reason: error?.message, sample: data });
     }
 
     const { items, meta } = parsed;
@@ -228,12 +233,13 @@ router.post('/actions/ingest', async (req, res) => {
     for (const item of items) {
       try {
         await upsertParserTrade(item);
-        upserted++;
-      } catch (e) {
-        console.error('UPSERT parser_trades error:', e?.message);
+        upserted += 1;
+      } catch (error) {
+        console.error('UPSERT parser_trades error:', error?.message);
       }
     }
-    res.json({
+
+    return res.json({
       ok: true,
       received: items.length,
       upserted,
@@ -241,39 +247,38 @@ router.post('/actions/ingest', async (req, res) => {
       offset: safeOffset,
       parser_meta: meta,
     });
-
-    res.json({ ok: true, received: data.length, upserted, limit, offset });
-  } catch (e) {
-    console.error('ingest call error:', e);
+  } catch (error) {
+    console.error('ingest call error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
 
-// 4) «Выложить»: перенос/обновление в listings (published=true)
 router.post('/parser-trades/:id/publish', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await query(`select * from parser_trades where id = $1`, [id]);
-    if (!rows[0]) return res.status(404).json({ error: 'not found' });
-    const t = rows[0];
+    const { rows } = await query('select * from parser_trades where id = $1', [id]);
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'not found' });
+    }
 
+    const trade = rows[0];
     const currency = 'RUB';
-    const prices = Array.isArray(t.prices) ? t.prices : [];
+    const prices = Array.isArray(trade.prices) ? trade.prices : [];
     const lastPrice = prices.length
-      ? Number(String(prices[prices.length - 1]?.price ?? prices[prices.length - 1]?.currentPrice ?? prices[prices.length - 1]?.current_price ?? '').replace(/\s/g,'').replace(',','.'))
+      ? Number(String(prices[prices.length - 1]?.price ?? prices[prices.length - 1]?.currentPrice ?? prices[prices.length - 1]?.current_price ?? '').replace(/\s/g, '').replace(',', '.'))
       : null;
-    const currentPrice = lastPrice || t.start_price || null;
+    const currentPrice = lastPrice || trade.start_price || null;
 
     const details = {
-      lot_details: t.lot_details || null,
-      debtor_details: t.debtor_details || null,
-      contact_details: t.contact_details || null,
+      lot_details: trade.lot_details || null,
+      debtor_details: trade.debtor_details || null,
+      contact_details: trade.contact_details || null,
       prices: prices.length ? prices : null,
-      documents: Array.isArray(t.documents) ? t.documents : null,
-      fedresurs_meta: t.raw_payload?.fedresurs_data || null,
+      documents: Array.isArray(trade.documents) ? trade.documents : null,
+      fedresurs_meta: trade.raw_payload?.fedresurs_data || null,
     };
 
-    const source_id = t.fedresurs_id || t.bidding_number || t.id;
+    const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
 
     await query(`
       insert into listings
@@ -296,23 +301,23 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
         published=true,
         updated_at=now()
     `, [
-      source_id,
-      t.title || [t.brand, t.model, t.year].filter(Boolean).join(' ') || 'Лот',
-      t.lot_details?.description || null,
-      t.category || 'vehicle',
-      t.region || null,
+      sourceId,
+      trade.title || [trade.brand, trade.model, trade.year].filter(Boolean).join(' ') || 'Лот',
+      trade.lot_details?.description || null,
+      trade.category || 'vehicle',
+      trade.region || null,
       currency,
-      t.start_price || null,
+      trade.start_price || null,
       currentPrice,
-      null, // статус можно подтянуть из raw_payload при желании
-      t.date_finish || null,
-      t.source_url || null,
+      null,
+      trade.date_finish || null,
+      trade.source_url || null,
       details,
     ]);
 
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('publish error:', e);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('publish error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
