@@ -121,7 +121,12 @@ export default function AdminParserTrades() {
       <h1>Админка — Объявления (из парсера)</h1>
 
       <div style={{display:'flex', gap:8, margin:'12px 0'}}>
-        <input className="input" value={q} onChange={e=>setQ(e.target.value)} placeholder="Поиск (название/регион/марка/модель/VIN)"/>
+        <input
+          className="input"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Поиск (название/регион/марка/модель/VIN)"
+        />
         <button className="button" onClick={()=>load(1)} disabled={loading}>Найти</button>
         <button className="button primary" onClick={runIngest} disabled={loading}>Спарсить объявления</button>
       </div>
@@ -137,4 +142,13 @@ export default function AdminParserTrades() {
                 <td>
                   <div style={{fontWeight:600}}>{it.title||'Лот'}</div>
                   <div className="muted" style={{fontSize:12}}>
+                    {it.source_url ? <a href={it.source_url} target="_blank" rel="noreferrer">Источник</a> : '—'}
+                  </div>
                 </td>
+                <td>{it.region||'—'}</td>
+                <td>{[it.brand, it.model, it.year].filter(Boolean).join(' ')||'—'}<br/>{it.vin||''}</td>
+                <td>{it.start_price ?? '—'}</td>
+                <td>{it.date_finish ? new Date(it.date_finish).toLocaleDateString('ru-RU') : '—'}</td>
+                <td style={{whiteSpace:'nowrap'}}>
+                  <Link href={`/admin/listings/${it.id}`} className="button">Открыть</Link>{' '}
+                  <button className="button primary" onClick={()=>publish(it.id)}>Выложить</button>
