@@ -95,13 +95,19 @@ export default function Header() {
     setAuthed(Boolean(token));
     if (token) {
       fetch(join('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => (r.ok ? r.json() : null))
         .then(d => { if (d) setMe(d); })
         .catch(() => {});
-    } else {
-      fetch('/api/auth/me', { credentials: 'include' })
-        .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.user) { setMe(d.user); setAuthed(true); }})
+    } else if (API) {
+      fetch(join('/api/me'), { credentials: 'include' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => {
+          const user = d?.user ?? d;
+          if (user?.id) {
+            setMe(user);
+            setAuthed(true);
+          }
+        })
         .catch(() => {});
     }
   }, []);
