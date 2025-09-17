@@ -96,7 +96,50 @@ async function upsertParserTrade(item) {
   return rows[0]?.id;
 }
 
-// 1) Список объявлений из parser_trades
+function toFiniteNumber(value) {
+  if (value === undefined || value === null) return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function normalizeParserResponse(payload) {
+  if (Array.isArray(payload)) {
+    return { items: payload, meta: { total_found: payload.length } };
+  }
+
+  if (payload && typeof payload === 'object') {
+    const results = Array.isArray(payload.results)
+      ? payload.results
+      : Array.isArray(payload.items)
+        ? payload.items
+        : Array.isArray(payload.data)
+          ? payload.data
+          : null;
+
+    if (!results) {
+      throw new Error('Parser payload does not contain a results array');
+    }
+
+    const meta = {};
+    const total = toFiniteNumber(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
+    if (total !== undefined) meta.total_found = total;
+    const limit = toFiniteNumber(payload.limit ?? payload.page_size ?? payload.per_page);
+    if (limit !== undefined) meta.limit = limit;
+    const offset = toFiniteNumber(payload.offset ?? payload.page ?? payload.page_number);
+    if (offset !== undefined) meta.offset = offset;
+    if (typeof payload.has_more === 'boolean') meta.has_more = payload.has_more;
+
+    if (meta.total_found === undefined) {
+      meta.total_found = results.length;
+    }
+
+    return { items: results, meta };
+  }
+
+  throw new Error(`Unexpected parser payload type: ${typeof payload}`);
+}
+
+###
 router.get('/parser-trades', async (req, res) => {
   try {
     const { q, page = 1, limit = 20 } = req.query;
@@ -152,22 +195,37 @@ router.get('/parser-trades/:id', async (req, res) => {
 router.post('/actions/ingest', async (req, res) => {
   try {
     const { search = 'vin', start_date, end_date, limit = 50, offset = 0 } = req.body || {};
+    const limitNum = Number(limit);
+    const offsetNum = Number(offset);
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 50;
+    const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : 0;
     const base = process.env.PARSER_BASE_URL || 'http://91.135.156.232:8000';
     const url  = new URL('/parse-fedresurs-trades', base);
     url.searchParams.set('search_string', String(search));
     if (start_date) url.searchParams.set('start_date', String(start_date));
     if (end_date)   url.searchParams.set('end_date',   String(end_date));
-    url.searchParams.set('limit',  String(limit));
-    url.searchParams.set('offset', String(offset));
+    url.searchParams.set('limit',  String(safeLimit));
+    url.searchParams.set('offset', String(safeOffset));
 
-    const r = await fetch(url.toString(), { method: 'GET', headers: { 'accept': 'application/json' }, cache: 'no-store' });
-    const data = await r.json().catch(()=>null);
-    if (!r.ok || !Array.isArray(data)) {
+    const r = await fetch(url.toString(), { method: 'GET', headers: { accept: 'application/json' }, cache: 'no-store' });
+    const data = await r.json().catch(() => null);
+
+    if (!r.ok || data == null) {
       return res.status(502).json({ error: 'parser failed', status: r.status, sample: data });
     }
 
+    let parsed;
+    try {
+      parsed = normalizeParserResponse(data);
+    } catch (error) {
+      console.error('normalize parser payload failed:', error?.message);
+      return res.status(502).json({ error: 'parser failed', status: r.status, reason: error?.message, sample: data });
+    }
+
+    const { items, meta } = parsed;
+
     let upserted = 0;
-    for (const item of data) {
+    for (const item of items) {
       try {
         await upsertParserTrade(item);
         upserted++;
@@ -175,6 +233,14 @@ router.post('/actions/ingest', async (req, res) => {
         console.error('UPSERT parser_trades error:', e?.message);
       }
     }
+    res.json({
+      ok: true,
+      received: items.length,
+      upserted,
+      limit: safeLimit,
+      offset: safeOffset,
+      parser_meta: meta,
+    });
 
     res.json({ ok: true, received: data.length, upserted, limit, offset });
   } catch (e) {
