@@ -22,20 +22,21 @@ router.post('/admin/ingest/fedresurs', auth, async (req, res) => {
       offset = 0
     } = Object.assign({}, req.query, req.body);
 
-    const data = await parseFedresursTrades({
+    const limitNum = Number(limit);
+    const offsetNum = Number(offset);
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 15;
+    const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : 0;
+
+    const { items, meta } = await parseFedresursTrades({
       search_string: search,
       start_date,
       end_date,
-      limit: Number(limit),
-      offset: Number(offset),
+      limit: safeLimit,
+      offset: safeOffset,
     });
 
-    if (!Array.isArray(data)) {
-      return res.status(502).json({ error: 'unexpected parser payload', sample: data });
-    }
-
     let inserted = 0;
-    for (const item of data) {
+    for (const item of items) {
       try {
         await upsertTradeFromParsedObject(item);
         inserted++;
@@ -44,7 +45,14 @@ router.post('/admin/ingest/fedresurs', auth, async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, received: data.length, upserted: inserted, offset: Number(offset), limit: Number(limit) });
+    return res.json({
+      ok: true,
+      received: items.length,
+      upserted: inserted,
+      offset: safeOffset,
+      limit: safeLimit,
+      parser_meta: meta,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: err?.message || 'ingest failed' });
