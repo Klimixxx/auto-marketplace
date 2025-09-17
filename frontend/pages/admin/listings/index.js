@@ -137,3 +137,4 @@ export default function AdminParserTrades() {
                 <td>
                   <div style={{fontWeight:600}}>{it.title||'Лот'}</div>
                   <div className="muted" style={{fontSize:12}}>
+                </td>
