@@ -1,3 +1,4 @@
+// backend/src/services/parserClient.js
 const axios = require('axios');
 
 const client = axios.create({
@@ -5,10 +6,19 @@ const client = axios.create({
   timeout: Number(process.env.PARSER_API_TIMEOUT || 30000),
 });
 
-function toFiniteNumber(value) {
+function toFinite(value) {
   if (value === undefined || value === null) return undefined;
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
+}
+
+function pickResultsArray(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.list)) return payload.list;
+  return null;
 }
 
 function normalizeParserPayload(payload) {
@@ -17,32 +27,23 @@ function normalizeParserPayload(payload) {
   }
 
   if (payload && typeof payload === 'object') {
-    const results = Array.isArray(payload.results)
-      ? payload.results
-      : Array.isArray(payload.items)
-        ? payload.items
-        : Array.isArray(payload.data)
-          ? payload.data
-          : null;
-
-    if (!results) {
+    const items = pickResultsArray(payload);
+    if (!items) {
       throw new Error('Parser payload does not contain a results array');
     }
 
     const meta = {};
-    const total = toFiniteNumber(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
+    const total = toFinite(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
     if (total !== undefined) meta.total_found = total;
-    const limit = toFiniteNumber(payload.limit ?? payload.page_size ?? payload.per_page);
+    const limit = toFinite(payload.limit ?? payload.page_size ?? payload.per_page ?? payload.size);
     if (limit !== undefined) meta.limit = limit;
-    const offset = toFiniteNumber(payload.offset ?? payload.page ?? payload.page_number);
+    const offset = toFinite(payload.offset ?? payload.page ?? payload.page_number ?? payload.start);
     if (offset !== undefined) meta.offset = offset;
     if (typeof payload.has_more === 'boolean') meta.has_more = payload.has_more;
 
-    if (meta.total_found === undefined) {
-      meta.total_found = results.length;
-    }
+    if (meta.total_found === undefined) meta.total_found = items.length;
 
-    return { items: results, meta };
+    return { items, meta };
   }
 
   throw new Error(`Unexpected parser payload type: ${typeof payload}`);
