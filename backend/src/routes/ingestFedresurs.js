@@ -1,4 +1,3 @@
-// backend/src/routes/ingestFedresurs.js
 const express = require('express');
 const router = express.Router();
 const { parseFedresursTrades } = require('../services/parserClient');
