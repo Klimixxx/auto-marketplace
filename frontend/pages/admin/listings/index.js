@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-const API = process.env.NEXT_PUBLIC_API_BASE;
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 export default function AdminParserTrades() {
   const [items, setItems] = useState([]);
@@ -9,46 +10,108 @@ export default function AdminParserTrades() {
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  async function load(p=1) {
+  async function load(p = 1) {
+    if (!API_BASE) {
+      console.warn('NEXT_PUBLIC_API_BASE не задан. Страница админа не может загрузить данные.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
-const r = await fetch(`${API}/api/admin/parser-trades?${params.toString()}`, {
-  headers: {
-    'Authorization': 'Bearer ' + token
-  }
-});
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+      if (!token) {
+        alert('Для доступа в админку войдите в аккаунт администратора.');
+        return;
+      }
 
-      const data = await r.json();
-      setItems(data.items||[]); setPage(data.page||1); setPageCount(data.pageCount||1);
-    } finally { setLoading(false); }
+      const params = new URLSearchParams();
+      const search = q.trim();
+      if (search) params.set('q', search);
+      params.set('page', String(p));
+      params.set('limit', '20');
+
+      const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || 'Не удалось загрузить список объявлений');
+      }
+
+      setItems(data.items || []);
+      setPage(data.page || 1);
+      setPageCount(data.pageCount || 1);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
-  useEffect(()=>{ load(1); }, []);
+
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runIngest() {
-    const token = (typeof window !== 'undefined') ? localStorage.getItem('token') : '';
-const r = await fetch(`${API}/api/admin/parser-trades/${id}/publish`, {
-  method: 'POST',
-  headers: {
-    'Authorization':'Bearer ' + token
-  }
-});
+    if (!API_BASE) {
+      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
+      return;
+    }
 
-    const d = await r.json();
-    if (!r.ok) return alert('Ошибка: '+(d?.error||'ingest failed'));
-    alert(`Получено: ${d.received}, сохранено/обновлено: ${d.upserted}`);
-    load(1);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+    if (!token) {
+      alert('Сначала войдите в админ-аккаунт.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/actions/ingest`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ search: q.trim() || 'vin' }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || 'Не удалось запустить парсер');
+      }
+
+      alert(`Получено: ${data.received}, сохранено/обновлено: ${data.upserted}`);
+      await load(1);
+    } catch (e) {
+      alert(`Ошибка: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function publish(id) {
+    if (!API_BASE) {
+      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
+      return;
+    }
+
     const token = localStorage.getItem('token');
-    const r = await fetch(`${API}/api/admin/parser-trades/${id}/publish`, {
-      method:'POST',
-      headers:{ Authorization:'Bearer '+token }
+    if (!token) {
+      alert('Сначала войдите в админ-аккаунт.');
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/publish`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
     });
-    if (!r.ok) {
-      const d = await r.json().catch(()=>({}));
-      return alert('Ошибка публикации: '+(d?.error||'failed'));
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return alert(`Ошибка публикации: ${data?.error || 'failed'}`);
     }
     alert('Опубликовано! Доступно на /trades');
   }
@@ -74,29 +137,3 @@ const r = await fetch(`${API}/api/admin/parser-trades/${id}/publish`, {
                 <td>
                   <div style={{fontWeight:600}}>{it.title||'Лот'}</div>
                   <div className="muted" style={{fontSize:12}}>
-                    {it.source_url ? <a href={it.source_url} target="_blank" rel="noreferrer">Источник</a> : '—'}
-                  </div>
-                </td>
-                <td>{it.region||'—'}</td>
-                <td>{[it.brand, it.model, it.year].filter(Boolean).join(' ')||'—'}<br/>{it.vin||''}</td>
-                <td>{it.start_price ?? '—'}</td>
-                <td>{it.date_finish ? new Date(it.date_finish).toLocaleDateString('ru-RU') : '—'}</td>
-                <td style={{whiteSpace:'nowrap'}}>
-                  <Link href={`/admin/listings/${it.id}`} className="button">Открыть</Link>{' '}
-                  <button className="button primary" onClick={()=>publish(it.id)}>Выложить</button>
-                </td>
-              </tr>
-            ))}
-            {!items.length && <tr><td colSpan={6} style={{textAlign:'center',padding:'24px 0'}}>Пусто</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{display:'flex', gap:8, marginTop:16}}>
-        <button className="button" onClick={()=>load(page-1)} disabled={page<=1}>← Назад</button>
-        <div style={{alignSelf:'center'}}>Стр. {page} / {pageCount}</div>
-        <button className="button" onClick={()=>load(page+1)} disabled={page>=pageCount}>Вперёд →</button>
-      </div>
-    </div>
-  );
-}
