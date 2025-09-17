@@ -75,6 +75,11 @@ function parseUnreadCount(d){
 
   const arr = d.items || d.rows || d.results || d.notifications;
   const byArr = countUnreadInArray(arr);
+   if (byD != null) return byD;
+  }
+
+  const arr = d.items || d.rows || d.results || d.notifications;
+  const byArr = countUnreadInArray(arr);
   if (byArr != null) return byArr;
 
   return 0;
