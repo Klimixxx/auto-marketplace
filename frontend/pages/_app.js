@@ -5,6 +5,12 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Router from 'next/router';
 
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
+
+function buildUrl(path) {
+  return `${API_BASE}${path}`;
+}
+
 // Дадим простой контекст, чтобы страницы/компоненты могли принудительно обновить профиль
 export const AuthContext = createContext({
   user: null,
@@ -19,18 +25,30 @@ export default function MyApp({ Component, pageProps }) {
   // единая функция загрузки профиля
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-        headers: { 'Accept': 'application/json' },
-      });
+      if (!API_BASE) {
+        setUser(null);
+        setLoaded(true);
+        return;
+      }
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers = { Accept: 'application/json' };
+      const options = { method: 'GET', headers };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      } else {
+        options.credentials = 'include';
+      }
+
+      const res = await fetch(buildUrl('/api/me'), options);
       if (!res.ok) {
         setUser(null);
         setLoaded(true);
         return;
       }
       const data = await res.json();
-      setUser(data?.user ?? null);
+      setUser(data?.user ?? data ?? null);
     } catch {
       setUser(null);
     } finally {
