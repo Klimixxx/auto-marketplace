@@ -55,34 +55,74 @@ function countUnreadInArray(arr){
   }
   return n;
 }
+function pickFiniteNumber(values){
+  for (const value of values){
+    if (isFiniteNum(value)) return value;
+  }
+  return null;
+}
+function pickFromCollections(collections){
+  for (const set of collections){
+    const count = countUnreadInArray(set);
+    if (count != null) return count;
+  }
+  return null;
+}
 function parseUnreadCount(d){
-  if (typeof d === 'number') return d;
-  if (Array.isArray(d)) return d.length;
-  if (!d || typeof d !== 'object') return 0;
+  let result = 0;
+  let resolved = false;
 
-  if (isFiniteNum(d.count)) return d.count;
-  if (isFiniteNum(d.unread)) return d.unread;
-  if (isFiniteNum(d.unreadCount)) return d.unreadCount;
+  if (typeof d === 'number') {
+    result = d;
+    resolved = true;
+  } else if (Array.isArray(d)) {
+    result = d.length;
+    resolved = true;
+  } else if (d && typeof d === 'object') {
+    const direct = pickFiniteNumber([d.count, d.unread, d.unreadCount]);
+    if (direct != null) {
+      result = direct;
+      resolved = true;
+    } else {
+      let candidate = null;
 
-  if (d.data){
-    if (isFiniteNum(d.data.count)) return d.data.count;
-    if (isFiniteNum(d.data.unread)) return d.data.unread;
-    if (isFiniteNum(d.data.unreadCount)) return d.data.unreadCount;
-    const arrD = d.data.items || d.data.rows || d.data.results || d.data.notifications;
-    const byD = countUnreadInArray(arrD);
-    if (byD != null) return byD;
+      if (d.data && typeof d.data === 'object') {
+        const nestedDirect = pickFiniteNumber([d.data.count, d.data.unread, d.data.unreadCount]);
+        if (nestedDirect != null) {
+          result = nestedDirect;
+          resolved = true;
+        } else {
+          candidate = pickFromCollections([
+            d.data.items,
+            d.data.rows,
+            d.data.results,
+            d.data.notifications,
+          ]);
+        }
+      }
+
+      if (!resolved) {
+        if (candidate == null) {
+          candidate = pickFromCollections([
+            d.items,
+            d.rows,
+            d.results,
+            d.notifications,
+          ]);
+        }
+        if (candidate != null) {
+          result = candidate;
+          resolved = true;
+        }
+      }
+    }
   }
 
-  const arr = d.items || d.rows || d.results || d.notifications;
-  const byArr = countUnreadInArray(arr);
-   if (byD != null) return byD;
+  if (!resolved && !isFiniteNum(result)) {
+    result = 0;
   }
 
-  const arr = d.items || d.rows || d.results || d.notifications;
-  const byArr = countUnreadInArray(arr);
-  if (byArr != null) return byArr;
-
-  return 0;
+  return isFiniteNum(result) ? result : 0;
 }
 
 /* ===== Header ===== */
