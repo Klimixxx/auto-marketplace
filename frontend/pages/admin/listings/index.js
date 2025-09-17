@@ -1,68 +1,108 @@
-import { useEffect, useState } from 'react';
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
-export default function AdminParserTrades() {
+function normalizeBase(value) {
+  if (!value) {
+    return '';
+  }
+
+  let result = value;
+  while (result.length > 1 && result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+
+  if (result === '/') {
+    return '';
+  }
+
+  return result;
+}
+
+const API_BASE = normalizeBase(RAW_API_BASE);
+const PAGE_SIZE = 20;
+const DASH = '\u2014';
+const ARROW_LEFT = '\u2190';
+const ARROW_RIGHT = '\u2192';
+
+function readToken() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem('token');
+  } catch {
+    return null;
+  }
+}
+
+export default function AdminParserTradesPage() {
   const [items, setItems] = useState([]);
-  const [q, setQ] = useState('');
+  const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  async function load(p = 1) {
-    if (!API_BASE) {
-      console.warn('NEXT_PUBLIC_API_BASE не задан. Страница админа не может загрузить данные.');
-      return;
-    }
+  const loadPage = useCallback(
+    async (nextPage = 1) => {
+      if (!API_BASE) {
+        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
+        return;
+      }
 
-    setLoading(true);
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+      const token = readToken();
       if (!token) {
-        alert('Для доступа в админку войдите в аккаунт администратора.');
+        alert('Для доступа в раздел авторизуйтесь под админ-аккаунтом.');
         return;
       }
 
       const params = new URLSearchParams();
-      const search = q.trim();
-      if (search) params.set('q', search);
-      params.set('page', String(p));
-      params.set('limit', '20');
-
-      const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) {
-        throw new Error(data?.error || 'Не удалось загрузить список объявлений');
+      const trimmed = query.trim();
+      if (trimmed) {
+        params.set('q', trimmed);
       }
+      params.set('page', String(nextPage));
+      params.set('limit', String(PAGE_SIZE));
 
-      setItems(data.items || []);
-      setPage(data.page || 1);
-      setPageCount(data.pageCount || 1);
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
+        }
+
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setPage(data.page || nextPage);
+        setPageCount(data.pageCount || 1);
+      } catch (error) {
+        alert(error.message || 'Ошибка запроса');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [query],
+  );
 
   useEffect(() => {
-    load(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    loadPage(1);
+  }, [loadPage]);
 
-  async function runIngest() {
+  const runIngest = useCallback(async () => {
     if (!API_BASE) {
       alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
       return;
     }
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+    const token = readToken();
     if (!token) {
       alert('Сначала войдите в админ-аккаунт.');
       return;
@@ -77,29 +117,29 @@ export default function AdminParserTrades() {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ search: q.trim() || 'vin' }),
+        body: JSON.stringify({ search: query.trim() || 'vin' }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data) {
-        throw new Error(data?.error || 'Не удалось запустить парсер');
+        throw new Error((data && data.error) || 'Не удалось запустить парсер');
       }
 
       alert(`Получено: ${data.received}, сохранено/обновлено: ${data.upserted}`);
-      await load(1);
-    } catch (e) {
-      alert(`Ошибка: ${e.message}`);
+      await loadPage(1);
+    } catch (error) {
+      alert(`Ошибка: ${error.message || 'ingest failed'}`);
     } finally {
       setLoading(false);
     }
-  }
+  }, [query, loadPage]);
 
-  async function publish(id) {
+  const publish = useCallback(async (id) => {
     if (!API_BASE) {
       alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = readToken();
     if (!token) {
       alert('Сначала войдите в админ-аккаунт.');
       return;
@@ -107,48 +147,105 @@ export default function AdminParserTrades() {
 
     const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/publish`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
     });
+
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return alert(`Ошибка публикации: ${data?.error || 'failed'}`);
+      const data = await res.json().catch(() => null);
+      alert(`Ошибка публикации: ${(data && data.error) || 'failed'}`);
+      return;
     }
-    alert('Опубликовано! Доступно на /trades');
-  }
+
+    alert('Объявление опубликовано и доступно в разделе /trades.');
+  }, []);
 
   return (
-    <div className="container" style={{paddingTop:16, paddingBottom:32}}>
+    <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
       <h1>Админка — Объявления (из парсера)</h1>
 
-      <div style={{display:'flex', gap:8, margin:'12px 0'}}>
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
         <input
           className="input"
-          value={q}
-          onChange={e => setQ(e.target.value)}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder="Поиск (название/регион/марка/модель/VIN)"
         />
-        <button className="button" onClick={()=>load(1)} disabled={loading}>Найти</button>
-        <button className="button primary" onClick={runIngest} disabled={loading}>Спарсить объявления</button>
+        <button className="button" onClick={() => loadPage(1)} disabled={loading}>
+          Найти
+        </button>
+        <button className="button primary" onClick={runIngest} disabled={loading}>
+          Спарсить объявления
+        </button>
       </div>
 
       <div className="table-wrapper">
         <table className="table">
-          <thead><tr>
-            <th>Заголовок</th><th>Регион</th><th>ТС</th><th>Стартовая</th><th>Окончание</th><th>Действия</th>
-          </tr></thead>
+          <thead>
+            <tr>
+              <th>Заголовок</th>
+              <th>Регион</th>
+              <th>ТС</th>
+              <th>Стартовая</th>
+              <th>Окончание</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
           <tbody>
-            {items.map(it=>(
-              <tr key={it.id}>
+            {items.map((item) => (
+              <tr key={item.id}>
                 <td>
-                  <div style={{fontWeight:600}}>{it.title||'Лот'}</div>
-                  <div className="muted" style={{fontSize:12}}>
-                    {it.source_url ? <a href={it.source_url} target="_blank" rel="noreferrer">Источник</a> : '—'}
+                  <div style={{ fontWeight: 600 }}>{item.title || 'Лот'}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {item.source_url ? (
+                      <a href={item.source_url} target="_blank" rel="noreferrer">
+                        Источник
+                      </a>
+                    ) : (
+                      DASH
+                    )}
                   </div>
                 </td>
-                <td>{it.region||'—'}</td>
-                <td>{[it.brand, it.model, it.year].filter(Boolean).join(' ')||'—'}<br/>{it.vin||''}</td>
-                <td>{it.start_price ?? '—'}</td>
-                <td>{it.date_finish ? new Date(it.date_finish).toLocaleDateString('ru-RU') : '—'}</td>
-                <td style={{whiteSpace:'nowrap'}}>
-                  <Link href={`/admin/listings/${it.id}`} className="button">Открыть</Link>{' '}
-                  <button className="button primary" onClick={()=>publish(it.id)}>Выложить</button>
+                <td>{item.region || DASH}</td>
+                <td>
+                  {[item.brand, item.model, item.year].filter(Boolean).join(' ') || DASH}
+                  <br />
+                  {item.vin || ''}
+                </td>
+                <td>{item.start_price ?? DASH}</td>
+                <td>{item.date_finish ? new Date(item.date_finish).toLocaleDateString('ru-RU') : DASH}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <Link href={`/admin/listings/${item.id}`} className="button">
+                    Открыть
+                  </Link>{' '}
+                  <button className="button primary" onClick={() => publish(item.id)}>
+                    Выложить
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!items.length && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '24px 0' }}>
+                  Пусто
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button className="button" onClick={() => loadPage(page - 1)} disabled={loading || page <= 1}>
+          {ARROW_LEFT} Назад
+        </button>
+        <div style={{ alignSelf: 'center' }}>Стр. {page} / {pageCount}</div>
+        <button className="button" onClick={() => loadPage(page + 1)} disabled={loading || page >= pageCount}>
+          Вперёд {ARROW_RIGHT}
+        </button>
+      </div>
+    </div>
+  );
+}
