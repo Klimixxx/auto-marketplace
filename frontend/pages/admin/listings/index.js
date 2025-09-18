@@ -24,6 +24,7 @@ function normalizeBase(value) {
 
 const API_BASE = normalizeBase(RAW_API_BASE);
 const PAGE_SIZE = 20;
+const PARSER_PAGE_SIZE = 15;
 const DASH = '\u2014';
 const ARROW_LEFT = '\u2190';
 const ARROW_RIGHT = '\u2192';
@@ -45,6 +46,8 @@ export default function AdminParserTradesPage() {
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [lastIngest, setLastIngest] = useState(null);
 
   const loadPage = useCallback(
     async (nextPage = 1) => {
@@ -70,7 +73,7 @@ export default function AdminParserTradesPage() {
       setLoading(true);
       try {
         const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
-          headers: {
+@@ -74,135 +77,211 @@ export default function AdminParserTradesPage() {
             Authorization: `Bearer ${token}`,
             Accept: 'application/json',
           },
@@ -96,42 +99,79 @@ export default function AdminParserTradesPage() {
     loadPage(1);
   }, [loadPage]);
 
-  const runIngest = useCallback(async () => {
-    if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
-      return;
-    }
-
-    const token = readToken();
-    if (!token) {
-      alert('Сначала войдите в админ-аккаунт.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/actions/ingest`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ search: query.trim() || 'vin' }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) {
-        throw new Error((data && data.error) || 'Не удалось запустить парсер');
+  const runIngest = useCallback(
+    async ({ reset = false } = {}) => {
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
+        return;
       }
 
-      alert(`Получено: ${data.received}, сохранено/обновлено: ${data.upserted}`);
-      await loadPage(1);
-    } catch (error) {
-      alert(`Ошибка: ${error.message || 'ingest failed'}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [query, loadPage]);
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      const trimmed = query.trim();
+      const offsetToUse = reset ? 0 : nextOffset;
+
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/actions/ingest`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            search: trimmed || 'vin',
+            limit: PARSER_PAGE_SIZE,
+            offset: offsetToUse,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось запустить парсер');
+        }
+
+        const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
+        const receivedCount = Number.isFinite(Number(data.received)) ? Number(data.received) : 0;
+        const limitUsed = Number.isFinite(Number(data.limit)) ? Number(data.limit) : PARSER_PAGE_SIZE;
+        const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
+        const next = Number.isFinite(Number(data.next_offset))
+          ? Number(data.next_offset)
+          : baseOffset + (receivedCount || limitUsed);
+
+        const totalFound = Number.isFinite(Number(data.parser_meta?.total_found))
+          ? Number(data.parser_meta.total_found)
+          : null;
+        const hasMore = totalFound == null ? true : next < totalFound;
+
+        setNextOffset(next);
+        setLastIngest({
+          offset: baseOffset,
+          received: receivedCount,
+          upserted: upsertedCount,
+          limit: limitUsed,
+          nextOffset: next,
+          totalFound,
+          hasMore,
+        });
+
+        alert(
+          `Получено: ${receivedCount}, сохранено/обновлено: ${upsertedCount}. ` +
+          `Текущий offset: ${baseOffset}, следующий: ${next}.`
+        );
+        await loadPage(1);
+      } catch (error) {
+        alert(`Ошибка: ${error.message || 'ingest failed'}`);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [query, loadPage, nextOffset],
+  );
 
   const publish = useCallback(async (id) => {
     if (!API_BASE) {
@@ -173,13 +213,52 @@ export default function AdminParserTradesPage() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Поиск (название/регион/марка/модель/VIN)"
         />
-        <button className="button" onClick={() => loadPage(1)} disabled={loading}>
+        <button
+          className="button"
+          onClick={() => {
+            setNextOffset(0);
+            setLastIngest(null);
+            loadPage(1);
+          }}
+          disabled={loading}
+        >
           Найти
         </button>
-        <button className="button primary" onClick={runIngest} disabled={loading}>
-          Спарсить объявления
+        <button
+          className="button primary"
+          onClick={() => runIngest({ reset: true })}
+          disabled={loading}
+        >
+          Получить новые
+        </button>
+        <button
+          className="button primary"
+          onClick={() => runIngest()}
+          disabled={loading}
+        >
+          ПОЛУЧИТЬ ЕЩЁ
         </button>
       </div>
+
+      <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+        Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Следующий offset: {nextOffset}.
+        {' '}
+        {lastIngest?.totalFound ? `Всего найдено: ${lastIngest.totalFound}.` : null}
+      </div>
+
+      {lastIngest && (
+        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+          Последний парсинг: offset {lastIngest.offset}, получено {lastIngest.received},
+          {' '}
+          обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
+        </div>
+      )}
+
+      {lastIngest && lastIngest.totalFound != null && !lastIngest.hasMore && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+          Новых объявлений в текущей выборке больше нет. Нажмите «Получить новые», чтобы начать загрузку сначала.
+        </div>
+      )}
 
       <div className="table-wrapper">
         <table className="table">
@@ -206,46 +285,3 @@ export default function AdminParserTradesPage() {
                     ) : (
                       DASH
                     )}
-                  </div>
-                </td>
-                <td>{item.region || DASH}</td>
-                <td>
-                  {[item.brand, item.model, item.year].filter(Boolean).join(' ') || DASH}
-                  <br />
-                  {item.vin || ''}
-                </td>
-                <td>{item.start_price ?? DASH}</td>
-                <td>{item.date_finish ? new Date(item.date_finish).toLocaleDateString('ru-RU') : DASH}</td>
-                <td style={{ whiteSpace: 'nowrap' }}>
-                  <Link href={`/admin/listings/${item.id}`} className="button">
-                    Открыть
-                  </Link>{' '}
-                  <button className="button primary" onClick={() => publish(item.id)}>
-                    Выложить
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!items.length && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '24px 0' }}>
-                  Пусто
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-        <button className="button" onClick={() => loadPage(page - 1)} disabled={loading || page <= 1}>
-          {ARROW_LEFT} Назад
-        </button>
-        <div style={{ alignSelf: 'center' }}>Стр. {page} / {pageCount}</div>
-        <button className="button" onClick={() => loadPage(page + 1)} disabled={loading || page >= pageCount}>
-          Вперёд {ARROW_RIGHT}
-        </button>
-      </div>
-    </div>
-  );
-}
