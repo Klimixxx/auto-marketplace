@@ -129,6 +129,22 @@ function getPhotoPreview(text) {
   }
 }
 
+const PRICE_TABLE_HEADER_STYLE = {
+  textAlign: 'left',
+  padding: '8px 10px',
+  fontSize: 12,
+  fontWeight: 600,
+  color: '#9aa6b2',
+  borderBottom: '1px solid rgba(255,255,255,0.08)',
+};
+
+const PRICE_TABLE_CELL_STYLE = {
+  padding: '8px 10px',
+  borderBottom: '1px solid rgba(255,255,255,0.05)',
+  verticalAlign: 'top',
+  fontSize: 13,
+};
+
 function ContactSection({ contact }) {
   if (!contact || typeof contact !== 'object') {
     return null;
@@ -141,7 +157,7 @@ function ContactSection({ contact }) {
     email,
     address,
     inspection_procedure: inspectionProcedure,
-  } = contact;
+  } = contact || {};
 
   if (
     !organizerName &&
@@ -199,6 +215,47 @@ function ContactSection({ contact }) {
     </section>
   );
 }
+function KeyValueList({ data }) {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  const entries = Object.entries(data);
+  if (!entries.length) {
+    return null;
+  }
+  return (
+    <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
+      {entries.map(([key, value]) => {
+        const text =
+          value && typeof value === 'object'
+            ? JSON.stringify(value, null, 2)
+            : String(value ?? '—');
+        const isMultiline = text.includes('\n');
+        return (
+          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <div className="muted">{key}</div>
+            {isMultiline ? (
+              <pre
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  textAlign: 'right',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {text}
+              </pre>
+            ) : (
+              <div style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{text}</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 
 export default function AdminParserTradeCard() {
   const router = useRouter();
@@ -225,437 +282,7 @@ export default function AdminParserTradeCard() {
       region: trade.region || '',
       brand: trade.brand || '',
       model: trade.model || '',
-      year: trade.year ? String(trade.year) : '',
-      vin: trade.vin || '',
-      start_price: trade.start_price != null ? String(trade.start_price) : '',
-      applications_count: trade.applications_count != null ? String(trade.applications_count) : '',
-      trade_place: trade.trade_place || '',
-      source_url: trade.source_url || '',
-      bidding_number: trade.bidding_number || '',
-      date_start: toInputDate(trade.date_start),
-      date_finish: toInputDate(trade.date_finish),
-    });
-    setLotDetailsText(formatObject(trade.lot_details));
-    setContactDetailsText(formatObject(trade.contact_details));
-    setDebtorDetailsText(formatObject(trade.debtor_details));
-    setPricesText(formatArray(trade.prices));
-    setDocumentsText(formatArray(trade.documents));
-    const photos = extractPhotos(trade);
-    setPhotosText(photos.join('\n'));
-  }, []);
-
-  const fetchTrade = useCallback(async () => {
-    if (!API_BASE) {
-      throw new Error('NEXT_PUBLIC_API_BASE не задан. Невозможно загрузить данные объявления.');
-    }
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      router.replace('/login');
-      throw new Error('AUTH_REQUIRED');
-    }
-    const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data) {
-      throw new Error(data?.error || 'Не удалось загрузить объявление');
-    }
-    return data;
-  }, [id, router]);
-
-  useEffect(() => {
-    if (!router.isReady || !id) return;
-    let cancelled = false;
-
-    setLoading(true);
-    fetchTrade()
-      .then((data) => {
-        if (!cancelled && data) {
-          applyTrade(data);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        if (error.message === 'AUTH_REQUIRED') return;
-        alert(error.message || 'Не удалось загрузить объявление');
-        router.replace('/admin/listings');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [router.isReady, id, fetchTrade, applyTrade, router]);
-
-  const updateFormField = (field) => (event) => {
-    const value = event.target.value;
-    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
-  };
-
-  const photoPreview = useMemo(() => getPhotoPreview(photosText), [photosText]);
-
-  const resetChanges = useCallback(() => {
-    if (item) {
-      applyTrade(item);
-    }
-  }, [item, applyTrade]);
-
-  const handleSubmit = useCallback(
-    async (event) => {
-      event.preventDefault();
-      if (!form) return;
-
-      if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно сохранить объявление.');
-        return;
-      }
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      if (!token) {
-        router.replace('/login');
-        return;
-      }
-
-      let lotDetails = null;
-      const lotText = lotDetailsText.trim();
-      if (lotText) {
-        try {
-          const parsed = JSON.parse(lotText);
-          if (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed))) {
-            throw new Error();
-          }
-          lotDetails = parsed;
-        } catch {
-          alert('Поле «Детали лота» должно содержать корректный JSON-объект.');
-          return;
-        }
-      }
-
-      let contactDetails = null;
-      const contactText = contactDetailsText.trim();
-      if (contactText) {
-        try {
-          const parsed = JSON.parse(contactText);
-          if (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed))) {
-            throw new Error();
-          }
-          contactDetails = parsed;
-        } catch {
-          alert('Поле «Контакты» должно содержать корректный JSON-объект.');
-          return;
-        }
-      }
-
-      let debtorDetails = null;
-      const debtorText = debtorDetailsText.trim();
-      if (debtorText) {
-        try {
-          const parsed = JSON.parse(debtorText);
-          if (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed))) {
-            throw new Error();
-          }
-          debtorDetails = parsed;
-        } catch {
-          alert('Поле «Должник» должно содержать корректный JSON-объект.');
-          return;
-        }
-      }
-
-      let prices = [];
-      const pricesTrimmed = pricesText.trim();
-      if (pricesTrimmed) {
-        try {
-          const parsed = JSON.parse(pricesTrimmed);
-          if (!Array.isArray(parsed)) {
-            throw new Error();
-          }
-          prices = parsed;
-        } catch {
-          alert('Поле «Периоды цен» должно содержать JSON-массив.');
-          return;
-        }
-      }
-
-      let documents = [];
-      const documentsTrimmed = documentsText.trim();
-      if (documentsTrimmed) {
-        try {
-          const parsed = JSON.parse(documentsTrimmed);
-          if (!Array.isArray(parsed)) {
-            throw new Error();
-          }
-          documents = parsed;
-        } catch {
-          alert('Поле «Документы» должно содержать JSON-массив.');
-          return;
-        }
-      }
-
-      let photos;
-      try {
-        photos = parsePhotosInput(photosText);
-      } catch (error) {
-        alert(error.message || 'Некорректный список фотографий.');
-        return;
-      }
-
-      const payload = {
-        title: trimOrNull(form.title),
-        description: trimOrNull(form.description),
-        category: trimOrNull(form.category),
-        region: trimOrNull(form.region),
-        brand: trimOrNull(form.brand),
-        model: trimOrNull(form.model),
-        year: trimOrNull(form.year),
-        vin: trimOrNull(form.vin),
-        start_price: trimOrNull(form.start_price),
-        applications_count: trimOrNull(form.applications_count),
-        trade_place: trimOrNull(form.trade_place),
-        source_url: trimOrNull(form.source_url),
-        bidding_number: trimOrNull(form.bidding_number),
-        date_start: fromInputDate(form.date_start),
-        date_finish: fromInputDate(form.date_finish),
-        lot_details: lotDetails,
-        contact_details: contactDetails,
-        debtor_details: debtorDetails,
-        prices,
-        documents,
-        photos,
-      };
-
-      setSaving(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => null);
-        if (res.status === 401) {
-          router.replace('/login');
-          throw new Error('AUTH_REQUIRED');
-        }
-        if (!res.ok || !data) {
-          throw new Error(data?.error || 'Не удалось сохранить изменения');
-        }
-        applyTrade(data);
-        alert('Изменения сохранены.');
-      } catch (error) {
-        if (error.message !== 'AUTH_REQUIRED') {
-          alert(error.message || 'Сохранение не удалось');
-        }
-      } finally {
-        setSaving(false);
-      }
-    },
-    [
-      form,
-      lotDetailsText,
-      contactDetailsText,
-      debtorDetailsText,
-      pricesText,
-      documentsText,
-      photosText,
-      id,
-      applyTrade,
-      router,
-    ],
-  );
-
-  const publishTrade = useCallback(async () => {
-    if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
-      return;
-    }
-
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      router.replace('/login');
-      return;
-    }
-
-    setPublishing(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/publish`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      const data = await res.json().catch(() => null);
-      if (res.status === 401) {
-        router.replace('/login');
-        throw new Error('AUTH_REQUIRED');
-      }
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || 'Не удалось опубликовать объявление');
-      }
-      alert('Объявление опубликовано и доступно на странице «Торги».');
-      const refreshed = await fetchTrade().catch((error) => {
-        if (error.message !== 'AUTH_REQUIRED') {
-          console.warn('Не удалось обновить объявление после публикации:', error);
-        }
-        return null;
-      });
-      if (refreshed) {
-        applyTrade(refreshed);
-      }
-    } catch (error) {
-      if (error.message !== 'AUTH_REQUIRED') {
-        alert(error.message || 'Ошибка публикации');
-      }
-    } finally {
-      setPublishing(false);
-    }
-  }, [id, applyTrade, fetchTrade, router]);
-
-  if (loading) {
-    return (
-      <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-        <div style={{ marginBottom: 12 }}>
-          <Link href="/admin/listings" className="link">
-            ← Назад
-          </Link>
-        </div>
-        <p>Загрузка...</p>
-      </div>
-    );
-  }
-
-  if (!item || !form) {
-    return (
-      <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-        <div style={{ marginBottom: 12 }}>
-          <Link href="/admin/listings" className="link">
-            ← Назад
-          </Link>
-        </div>
-        <p>Объявление не найдено.</p>
-      </div>
-    );
-  }
-
-  const d = item;
-  const titlePreview = form.title?.trim() || d.title || 'Лот';
-  const metaPreview = [form.region?.trim() || d.region, form.category?.trim() || d.category]
-    .filter(Boolean)
-    .join(' • ') || '—';
-  const vehiclePreview = [form.brand?.trim() || d.brand, form.model?.trim() || d.model, form.year?.trim() || d.year]
-    .filter(Boolean)
-    .join(' ') || '—';
-  const vinPreview = form.vin?.trim() || d.vin || '—';
-  const parsedStart = form.start_price?.trim()
-    ? Number(form.start_price.replace(/\s/g, '').replace(',', '.'))
-    : null;
-  const startPricePreview = form.start_price?.trim()
-    ? (Number.isFinite(parsedStart) ? fmtPrice(parsedStart) : form.start_price)
-    : fmtPrice(d.start_price);
-  const endDatePreview = form.date_finish?.trim()
-    ? formatDateTime(form.date_finish)
-    : formatDateTime(d.date_finish);
-  const applicationsPreview = form.applications_count?.trim()
-    || (d.applications_count != null ? String(d.applications_count) : '—');
-  const tradePlacePreview = form.trade_place?.trim() || d.trade_place || '—';
-  const biddingPreview = form.bidding_number?.trim() || d.bidding_number || '—';
-  const savedDescription = d.description || d.lot_details?.description;
-  const descriptionPreview = form.description?.trim() || savedDescription || '';
-  const sourceLink = form.source_url?.trim() || d.source_url || '';
-
-  return (
-    <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-      <div style={{ marginBottom: 12 }}>
-        <Link href="/admin/listings" className="link">
-          ← Назад
-        </Link>
-      </div>
-
-      <h1 style={{ marginBottom: 4 }}>{titlePreview}</h1>
-      <div className="muted" style={{ marginBottom: 12 }}>{metaPreview}</div>
-
-      <div className="muted" style={{ marginBottom: 12, fontSize: 13 }}>
-        ID: {d.id}
-        {d.fedresurs_id ? ` • Fedresurs: ${d.fedresurs_id}` : ''}
-        {d.created_at ? ` • Получено: ${formatDateTime(d.created_at)}` : ''}
-      </div>
-
-      {d.published_at && (
-        <div className="badge" style={{ display: 'inline-block', marginBottom: 12 }}>
-          Опубликовано {formatDateTime(d.published_at)}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))',
-          gap: 12,
-        }}
-      >
-        <div className="panel">
-          <div className="muted">ТС</div>
-          <div className="big">{vehiclePreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">VIN</div>
-          <div className="big">{vinPreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">Стартовая цена</div>
-          <div className="big">{startPricePreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">Окончание</div>
-          <div className="big">{endDatePreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">Номер торгов</div>
-          <div className="big">{biddingPreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">Заявок</div>
-          <div className="big">{applicationsPreview}</div>
-        </div>
-        <div className="panel">
-          <div className="muted">Площадка</div>
-          <div className="big">{tradePlacePreview}</div>
-        </div>
-      </div>
-
-      {sourceLink && (
-        <div style={{ marginTop: 12 }}>
-          <a href={sourceLink} target="_blank" rel="noreferrer" className="link">
-            Открыть источник
-          </a>
-        </div>
-      )}
-
-      <form
-        onSubmit={handleSubmit}
-        className="panel"
-        style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
-        <h2>Редактирование объявления</h2>
-        <div className="muted" style={{ fontSize: 13 }}>
-          Измените данные перед публикацией. JSON-поля можно оставить пустыми — они заполнятся пустыми объектами или массивами.
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Заголовок</span>
-            <input className="input" value={form.title} onChange={updateFormField('title')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Номер торгов</span>
-            <input className="input" value={form.bidding_number} onChange={updateFormField('bidding_number')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+@@ -659,63 +716,84 @@ export default function AdminParserTradeCard() {
             <span className="muted">Категория</span>
             <input className="input" value={form.category} onChange={updateFormField('category')} />
           </label>
@@ -681,19 +308,40 @@ export default function AdminParserTradeCard() {
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Стартовая цена</span>
-            <input className="input" value={form.start_price} onChange={updateFormField('start_price')} placeholder="Например, 1500000" />
+            <input
+              className="input"
+              value={form.start_price}
+              onChange={updateFormField('start_price')}
+              placeholder="Например, 1500000"
+            />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Кол-во заявок</span>
-            <input className="input" value={form.applications_count} onChange={updateFormField('applications_count')} type="number" min="0" />
+            <input
+              className="input"
+              value={form.applications_count}
+              onChange={updateFormField('applications_count')}
+              type="number"
+              min="0"
+            />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Дата начала</span>
-            <input className="input" value={form.date_start} onChange={updateFormField('date_start')} type="datetime-local" />
+            <input
+              className="input"
+              value={form.date_start}
+              onChange={updateFormField('date_start')}
+              type="datetime-local"
+            />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Дата окончания</span>
-            <input className="input" value={form.date_finish} onChange={updateFormField('date_finish')} type="datetime-local" />
+            <input
+              className="input"
+              value={form.date_finish}
+              onChange={updateFormField('date_finish')}
+              type="datetime-local"
+            />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Площадка</span>
@@ -719,83 +367,7 @@ export default function AdminParserTradeCard() {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="muted">Фотографии (каждый URL с новой строки или JSON-массив)</span>
           <textarea
-            className="textarea"
-            rows={4}
-            value={photosText}
-            onChange={(event) => setPhotosText(event.target.value)}
-            placeholder="https://...jpg"
-            spellCheck={false}
-          />
-        </label>
-
-        {photoPreview.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8 }}>
-            {photoPreview.map((url, index) => (
-              <div key={`${url}-${index}`} className="panel" style={{ padding: 8 }}>
-                <img
-                  src={url}
-                  alt={`Фото ${index + 1}`}
-                  style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6 }}
-                />
-                <div className="muted" style={{ marginTop: 6, fontSize: 12, wordBreak: 'break-word' }}>{url}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Детали лота (JSON)</span>
-          <textarea
-            className="textarea"
-            rows={8}
-            value={lotDetailsText}
-            onChange={(event) => setLotDetailsText(event.target.value)}
-            spellCheck={false}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Контакты (JSON)</span>
-          <textarea
-            className="textarea"
-            rows={6}
-            value={contactDetailsText}
-            onChange={(event) => setContactDetailsText(event.target.value)}
-            spellCheck={false}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Должник (JSON)</span>
-          <textarea
-            className="textarea"
-            rows={6}
-            value={debtorDetailsText}
-            onChange={(event) => setDebtorDetailsText(event.target.value)}
-            spellCheck={false}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Периоды цен (JSON-массив)</span>
-          <textarea
-            className="textarea"
-            rows={6}
-            value={pricesText}
-            onChange={(event) => setPricesText(event.target.value)}
-            spellCheck={false}
-          />
-        </label>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Документы (JSON-массив)</span>
-          <textarea
-            className="textarea"
-            rows={6}
-            value={documentsText}
-            onChange={(event) => setDocumentsText(event.target.value)}
-            spellCheck={false}
-          />
+@@ -799,63 +877,204 @@ export default function AdminParserTradeCard() {
         </label>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
@@ -821,23 +393,18 @@ export default function AdminParserTradeCard() {
       {d.lot_details && (
         <section style={{ marginTop: 24 }}>
           <h2>Характеристики</h2>
-          <div className="panel" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {Object.entries(d.lot_details).map(([key, value]) => (
-              <div
-                key={key}
-                style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
-              >
-                <div className="muted">{key}</div>
-                <div style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>
-                  {String(value ?? '—')}
-                </div>
-              </div>
-            ))}
-          </div>
+          <KeyValueList data={d.lot_details} />
         </section>
       )}
 
       <ContactSection contact={d.contact_details} />
+
+      {d.debtor_details && (
+        <section style={{ marginTop: 24 }}>
+          <h2>Данные должника</h2>
+          <KeyValueList data={d.debtor_details} />
+        </section>
+      )}
 
       {Array.isArray(d.photos) && d.photos.length > 0 && (
         <section style={{ marginTop: 24 }}>
@@ -859,3 +426,149 @@ export default function AdminParserTradeCard() {
                 </div>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {Array.isArray(d.prices) && d.prices.length > 0 && (
+        <section style={{ marginTop: 24 }}>
+          <h2>История цен</h2>
+          <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+              <thead>
+                <tr>
+                  <th style={PRICE_TABLE_HEADER_STYLE}>Этап</th>
+                  <th style={PRICE_TABLE_HEADER_STYLE}>Цена</th>
+                  <th style={PRICE_TABLE_HEADER_STYLE}>Дата</th>
+                  <th style={PRICE_TABLE_HEADER_STYLE}>Комментарий</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.prices.map((entry, index) => {
+                  const stage =
+                    entry.stage ||
+                    entry.stage_name ||
+                    entry.stageName ||
+                    entry.round ||
+                    entry.type ||
+                    entry.name ||
+                    entry.title ||
+                    `Запись ${index + 1}`;
+                  const rawPrice =
+                    entry.price ||
+                    entry.currentPrice ||
+                    entry.current_price ||
+                    entry.startPrice ||
+                    entry.start_price ||
+                    entry.value ||
+                    entry.amount ||
+                    null;
+                  const numericPrice =
+                    rawPrice != null ? Number(String(rawPrice).replace(/\s/g, '').replace(',', '.')) : null;
+                  const priceText =
+                    Number.isFinite(numericPrice)
+                      ? fmtPrice(numericPrice)
+                      : rawPrice != null
+                      ? String(rawPrice)
+                      : '—';
+                  const dateValue =
+                    entry.date ||
+                    entry.date_start ||
+                    entry.dateStart ||
+                    entry.date_finish ||
+                    entry.dateFinish ||
+                    entry.updated_at ||
+                    entry.updatedAt ||
+                    null;
+                  const comment =
+                    entry.comment ||
+                    entry.description ||
+                    entry.note ||
+                    entry.status ||
+                    entry.info ||
+                    null;
+                  const commentText =
+                    comment && typeof comment === 'object'
+                      ? JSON.stringify(comment, null, 2)
+                      : comment
+                      ? String(comment)
+                      : '—';
+                  const commentMultiline = commentText.includes('\n');
+                  return (
+                    <tr key={entry.id || `${stage}-${index}`}>
+                      <td style={PRICE_TABLE_CELL_STYLE}>{stage}</td>
+                      <td style={PRICE_TABLE_CELL_STYLE}>{priceText}</td>
+                      <td style={PRICE_TABLE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
+                      <td style={PRICE_TABLE_CELL_STYLE}>
+                        {commentMultiline ? (
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{commentText}</pre>
+                        ) : (
+                          commentText
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {Array.isArray(d.documents) && d.documents.length > 0 && (
+        <section style={{ marginTop: 24 }}>
+          <h2>Документы</h2>
+          <div className="panel" style={{ display: 'grid', gap: 8 }}>
+            {d.documents.map((doc, index) => {
+              const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
+              const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
+              const description = doc?.description || doc?.comment || doc?.note || null;
+              const date = doc?.date || doc?.created_at || doc?.updated_at || null;
+              return (
+                <div key={url || `${title}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="link">
+                      {title}
+                    </a>
+                  ) : (
+                    <div>{title}</div>
+                  )}
+                  {date ? (
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      Дата: {formatDateTime(date)}
+                    </div>
+                  ) : null}
+                  {description ? (
+                    <div className="muted" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{description}</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {d.raw_payload && (
+        <section style={{ marginTop: 24 }}>
+          <h2>Исходные данные парсера</h2>
+          <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
+            <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(d.raw_payload, null, 2)}
+            </pre>
+          </div>
+        </section>
+      )}
+
+      {d.raw_payload?.fedresurs_data && !d.fedresurs_meta && (
+        <section style={{ marginTop: 24 }}>
+          <h2>Данные Федресурса</h2>
+          <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
+            <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(d.raw_payload.fedresurs_data, null, 2)}
+            </pre>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
