@@ -98,3 +98,65 @@ a { color: var(--accent); text-decoration: none; }
 .nav-link:hover{
   text-shadow: 0 0 12px rgba(103,232,249,0.35);
 }
+
+.tab-nav {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tab-button {
+  position: relative;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.tab-button:hover {
+  color: var(--text);
+}
+
+.tab-button:focus-visible {
+  outline: none;
+  color: var(--text);
+}
+
+.tab-button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.tab-button.active {
+  color: var(--text);
+}
+
+.tab-button.active::after {
+  background: var(--accent);
+}
+
+.tab-content {
+  display: grid;
+  gap: 24px;
+  padding-top: 16px;
+}
+
+.tab-section {
+  display: grid;
+  gap: 12px;
+}
+
+.tab-section h3 {
+  margin: 0;
+  font-size: 18px;
+}

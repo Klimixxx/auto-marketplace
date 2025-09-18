@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Link from 'next/link';
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
@@ -117,6 +118,18 @@ function formatValue(value) {
   return String(value);
 }
 
+function pickFirstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
 function makeKeyValueEntries(source) {
   if (!source) {
     return [];
@@ -205,6 +218,93 @@ const PRICE_CELL_STYLE = {
   fontSize: 13,
 };
 
+function PriceHistoryTable({ prices, currency }) {
+  if (!Array.isArray(prices) || prices.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+        <thead>
+          <tr>
+            <th style={PRICE_HEADER_STYLE}>Этап</th>
+            <th style={PRICE_HEADER_STYLE}>Цена</th>
+            <th style={PRICE_HEADER_STYLE}>Дата</th>
+            <th style={PRICE_HEADER_STYLE}>Комментарий</th>
+          </tr>
+        </thead>
+        <tbody>
+          {prices.map((entry, index) => {
+            const label =
+              entry.stage ||
+              entry.stage_name ||
+              entry.stageName ||
+              entry.round ||
+              entry.type ||
+              entry.name ||
+              entry.title ||
+              `Запись ${index + 1}`;
+            const numericPrice = parseNumberValue(
+              entry.price ??
+                entry.currentPrice ??
+                entry.current_price ??
+                entry.startPrice ??
+                entry.start_price ??
+                entry.value ??
+                entry.amount,
+            );
+            const priceText =
+              numericPrice != null
+                ? fmtPrice(numericPrice, currency)
+                : formatValue(
+                    entry.price ??
+                      entry.currentPrice ??
+                      entry.current_price ??
+                      entry.startPrice ??
+                      entry.start_price ??
+                      entry.value ??
+                      entry.amount ??
+                      '—',
+                  );
+            const dateValue =
+              entry.date ||
+              entry.date_start ||
+              entry.dateStart ||
+              entry.date_finish ||
+              entry.dateFinish ||
+              entry.updated_at ||
+              entry.updatedAt;
+            const comment =
+              entry.comment ||
+              entry.description ||
+              entry.info ||
+              entry.status ||
+              entry.note ||
+              entry.result ||
+              null;
+
+            return (
+              <tr key={entry.id || `${label}-${index}`}>
+                <td style={PRICE_CELL_STYLE}>{label}</td>
+                <td style={PRICE_CELL_STYLE}>{priceText}</td>
+                <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
+                <td style={PRICE_CELL_STYLE}>
+                  {comment ? (
+                    <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export async function getServerSideProps({ params }) {
   const r = await fetch(`${API}/api/listings/${params.id}`, { cache: 'no-store' });
   if (!r.ok) return { notFound: true };
@@ -290,6 +390,66 @@ export default function ListingPage({ item }) {
   const documents = Array.isArray(details?.documents) ? details.documents : [];
   const fedresursMeta = details?.fedresurs_meta;
   const currency = item?.currency || 'RUB';
+  const descriptionText = pickFirstNonEmptyString(
+    item?.description,
+    details?.lot_details?.description,
+    details?.description,
+  );
+
+  const lotSections = [];
+  if (descriptionText) {
+    lotSections.push({
+      key: 'description',
+      title: 'Описание',
+      content: (
+        <div className="panel">
+          <div style={{ whiteSpace: 'pre-wrap' }}>{descriptionText}</div>
+        </div>
+      ),
+    });
+  }
+  if (lotEntries.length > 0) {
+    lotSections.push({
+      key: 'features',
+      title: 'Характеристики',
+      content: <KeyValueGrid entries={lotEntries} />,
+    });
+  }
+  if (prices.length > 0) {
+    lotSections.push({
+      key: 'price-history',
+      title: 'История цен',
+      content: <PriceHistoryTable prices={prices} currency={currency} />,
+    });
+  }
+
+  const debtorSections = [];
+  if (debtorEntries.length > 0) {
+    debtorSections.push({
+      key: 'debtor-details',
+      title: 'Данные должника',
+      content: <KeyValueList entries={debtorEntries} />,
+    });
+  }
+  if (contactEntries.length > 0) {
+    debtorSections.push({
+      key: 'contacts',
+      title: 'Контакты',
+      content: <KeyValueList entries={contactEntries} />,
+    });
+  }
+
+  const tabs = [];
+  if (lotSections.length > 0) {
+    tabs.push({ id: 'lot-info', label: 'Сведения по лоту', sections: lotSections });
+  }
+  if (debtorSections.length > 0) {
+    tabs.push({ id: 'debtor-info', label: 'Сведения о должнике', sections: debtorSections });
+  }
+
+  const initialTabId = tabs[0]?.id ?? null;
+  const [activeTab, setActiveTab] = useState(initialTabId);
+  const currentTab = tabs.find((tab) => tab.id === activeTab) || (tabs.length > 0 ? tabs[0] : null);
 
   return (
     <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
@@ -350,115 +510,30 @@ export default function ListingPage({ item }) {
         </section>
       )}
 
-      {(item?.description || details?.lot_details?.description) && (
+      {tabs.length > 0 && (
         <section style={{ marginTop: 24 }}>
-          <h2>Описание</h2>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{item?.description || details?.lot_details?.description}</div>
-        </section>
-      )}
-
-      {lotEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Характеристики</h2>
-          <KeyValueGrid entries={lotEntries} />
-        </section>
-      )}
-
-      {contactEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Контакты</h2>
-          <KeyValueList entries={contactEntries} />
-        </section>
-      )}
-
-      {debtorEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Данные должника</h2>
-          <KeyValueList entries={debtorEntries} />
-        </section>
-      )}
-
-      {prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>История цен</h2>
-          <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-              <thead>
-                <tr>
-                  <th style={PRICE_HEADER_STYLE}>Этап</th>
-                  <th style={PRICE_HEADER_STYLE}>Цена</th>
-                  <th style={PRICE_HEADER_STYLE}>Дата</th>
-                  <th style={PRICE_HEADER_STYLE}>Комментарий</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prices.map((entry, index) => {
-                  const label =
-                    entry.stage ||
-                    entry.stage_name ||
-                    entry.stageName ||
-                    entry.round ||
-                    entry.type ||
-                    entry.name ||
-                    entry.title ||
-                    `Запись ${index + 1}`;
-                  const numericPrice = parseNumberValue(
-                    entry.price ??
-                      entry.currentPrice ??
-                      entry.current_price ??
-                      entry.startPrice ??
-                      entry.start_price ??
-                      entry.value ??
-                      entry.amount,
-                  );
-                  const priceText =
-                    numericPrice != null
-                      ? fmtPrice(numericPrice, currency)
-                      : formatValue(
-                          entry.price ??
-                            entry.currentPrice ??
-                            entry.current_price ??
-                            entry.startPrice ??
-                            entry.start_price ??
-                            entry.value ??
-                            entry.amount ??
-                            '—',
-                        );
-                  const dateValue =
-                    entry.date ||
-                    entry.date_start ||
-                    entry.dateStart ||
-                    entry.date_finish ||
-                    entry.dateFinish ||
-                    entry.updated_at ||
-                    entry.updatedAt;
-                  const comment =
-                    entry.comment ||
-                    entry.description ||
-                    entry.info ||
-                    entry.status ||
-                    entry.note ||
-                    entry.result ||
-                    null;
-
-                  return (
-                    <tr key={entry.id || `${label}-${index}`}>
-                      <td style={PRICE_CELL_STYLE}>{label}</td>
-                      <td style={PRICE_CELL_STYLE}>{priceText}</td>
-                      <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
-                      <td style={PRICE_CELL_STYLE}>
-                        {comment ? (
-                          <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="tab-nav">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`tab-button${currentTab?.id === tab.id ? ' active' : ''}`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
+          {currentTab ? (
+            <div className="tab-content">
+              {currentTab.sections.map((section) => (
+                <div key={section.key} className="tab-section">
+                  <h3>{section.title}</h3>
+                  {section.content}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
       )}
 
