@@ -382,12 +382,12 @@ export default function AdminParserTradeCard() {
     let documents = [];
     let photos = [];
 
-    try { lot = JSON.parse(lotDetailsText || '{}') } catch {}
-    try { contact = JSON.parse(contactDetailsText || '{}') } catch {}
-    try { debtor = JSON.parse(debtorDetailsText || '{}') } catch {}
-    try { prices = JSON.parse(pricesText || '[]') } catch {}
-    try { documents = JSON.parse(documentsText || '[]') } catch {}
-    try { photos = parsePhotosInput(photosText || '') } catch {}
+    try { lot = JSON.parse(lotDetailsText || '{}'); } catch {}
+    try { contact = JSON.parse(contactDetailsText || '{}'); } catch {}
+    try { debtor = JSON.parse(debtorDetailsText || '{}'); } catch {}
+    try { prices = JSON.parse(pricesText || '[]'); } catch {}
+    try { documents = JSON.parse(documentsText || '[]'); } catch {}
+    try { photos = parsePhotosInput(photosText || ''); } catch {}
 
     const merged = {
       ...(item || {}),
@@ -492,7 +492,6 @@ export default function AdminParserTradeCard() {
     setPublishing(true);
     setError(null);
     try {
-      try {
       if (!API_BASE) {
         throw new Error('NEXT_PUBLIC_API_BASE не задан.');
       }
@@ -516,7 +515,7 @@ export default function AdminParserTradeCard() {
       if (typeof window !== 'undefined') {
         window.alert('Лот опубликован и появится в общем списке объявлений.');
       }
-      // no-op: backend handles status
+      // no-op
     } catch (e) {
       setError(`Ошибка публикации: ${e.message}`);
     } finally {
