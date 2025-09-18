@@ -4,6 +4,7 @@ import { query } from '../db.js';
 const router = express.Router();
 
 const DEFAULT_LIMIT = 15;
+const MAX_LIMIT = 15;
 const DEFAULT_OFFSET = 0;
 const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
 
@@ -56,6 +57,47 @@ function normalizeParserResponse(payload) {
   throw new Error(`Unexpected parser payload type: ${typeof payload}`);
 }
 
+function normalizePhotoEntry(photo) {
+  if (!photo) return null;
+  if (typeof photo === 'string') {
+    const trimmed = photo.trim();
+    return trimmed ? { url: trimmed } : null;
+  }
+
+  if (typeof photo === 'object') {
+    const url = photo.url || photo.href || photo.link || photo.download_url || photo.source || null;
+    if (!url) return null;
+    const title = photo.title || photo.name || photo.caption || null;
+    return title ? { url, title } : { url };
+  }
+
+  return null;
+}
+
+function normalizePhotos(payload) {
+  if (!payload) return [];
+  const list = Array.isArray(payload) ? payload : [payload];
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of list) {
+    const photo = normalizePhotoEntry(entry);
+    if (photo && !seen.has(photo.url)) {
+      seen.add(photo.url);
+      normalized.push(photo);
+    }
+  }
+  return normalized;
+}
+
+function parseDate(value, fieldName = 'date') {
+  if (value === undefined || value === null || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+  return date;
+}
+
 async function upsertParserTrade(item) {
   const fedresurs = item?.fedresurs_data || {};
   const parsed = item?.parsed_data || item || {};
@@ -67,6 +109,13 @@ async function upsertParserTrade(item) {
 
   const fedresursId = parsed.fedresurs_id || fedresurs.guid || fedresurs.number || parsed.bidding_number || null;
   const biddingNumber = parsed.bidding_number || null;
+
+  const description = parsed.description || lot.description || null;
+  const photos = [
+    ...normalizePhotos(item?.photos),
+    ...normalizePhotos(parsed.photos),
+    ...normalizePhotos(lot.photos || lot.images || lot.gallery || lot.photo_urls),
+  ];
 
   const params = {
     fedresurs_id: fedresursId,
@@ -97,12 +146,12 @@ async function upsertParserTrade(item) {
       (fedresurs_id, bidding_number, title, applications_count,
        lot_details, debtor_details, contact_details, prices, documents, raw_payload,
        category, region, brand, model, year, vin, start_price,
-       date_start, date_finish, trade_place, source_url)
+       date_start, date_finish, trade_place, source_url, description, photos)
     values
       ($1,$2,$3,$4,
        $5,$6,$7,$8,$9,$10,
        $11,$12,$13,$14,$15,$16,$17,
-       $18,$19,$20,$21)
+       $18,$19,$20,$21,$22,$23)
     on conflict (fedresurs_id) do update set
       bidding_number     = excluded.bidding_number,
       title              = excluded.title,
@@ -123,7 +172,10 @@ async function upsertParserTrade(item) {
       date_start         = excluded.date_start,
       date_finish        = excluded.date_finish,
       trade_place        = excluded.trade_place,
-      source_url         = excluded.source_url
+      source_url         = excluded.source_url,
+      description        = excluded.description,
+      photos             = excluded.photos,
+      updated_at         = now()
     returning id
   `;
 
@@ -132,7 +184,8 @@ async function upsertParserTrade(item) {
     params.lot_details, params.debtor_details, params.contact_details, JSON.stringify(params.prices),
     JSON.stringify(params.documents), params.raw_payload,
     params.category, params.region, params.brand, params.model, params.year, params.vin, params.start_price,
-    params.date_start, params.date_finish, params.trade_place, params.source_url,
+    params.date_start, params.date_finish, params.trade_place, params.source_url, params.description,
+    JSON.stringify(params.photos),
   ];
 
   const { rows } = await query(sql, values);
@@ -197,7 +250,9 @@ router.post('/actions/ingest', async (req, res) => {
 
     const limitNum = Number(limit);
     const offsetNum = Number(offset);
-    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : DEFAULT_LIMIT;
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0
+      ? Math.min(limitNum, MAX_LIMIT)
+      : DEFAULT_LIMIT;
     const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : DEFAULT_OFFSET;
 
     const baseUrl = process.env.PARSER_BASE_URL || PARSER_FALLBACK_BASE;
@@ -239,6 +294,8 @@ router.post('/actions/ingest', async (req, res) => {
       }
     }
 
+    const nextOffset = safeOffset + items.length;
+
     return res.json({
       ok: true,
       received: items.length,
@@ -246,9 +303,196 @@ router.post('/actions/ingest', async (req, res) => {
       limit: safeLimit,
       offset: safeOffset,
       parser_meta: meta,
+      next_offset: nextOffset,
     });
   } catch (error) {
     console.error('ingest call error:', error);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+router.patch('/parser-trades/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows: existingRows } = await query('select * from parser_trades where id = $1', [id]);
+    const existing = existingRows[0];
+    if (!existing) {
+      return res.status(404).json({ error: 'not found' });
+    }
+
+    const payload = req.body || {};
+    const updates = [];
+    const values = [];
+
+    function push(column, value) {
+      values.push(value);
+      updates.push(`${column} = $${values.length}`);
+    }
+
+    if ('title' in payload) {
+      push('title', payload.title || null);
+    }
+
+    if ('bidding_number' in payload) {
+      push('bidding_number', payload.bidding_number || null);
+    }
+
+    if ('description' in payload) {
+      push('description', payload.description || null);
+    }
+
+    if ('region' in payload) {
+      push('region', payload.region || null);
+    }
+
+    if ('category' in payload) {
+      push('category', payload.category || null);
+    }
+
+    if ('brand' in payload) {
+      push('brand', payload.brand || null);
+    }
+
+    if ('model' in payload) {
+      push('model', payload.model || null);
+    }
+
+    if ('year' in payload) {
+      push('year', payload.year || null);
+    }
+
+    if ('vin' in payload) {
+      push('vin', payload.vin || null);
+    }
+
+    if ('trade_place' in payload) {
+      push('trade_place', payload.trade_place || null);
+    }
+
+    if ('source_url' in payload) {
+      push('source_url', payload.source_url || null);
+    }
+
+    if ('applications_count' in payload) {
+      const count = toFinite(payload.applications_count);
+      push('applications_count', count ?? null);
+    }
+
+    if ('start_price' in payload) {
+      push('start_price', toNumberSafe(payload.start_price));
+    }
+
+    if ('date_start' in payload) {
+      try {
+        push('date_start', parseDate(payload.date_start, 'date_start'));
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
+
+    if ('date_finish' in payload) {
+      try {
+        push('date_finish', parseDate(payload.date_finish, 'date_finish'));
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
+
+    let lotDetails = existing.lot_details || null;
+    let lotDetailsShouldUpdate = false;
+    if ('lot_details' in payload) {
+      if (payload.lot_details === null) {
+        lotDetails = null;
+      } else if (typeof payload.lot_details === 'object' && !Array.isArray(payload.lot_details)) {
+        lotDetails = payload.lot_details;
+      } else {
+        return res.status(400).json({ error: 'lot_details must be an object or null' });
+      }
+      lotDetailsShouldUpdate = true;
+    }
+
+    if ('description' in payload) {
+      lotDetailsShouldUpdate = true;
+      if (lotDetails && typeof lotDetails === 'object' && !Array.isArray(lotDetails)) {
+        lotDetails = { ...lotDetails, description: payload.description || null };
+      } else if (payload.description) {
+        lotDetails = { description: payload.description };
+      }
+    }
+
+    if (lotDetailsShouldUpdate) {
+      push('lot_details', lotDetails);
+    }
+
+    if ('contact_details' in payload) {
+      if (payload.contact_details === null) {
+        push('contact_details', null);
+      } else if (typeof payload.contact_details === 'object' && !Array.isArray(payload.contact_details)) {
+        push('contact_details', payload.contact_details);
+      } else {
+        return res.status(400).json({ error: 'contact_details must be an object or null' });
+      }
+    }
+
+    if ('debtor_details' in payload) {
+      if (payload.debtor_details === null) {
+        push('debtor_details', null);
+      } else if (typeof payload.debtor_details === 'object' && !Array.isArray(payload.debtor_details)) {
+        push('debtor_details', payload.debtor_details);
+      } else {
+        return res.status(400).json({ error: 'debtor_details must be an object or null' });
+      }
+    }
+
+    if ('prices' in payload) {
+      if (payload.prices === null) {
+        push('prices', null);
+      } else if (Array.isArray(payload.prices)) {
+        push('prices', JSON.stringify(payload.prices));
+      } else {
+        return res.status(400).json({ error: 'prices must be an array or null' });
+      }
+    }
+
+    if ('documents' in payload) {
+      if (payload.documents === null) {
+        push('documents', null);
+      } else if (Array.isArray(payload.documents)) {
+        push('documents', JSON.stringify(payload.documents));
+      } else {
+        return res.status(400).json({ error: 'documents must be an array or null' });
+      }
+    }
+
+    if ('photos' in payload) {
+      if (payload.photos === null) {
+        push('photos', null);
+      } else if (Array.isArray(payload.photos) || typeof payload.photos === 'string') {
+        const normalizedPhotos = normalizePhotos(payload.photos);
+        push('photos', JSON.stringify(normalizedPhotos));
+      } else {
+        return res.status(400).json({ error: 'photos must be an array, string or null' });
+      }
+    }
+
+    if (!updates.length) {
+      return res.status(400).json({ error: 'no fields provided' });
+    }
+
+    updates.push('updated_at = now()');
+
+    values.push(id);
+    const sql = `
+      update parser_trades
+         set ${updates.join(', ')}
+       where id = $${values.length}
+       returning *
+    `;
+
+    const { rows } = await query(sql, values);
+    return res.json(rows[0]);
+  } catch (error) {
+    console.error('parser-trades update error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
@@ -276,6 +520,7 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
       prices: prices.length ? prices : null,
       documents: Array.isArray(trade.documents) ? trade.documents : null,
       fedresurs_meta: trade.raw_payload?.fedresurs_data || null,
+      photos: Array.isArray(trade.photos) && trade.photos.length ? trade.photos : null,
     };
 
     const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
@@ -303,7 +548,7 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
     `, [
       sourceId,
       trade.title || [trade.brand, trade.model, trade.year].filter(Boolean).join(' ') || 'Лот',
-      trade.lot_details?.description || null,
+      trade.description || trade.lot_details?.description || null,
       trade.category || 'vehicle',
       trade.region || null,
       currency,
@@ -314,6 +559,11 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
       trade.source_url || null,
       details,
     ]);
+
+    await query(
+      'update parser_trades set published_at = now(), updated_at = now() where id = $1',
+      [id],
+    );
 
     return res.json({ ok: true });
   } catch (error) {
