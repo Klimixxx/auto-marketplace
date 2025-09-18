@@ -3,7 +3,7 @@ import { query } from '../db.js';
 
 const router = express.Router();
 
-const DEFAULT_LIMIT = 50;
+const DEFAULT_LIMIT = 15;
 const DEFAULT_OFFSET = 0;
 const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
 
