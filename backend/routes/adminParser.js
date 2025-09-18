@@ -230,7 +230,7 @@ async function upsertParserTrade(item) {
 
 router.get('/parser-trades', async (req, res) => {
   try {
-    const { q, page = 1, limit = 20 } = req.query;
+    const { q, page = 1, limit = 20, status } = req.query;
     const filters = [];
     const params = [];
 
@@ -238,19 +238,31 @@ router.get('/parser-trades', async (req, res) => {
       params.push(`%${q}%`);
       filters.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
     }
-
+    const statusRaw = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    let effectiveStatus = 'drafts';
+    if (statusRaw === 'published') {
+      filters.push('published_at is not null');
+      effectiveStatus = 'published';
+    } else if (statusRaw === 'all') {
+      effectiveStatus = 'all';
+    } else {
+      filters.push('published_at is null');
+    }
     const pageNum = Math.max(1, parseInt(page, 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10)));
     const offset = (pageNum - 1) * pageSize;
 
     const whereSql = filters.length ? `where ${filters.join(' and ')}` : '';
     const totalSql = `select count(*)::int as c from parser_trades ${whereSql}`;
+    const orderSql = effectiveStatus === 'published'
+      ? 'order by published_at desc nulls last, created_at desc'
+      : 'order by created_at desc';
     const listSql = `
       select id, title, region, category, brand, model, year, vin, start_price,
-             date_finish, trade_place, source_url, created_at
+             date_finish, trade_place, source_url, created_at, published_at
         from parser_trades
       ${whereSql}
-      order by created_at desc
+      ${orderSql}
       limit $${params.length + 1} offset $${params.length + 2}
     `;
 
