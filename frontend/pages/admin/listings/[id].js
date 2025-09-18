@@ -259,6 +259,10 @@ function KeyValueList({ data }) {
 export default function AdminParserTradeCard() {
   const router = useRouter();
   const { id } = router.query;
+  const viewQuery = Array.isArray(router.query?.view) ? router.query.view[0] : router.query?.view;
+  const backLinkHref = viewQuery === 'published'
+    ? { pathname: '/admin/listings', query: { view: 'published' } }
+    : '/admin/listings';
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -536,19 +540,26 @@ export default function AdminParserTradeCard() {
       <div className="container">
         <div className="muted">{error || 'Объект не найден.'}</div>
         <div style={{ marginTop: 12 }}>
-          <Link href="/admin/listings" className="link">← Назад к списку</Link>
+          <Link href={backLinkHref} className="link">← Назад к списку</Link>
         </div>
       </div>
     );
   }
+  const publishButtonLabel = item.published_at ? 'Обновить публикацию' : 'Опубликовать';
 
   return (
     <div className="container" style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Link href="/admin/listings" className="link">← Список</Link>
+        <Link href={backLinkHref} className="link">← Список</Link>
         <h1 style={{ margin: 0, fontSize: 20, lineHeight: 1.3 }}>
           Редактирование лота <span className="muted">#{id}</span>
         </h1>
+      </div>
+
+      <div className="muted" style={{ fontSize: 13 }}>
+        {item.published_at
+          ? `Опубликовано: ${formatDateTime(item.published_at)}`
+          : 'Ещё не опубликовано на сайте.'}
       </div>
 
       {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
@@ -699,7 +710,7 @@ export default function AdminParserTradeCard() {
             Сбросить изменения
           </button>
           <button type="button" className="button" onClick={publishTrade} disabled={saving || publishing}>
-            {publishing ? 'Публикуем…' : 'Опубликовать'}
+            {publishing ? 'Публикуем…' : publishButtonLabel}
           </button>
         </div>
       </form>
