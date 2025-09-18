@@ -1,9 +1,11 @@
+// pages/admin/listings/[id].js
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
+// ── helpers ───────────────────────────────────────────────────────────────────
 function fmtPrice(value, currency = 'RUB') {
   try {
     if (value == null || value === '') return '—';
@@ -23,7 +25,7 @@ function toInputDate(value) {
   if (Number.isNaN(date.getTime())) return '';
   const tzOffset = date.getTimezoneOffset();
   const local = new Date(date.getTime() - tzOffset * 60000);
-  return local.toISOString().slice(0, 16);
+  return local.toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
 }
 
 function fromInputDate(value) {
@@ -145,10 +147,9 @@ const PRICE_TABLE_CELL_STYLE = {
   fontSize: 13,
 };
 
+// ── UI pieces ─────────────────────────────────────────────────────────────────
 function ContactSection({ contact }) {
-  if (!contact || typeof contact !== 'object') {
-    return null;
-  }
+  if (!contact || typeof contact !== 'object') return null;
 
   const {
     organizer_name: organizerName,
@@ -159,16 +160,7 @@ function ContactSection({ contact }) {
     inspection_procedure: inspectionProcedure,
   } = contact || {};
 
-  if (
-    !organizerName &&
-    !organizerInn &&
-    !phone &&
-    !email &&
-    !address &&
-    !inspectionProcedure
-  ) {
-    return null;
-  }
+  if (!organizerName && !organizerInn && !phone && !email && !address && !inspectionProcedure) return null;
 
   return (
     <section style={{ marginTop: 24 }}>
@@ -215,14 +207,12 @@ function ContactSection({ contact }) {
     </section>
   );
 }
+
 function KeyValueList({ data }) {
-  if (!data || typeof data !== 'object') {
-    return null;
-  }
+  if (!data || typeof data !== 'object') return null;
   const entries = Object.entries(data);
-  if (!entries.length) {
-    return null;
-  }
+  if (!entries.length) return null;
+
   return (
     <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
       {entries.map(([key, value]) => {
@@ -256,12 +246,14 @@ function KeyValueList({ data }) {
   );
 }
 
-
+// ── page ──────────────────────────────────────────────────────────────────────
 export default function AdminParserTradeCard() {
   const router = useRouter();
   const { id } = router.query;
+
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const [form, setForm] = useState(null);
   const [lotDetailsText, setLotDetailsText] = useState('{}');
   const [contactDetailsText, setContactDetailsText] = useState('{}');
@@ -269,12 +261,15 @@ export default function AdminParserTradeCard() {
   const [pricesText, setPricesText] = useState('[]');
   const [documentsText, setDocumentsText] = useState('[]');
   const [photosText, setPhotosText] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState(null);
 
   const applyTrade = useCallback((trade) => {
     if (!trade) return;
     setItem(trade);
+
     setForm({
       title: trade.title || '',
       description: trade.description || trade.lot_details?.description || '',
@@ -282,7 +277,221 @@ export default function AdminParserTradeCard() {
       region: trade.region || '',
       brand: trade.brand || '',
       model: trade.model || '',
-export default function AdminParserTradeCard() {
+      year: trade.year || '',
+      vin: trade.vin || trade.lot_details?.vin || '',
+      start_price: trade.start_price ?? trade.lot_details?.start_price ?? '',
+      applications_count: trade.applications_count ?? 0,
+      date_start: toInputDate(trade.date_start || trade.dateStart),
+      date_finish: toInputDate(trade.date_finish || trade.dateFinish),
+      trade_place: trade.trade_place || trade.tradePlace || '',
+      source_url: trade.source_url || trade.url || trade.source || '',
+    });
+
+    setLotDetailsText(formatObject(trade.lot_details));
+    setContactDetailsText(formatObject(trade.contact_details));
+    setDebtorDetailsText(formatObject(trade.debtor_details));
+    setPricesText(formatArray(trade.prices));
+    setDocumentsText(formatArray(trade.documents));
+
+    const photos = extractPhotos(trade);
+    if (photos.length) {
+      setPhotosText(photos.join('\n'));
+    } else if (Array.isArray(trade.photos)) {
+      setPhotosText(JSON.stringify(trade.photos, null, 2));
+    } else {
+      setPhotosText('');
+    }
+  }, []);
+
+  // fetch trade
+  useEffect(() => {
+    if (!id) return;
+    let aborted = false;
+    async function run() {
+      setLoading(true);
+      setError(null);
+      try {
+        const url = API_BASE ? `${API_BASE}/admin/listings/${id}` : `/api/admin/listings/${id}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!aborted) applyTrade(data);
+      } catch (e) {
+        if (!aborted) setError(`Ошибка загрузки: ${e.message}`);
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    }
+    run();
+    return () => {
+      aborted = true;
+    };
+  }, [id, applyTrade]);
+
+  const updateFormField = useCallback(
+    (key) => (e) => {
+      const value = e?.target?.value ?? e;
+      setForm((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
+
+  const resetChanges = useCallback(() => {
+    if (item) applyTrade(item);
+  }, [item, applyTrade]);
+
+  const descriptionPreview = useMemo(() => (form?.description || '').trim(), [form?.description]);
+
+  const d = useMemo(() => {
+    // parsed blocks for preview sections
+    let lot = {};
+    let contact = {};
+    let debtor = {};
+    let prices = [];
+    let documents = [];
+    let photos = [];
+
+    try { lot = JSON.parse(lotDetailsText || '{}') } catch {}
+    try { contact = JSON.parse(contactDetailsText || '{}') } catch {}
+    try { debtor = JSON.parse(debtorDetailsText || '{}') } catch {}
+    try { prices = JSON.parse(pricesText || '[]') } catch {}
+    try { documents = JSON.parse(documentsText || '[]') } catch {}
+    try { photos = parsePhotosInput(photosText || '') } catch {}
+
+    const merged = {
+      ...(item || {}),
+      ...form,
+      lot_details: lot,
+      contact_details: contact,
+      debtor_details: debtor,
+      prices,
+      documents,
+      photos,
+    };
+
+    // keep original payload for debug if present
+    if (item?.raw_payload) merged.raw_payload = item.raw_payload;
+
+    return merged;
+  }, [
+    item,
+    form,
+    lotDetailsText,
+    contactDetailsText,
+    debtorDetailsText,
+    pricesText,
+    documentsText,
+    photosText,
+  ]);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (!id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      // build payload
+      const payload = {
+        ...d,
+        title: trimOrNull(form.title),
+        description: trimOrNull(form.description),
+        category: trimOrNull(form.category),
+        region: trimOrNull(form.region),
+        brand: trimOrNull(form.brand),
+        model: trimOrNull(form.model),
+        year: trimOrNull(form.year),
+        vin: trimOrNull(form.vin),
+        start_price:
+          form.start_price === '' || form.start_price == null
+            ? null
+            : Number(String(form.start_price).replace(/\s/g, '').replace(',', '.')),
+        applications_count:
+          form.applications_count === '' || form.applications_count == null
+            ? 0
+            : Number(form.applications_count),
+        date_start: fromInputDate(form.date_start),
+        date_finish: fromInputDate(form.date_finish),
+        trade_place: trimOrNull(form.trade_place),
+        source_url: trimOrNull(form.source_url),
+
+        lot_details: JSON.parse(lotDetailsText || '{}'),
+        contact_details: JSON.parse(contactDetailsText || '{}'),
+        debtor_details: JSON.parse(debtorDetailsText || '{}'),
+        prices: JSON.parse(pricesText || '[]'),
+        documents: JSON.parse(documentsText || '[]'),
+        photos: parsePhotosInput(photosText || ''),
+      };
+
+      const url = API_BASE ? `${API_BASE}/admin/listings/${id}` : `/api/admin/listings/${id}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const saved = await res.json();
+      applyTrade(saved);
+    } catch (e) {
+      setError(`Ошибка сохранения: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function publishTrade() {
+    if (!id) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const url = API_BASE ? `${API_BASE}/admin/listings/${id}/publish` : `/api/admin/listings/${id}/publish`;
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // no-op: backend handles status
+    } catch (e) {
+      setError(`Ошибка публикации: ${e.message}`);
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="muted">Загрузка…</div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="container">
+        <div className="muted">Объект не найден.</div>
+        <div style={{ marginTop: 12 }}>
+          <Link href="/admin/listings" className="link">← Назад к списку</Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container" style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Link href="/admin/listings" className="link">← Список</Link>
+        <h1 style={{ margin: 0, fontSize: 20, lineHeight: 1.3 }}>
+          Редактирование лота <span className="muted">#{id}</span>
+        </h1>
+      </div>
+
+      {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
+
+      <form onSubmit={onSubmit} className="panel" style={{ display: 'grid', gap: 12 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="muted">Заголовок</span>
+          <input className="input" value={form.title} onChange={updateFormField('title')} />
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Категория</span>
             <input className="input" value={form.category} onChange={updateFormField('category')} />
           </label>
@@ -313,6 +522,7 @@ export default function AdminParserTradeCard() {
               value={form.start_price}
               onChange={updateFormField('start_price')}
               placeholder="Например, 1500000"
+              inputMode="numeric"
             />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -367,8 +577,50 @@ export default function AdminParserTradeCard() {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="muted">Фотографии (каждый URL с новой строки или JSON-массив)</span>
           <textarea
-@@ -799,63 +877,204 @@ export default function AdminParserTradeCard() {
+            className="textarea"
+            rows={4}
+            value={photosText}
+            onChange={(e) => setPhotosText(e.target.value)}
+            placeholder='["https://.../1.jpg","https://.../2.jpg"] или по строке на URL'
+          />
         </label>
+
+        {getPhotoPreview(photosText).length > 0 && (
+          <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+            {getPhotoPreview(photosText).map((url, i) => (
+              <div key={url || i} className="panel" style={{ padding: 8 }}>
+                <img src={url} alt={`Фото ${i + 1}`} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 6 }} />
+                <div className="muted" style={{ marginTop: 6, fontSize: 12, wordBreak: 'break-word' }}>{url}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">lot_details (JSON)</span>
+            <textarea className="textarea" rows={8} value={lotDetailsText} onChange={(e) => setLotDetailsText(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">contact_details (JSON)</span>
+            <textarea className="textarea" rows={8} value={contactDetailsText} onChange={(e) => setContactDetailsText(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">debtor_details (JSON)</span>
+            <textarea className="textarea" rows={8} value={debtorDetailsText} onChange={(e) => setDebtorDetailsText(e.target.value)} />
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">prices (JSON-массив)</span>
+            <textarea className="textarea" rows={6} value={pricesText} onChange={(e) => setPricesText(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">documents (JSON-массив)</span>
+            <textarea className="textarea" rows={6} value={documentsText} onChange={(e) => setDocumentsText(e.target.value)} />
+          </label>
+        </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <button type="submit" className="button primary" disabled={saving || publishing}>
