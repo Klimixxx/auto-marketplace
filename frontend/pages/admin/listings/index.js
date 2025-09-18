@@ -6,19 +6,12 @@ import { useRouter } from 'next/router';
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
 function normalizeBase(value) {
-  if (!value) {
-    return '';
-  }
-
+  if (!value) return '';
   let result = value;
   while (result.length > 1 && result.endsWith('/')) {
     result = result.slice(0, -1);
   }
-
-  if (result === '/') {
-    return '';
-  }
-
+  if (result === '/') return '';
   return result;
 }
 
@@ -68,9 +61,7 @@ const TABLE_CELL_STYLE = {
 };
 
 function readToken() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
+  if (typeof window === 'undefined') return null;
   try {
     return window.localStorage.getItem('token');
   } catch {
@@ -79,11 +70,9 @@ function readToken() {
 }
 
 function formatCurrency(value, currency = 'RUB') {
-  if (value == null || value === '') {
-    return DASH;
-  }
+  if (value == null || value === '') return DASH;
 
-  let numeric;
+  let numeric = null;
   if (typeof value === 'number') {
     numeric = Number.isFinite(value) ? value : null;
   } else if (typeof value === 'string') {
@@ -92,9 +81,7 @@ function formatCurrency(value, currency = 'RUB') {
     numeric = Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (numeric == null) {
-    return String(value);
-  }
+  if (numeric == null) return String(value);
 
   try {
     return new Intl.NumberFormat('ru-RU', {
@@ -108,35 +95,23 @@ function formatCurrency(value, currency = 'RUB') {
 }
 
 function formatDate(value) {
-  if (!value) {
-    return DASH;
-  }
+  if (!value) return DASH;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
+  if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleDateString('ru-RU');
 }
 
 function formatVehicle(item) {
-  if (!item) {
-    return DASH;
-  }
+  if (!item) return DASH;
   const parts = [item.brand, item.model, item.year].filter(Boolean);
-  if (parts.length) {
-    return parts.join(' ');
-  }
+  if (parts.length) return parts.join(' ');
   return item.category || DASH;
 }
 
 function formatCreatedAt(value) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
+  if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString('ru-RU');
 }
 
@@ -161,34 +136,33 @@ export default function AdminParserTradesPage() {
   const queryView = router.query?.view;
 
   useEffect(() => {
-    if (!router.isReady) {
-      return;
-    }
+    if (!router.isReady) return;
     const rawView = queryView;
     const viewParam = Array.isArray(rawView) ? rawView[0] : rawView;
     const normalized = viewParam === 'published' ? 'published' : 'drafts';
     setView((prev) => (prev === normalized ? prev : normalized));
   }, [router.isReady, queryView]);
 
-  const changeView = useCallback((nextView) => {
-    setView(nextView);
-    setItems([]);
-    setPage(1);
-    setPageCount(1);
-    setPublishingId(null);
-    setListLoading(true);
-    setIngesting(false);
-    if (!router.isReady) {
-      return;
-    }
-    const nextQuery = { ...router.query };
-    if (nextView === 'published') {
-      nextQuery.view = 'published';
-    } else {
-      delete nextQuery.view;
-    }
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
-  }, [router]);
+  const changeView = useCallback(
+    (nextView) => {
+      setView(nextView);
+      setItems([]);
+      setPage(1);
+      setPageCount(1);
+      setPublishingId(null);
+      setListLoading(true);
+      setIngesting(false);
+      if (!router.isReady) return;
+      const nextQuery = { ...router.query };
+      if (nextView === 'published') {
+        nextQuery.view = 'published';
+      } else {
+        delete nextQuery.view;
+      }
+      router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+    },
+    [router],
+  );
 
   const applyProgress = useCallback((progress) => {
     if (!progress || typeof progress !== 'object') {
@@ -203,9 +177,10 @@ export default function AdminParserTradesPage() {
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const searchTerm = typeof progress.search_term === 'string' && progress.search_term.trim()
-      ? progress.search_term
-      : DEFAULT_SEARCH_TERM;
+    const searchTerm =
+      typeof progress.search_term === 'string' && progress.search_term.trim()
+        ? progress.search_term
+        : DEFAULT_SEARCH_TERM;
     setProgressSearchTerm(searchTerm);
 
     const next = toInt(progress.next_offset, 0);
@@ -216,9 +191,7 @@ export default function AdminParserTradesPage() {
     const upserted = toInt(progress.last_upserted, 0);
     const limit = toInt(progress.last_limit, PARSER_PAGE_SIZE);
     const totalFoundRaw = progress.total_found;
-    const totalFound = totalFoundRaw === null || totalFoundRaw === undefined
-      ? null
-      : toInt(totalFoundRaw, null);
+    const totalFound = totalFoundRaw === null || totalFoundRaw === undefined ? null : toInt(totalFoundRaw, null);
 
     let hasMore = null;
     if (typeof progress.has_more === 'boolean') {
@@ -268,9 +241,7 @@ export default function AdminParserTradesPage() {
       }
 
       const qs = params.toString();
-      const url = qs
-        ? `${API_BASE}/api/admin/parser-progress?${qs}`
-        : `${API_BASE}/api/admin/parser-progress`;
+      const url = qs ? `${API_BASE}/api/admin/parser-progress?${qs}` : `${API_BASE}/api/admin/parser-progress`;
 
       try {
         const res = await fetch(url, {
@@ -342,7 +313,7 @@ export default function AdminParserTradesPage() {
   useEffect(() => {
     loadPage(1);
   }, [loadPage]);
-  
+
   useEffect(() => {
     if (view === 'drafts') {
       fetchProgress();
@@ -360,9 +331,7 @@ export default function AdminParserTradesPage() {
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
-      if (view !== 'drafts') {
-        return;
-      }
+      if (view !== 'drafts') return;
       if (!API_BASE) {
         alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
         return;
@@ -438,9 +407,7 @@ export default function AdminParserTradesPage() {
 
   const publish = useCallback(
     async (id) => {
-      if (view !== 'drafts') {
-        return;
-      }
+      if (view !== 'drafts') return;
       if (!API_BASE) {
         alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
         return;
@@ -480,23 +447,13 @@ export default function AdminParserTradesPage() {
   );
 
   const isPublishedView = view === 'published';
-  const pageTitle = isPublishedView
-    ? 'Админка — Опубликованные объявления'
-    : 'Админка — Объявления (из парсера)';
+  const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const searchButtonStyle = listLoading
-    ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' }
-    : ACTION_BUTTON_STYLE;
-  const ingestButtonStyle = ingesting
-    ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
-    : PRIMARY_BUTTON_STYLE;
-  const linkButtonStyle = listLoading
-    ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' }
-    : ACTION_BUTTON_STYLE;
-  const resolveTabStyle = (tabKey) => (tabKey === view
-    ? { ...PRIMARY_BUTTON_STYLE, cursor: 'default' }
-    : ACTION_BUTTON_STYLE);
+  const searchButtonStyle = listLoading ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' } : ACTION_BUTTON_STYLE;
+  const ingestButtonStyle = ingesting ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' } : PRIMARY_BUTTON_STYLE;
+  const linkButtonStyle = listLoading ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' } : ACTION_BUTTON_STYLE;
+  const resolveTabStyle = (tabKey) => (tabKey === view ? { ...PRIMARY_BUTTON_STYLE, cursor: 'default' } : ACTION_BUTTON_STYLE);
 
   return (
     <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
@@ -537,12 +494,7 @@ export default function AdminParserTradesPage() {
           placeholder="Поиск (название/регион/марка/модель/VIN)"
           style={{ flex: '1 1 240px' }}
         />
-        <button
-          className="button"
-          onClick={handleSearch}
-          disabled={listLoading}
-          style={searchButtonStyle}
-        >
+        <button className="button" onClick={handleSearch} disabled={listLoading} style={searchButtonStyle}>
           Найти
         </button>
         {isPublishedView ? null : (
@@ -582,8 +534,8 @@ export default function AdminParserTradesPage() {
 
           {lastIngest && (
             <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-              Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено {lastIngest.received},
-              обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
+              Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено{' '}
+              {lastIngest.received}, обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
             </div>
           )}
 
@@ -593,6 +545,7 @@ export default function AdminParserTradesPage() {
             </div>
           )}
         </>
+      )}
 
       <div
         className="table-wrapper"
@@ -627,9 +580,10 @@ export default function AdminParserTradesPage() {
                 const createdAt = formatCreatedAt(item.created_at);
                 const publishedAt = formatCreatedAt(item.published_at);
                 const isPublishing = publishingId === item.id;
-                const publishButtonStyle = isPublishing || listLoading
-                  ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
-                  : PRIMARY_BUTTON_STYLE;
+                const publishButtonStyle =
+                  isPublishing || listLoading
+                    ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
+                    : PRIMARY_BUTTON_STYLE;
                 const detailHref = {
                   pathname: '/admin/listings/[id]',
                   query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
@@ -672,11 +626,7 @@ export default function AdminParserTradesPage() {
                     </td>
                     <td style={TABLE_CELL_STYLE}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <Link
-                          href={detailHref}
-                          className="button"
-                          style={linkButtonStyle}
-                        >
+                        <Link href={detailHref} className="button" style={linkButtonStyle}>
                           Редактировать
                         </Link>
                         {isPublishedView ? null : (
@@ -712,23 +662,13 @@ export default function AdminParserTradesPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
-        <button
-          className="button"
-          onClick={() => loadPage(page - 1)}
-          disabled={!canGoPrev || listLoading}
-          style={linkButtonStyle}
-        >
+        <button className="button" onClick={() => loadPage(page - 1)} disabled={!canGoPrev || listLoading} style={linkButtonStyle}>
           {ARROW_LEFT} Назад
         </button>
         <div style={{ color: '#9aa6b2' }}>
           Страница {page} из {pageCount}
         </div>
-        <button
-          className="button"
-          onClick={() => loadPage(page + 1)}
-          disabled={!canGoNext || listLoading}
-          style={linkButtonStyle}
-        >
+        <button className="button" onClick={() => loadPage(page + 1)} disabled={!canGoNext || listLoading} style={linkButtonStyle}>
           Вперёд {ARROW_RIGHT}
         </button>
       </div>
