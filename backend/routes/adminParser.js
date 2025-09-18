@@ -7,6 +7,7 @@ const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 15;
 const DEFAULT_OFFSET = 0;
 const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
+const DEFAULT_SEARCH_TERM = 'vin';
 
 function toNumberSafe(value) {
   if (value == null) return null;
