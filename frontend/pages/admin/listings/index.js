@@ -139,14 +139,123 @@ function formatCreatedAt(value) {
   return date.toLocaleString('ru-RU');
 }
 
+function resolveSearchTerm(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed || DEFAULT_SEARCH_TERM;
+}
+
 export default function AdminParserTradesPage() {
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
+  const [publishingId, setPublishingId] = useState(null);
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
+  const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
+
+  const applyProgress = useCallback((progress) => {
+    if (!progress || typeof progress !== 'object') {
+      setProgressSearchTerm(DEFAULT_SEARCH_TERM);
+      setNextOffset(0);
+      setLastIngest(null);
+      return;
+    }
+
+    const toInt = (value, fallback = 0) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const searchTerm = typeof progress.search_term === 'string' && progress.search_term.trim()
+      ? progress.search_term
+      : DEFAULT_SEARCH_TERM;
+    setProgressSearchTerm(searchTerm);
+
+    const next = toInt(progress.next_offset, 0);
+    setNextOffset(next);
+
+    const lastOffset = toInt(progress.last_offset, 0);
+    const received = toInt(progress.last_received, 0);
+    const upserted = toInt(progress.last_upserted, 0);
+    const limit = toInt(progress.last_limit, PARSER_PAGE_SIZE);
+    const totalFoundRaw = progress.total_found;
+    const totalFound = totalFoundRaw === null || totalFoundRaw === undefined
+      ? null
+      : toInt(totalFoundRaw, null);
+
+    let hasMore = null;
+    if (typeof progress.has_more === 'boolean') {
+      hasMore = progress.has_more;
+    } else if (totalFound != null) {
+      hasMore = next < totalFound;
+    }
+
+    const updatedAt = progress.updated_at || null;
+    const hasHistory = Boolean(
+      updatedAt || received > 0 || upserted > 0 || lastOffset > 0 || (totalFound != null && totalFound > 0),
+    );
+
+    setLastIngest(
+      hasHistory
+        ? {
+            offset: lastOffset,
+            received,
+            upserted,
+            limit,
+            nextOffset: next,
+            totalFound,
+            hasMore,
+            updatedAt,
+            searchTerm,
+          }
+        : null,
+    );
+  }, []);
+
+  const fetchProgress = useCallback(
+    async (searchTerm) => {
+      if (!API_BASE) {
+        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        console.warn('No admin token found. Skip progress fetch.');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (typeof searchTerm === 'string' && searchTerm.trim()) {
+        params.set('search', resolveSearchTerm(searchTerm));
+      }
+
+      const qs = params.toString();
+      const url = qs
+        ? `${API_BASE}/api/admin/parser-progress?${qs}`
+        : `${API_BASE}/api/admin/parser-progress`;
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'failed');
+        }
+        applyProgress(data);
+      } catch (error) {
+        console.error('fetchProgress error:', error);
+      }
+    },
+    [applyProgress],
+  );
 
   const loadPage = useCallback(
     async (nextPage = 1) => {
@@ -169,7 +278,7 @@ export default function AdminParserTradesPage() {
       params.set('page', String(nextPage));
       params.set('limit', String(PAGE_SIZE));
 
-      setLoading(true);
+      setListLoading(true);
       try {
         const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
           headers: {
@@ -189,7 +298,7 @@ export default function AdminParserTradesPage() {
         console.error('loadPage error:', error);
         alert(error.message || 'Ошибка запроса');
       } finally {
-        setLoading(false);
+        setListLoading(false);
       }
     },
     [query],
@@ -198,12 +307,15 @@ export default function AdminParserTradesPage() {
   useEffect(() => {
     loadPage(1);
   }, [loadPage]);
+  
+  useEffect(() => {
+    fetchProgress();
+  }, [fetchProgress]);
 
   const handleSearch = useCallback(() => {
-    setNextOffset(0);
-    setLastIngest(null);
     loadPage(1);
-  }, [loadPage]);
+    fetchProgress(resolveSearchTerm(query));
+  }, [loadPage, fetchProgress, query]);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -218,10 +330,10 @@ export default function AdminParserTradesPage() {
         return;
       }
 
-      const trimmed = query.trim();
+      const searchTerm = resolveSearchTerm(query);
       const offsetToUse = reset ? 0 : nextOffset;
 
-      setLoading(true);
+      setIngesting(true);
       try {
         const res = await fetch(`${API_BASE}/api/admin/actions/ingest`, {
           method: 'POST',
@@ -231,7 +343,7 @@ export default function AdminParserTradesPage() {
             Accept: 'application/json',
           },
           body: JSON.stringify({
-            search: trimmed || DEFAULT_SEARCH_TERM,
+            search: searchTerm,
             limit: PARSER_PAGE_SIZE,
             offset: offsetToUse,
           }),
@@ -241,43 +353,43 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'Не удалось запустить парсер');
         }
 
-        const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
-        const receivedCount = Number.isFinite(Number(data.received)) ? Number(data.received) : 0;
-        const limitUsed = Number.isFinite(Number(data.limit)) ? Number(data.limit) : PARSER_PAGE_SIZE;
-        const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
-        const next = Number.isFinite(Number(data.next_offset))
-          ? Number(data.next_offset)
-          : baseOffset + (receivedCount || limitUsed);
-
-        const totalFound = Number.isFinite(Number(data.parser_meta?.total_found))
-          ? Number(data.parser_meta.total_found)
-          : null;
-        const hasMore = totalFound == null ? true : next < totalFound;
-
-        setNextOffset(next);
-        setLastIngest({
-          offset: baseOffset,
-          received: receivedCount,
-          upserted: upsertedCount,
-          limit: limitUsed,
-          nextOffset: next,
-          totalFound,
-          hasMore,
-        });
+        if (data.progress) {
+          applyProgress(data.progress);
+        } else {
+          const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
+          const receivedCount = Number.isFinite(Number(data.received)) ? Number(data.received) : 0;
+          const limitUsed = Number.isFinite(Number(data.limit)) ? Number(data.limit) : PARSER_PAGE_SIZE;
+          const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
+          const fallbackProgress = {
+            search_term: searchTerm,
+            next_offset: Number.isFinite(Number(data.next_offset))
+              ? Number(data.next_offset)
+              : baseOffset + (receivedCount || limitUsed),
+            last_offset: baseOffset,
+            last_received: receivedCount,
+            last_upserted: upsertedCount,
+            last_limit: limitUsed,
+            total_found: data.parser_meta?.total_found ?? null,
+            has_more: data.parser_meta?.has_more ?? null,
+            updated_at: new Date().toISOString(),
+          };
+          applyProgress(fallbackProgress);
+        }
 
         alert(
-          `Получено: ${receivedCount}, сохранено/обновлено: ${upsertedCount}. ` +
-            `Текущий offset: ${baseOffset}, следующий: ${next}.`,
+          `Получено: ${Number(data.received) || 0}, сохранено/обновлено: ${Number(data.upserted) || 0}. ` +
+            `Текущий offset: ${Number(data.offset) || offsetToUse}, следующий: ${Number(data.next_offset) || nextOffset}.`,
         );
         await loadPage(1);
+        await fetchProgress(searchTerm);
       } catch (error) {
         console.error('ingest error:', error);
         alert(`Ошибка: ${error.message || 'ingest failed'}`);
       } finally {
-        setLoading(false);
+        setIngesting(false);
       }
     },
-    [query, loadPage, nextOffset],
+    [query, loadPage, nextOffset, applyProgress, fetchProgress],
   );
 
   const publish = useCallback(
@@ -293,7 +405,7 @@ export default function AdminParserTradesPage() {
         return;
       }
 
-      setLoading(true);
+      setPublishingId(id);
       try {
         const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/publish`, {
           method: 'POST',
@@ -314,7 +426,7 @@ export default function AdminParserTradesPage() {
         console.error('publish error:', error);
         alert(`Ошибка публикации: ${error.message || 'failed'}`);
       } finally {
-        setLoading(false);
+        setPublishingId(null);
       }
     },
     [page, loadPage],
@@ -322,10 +434,13 @@ export default function AdminParserTradesPage() {
 
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const publishButtonStyle = loading
+  const searchButtonStyle = listLoading
+    ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' }
+    : ACTION_BUTTON_STYLE;
+  const ingestButtonStyle = ingesting
     ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
     : PRIMARY_BUTTON_STYLE;
-  const linkButtonStyle = loading
+  const linkButtonStyle = listLoading
     ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' }
     : ACTION_BUTTON_STYLE;
 
@@ -350,42 +465,43 @@ export default function AdminParserTradesPage() {
         <button
           className="button"
           onClick={handleSearch}
-          disabled={loading}
-          style={linkButtonStyle}
+          disabled={listLoading}
+          style={searchButtonStyle}
         >
           Найти
         </button>
         <button
           className="button primary"
           onClick={() => runIngest({ reset: true })}
-          disabled={loading}
-          style={publishButtonStyle}
+          disabled={ingesting}
+          style={ingestButtonStyle}
         >
           Получить новые
         </button>
         <button
           className="button primary"
           onClick={() => runIngest({ reset: false })}
-          disabled={loading}
-          style={publishButtonStyle}
+          disabled={ingesting}
+          style={ingestButtonStyle}
         >
           ПОЛУЧИТЬ ЕЩЁ
         </button>
       </div>
 
       <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-        Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Следующий offset: {nextOffset}.{' '}
+        Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Текущий поисковый запрос:{' '}
+        <span style={{ fontWeight: 600 }}>{progressSearchTerm}</span>. Следующий offset: {nextOffset}.{' '}
         {lastIngest?.totalFound ? `Всего найдено: ${lastIngest.totalFound}.` : null}
       </div>
 
       {lastIngest && (
         <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          Последний парсинг: offset {lastIngest.offset}, получено {lastIngest.received}, обновлено {lastIngest.upserted}.{' '}
-          Следующий offset: {lastIngest.nextOffset}.
+          Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено {lastIngest.received},
+          обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
         </div>
       )}
 
-      {lastIngest && lastIngest.totalFound != null && !lastIngest.hasMore && (
+      {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
         <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
           Новых объявлений в текущей выборке больше нет. Нажмите «Получить новые», чтобы начать загрузку сначала.
         </div>
@@ -416,12 +532,16 @@ export default function AdminParserTradesPage() {
             {items.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ ...TABLE_CELL_STYLE, textAlign: 'center', color: '#9aa6b2' }}>
-                  {loading ? 'Загрузка…' : 'Записей пока нет.'}
+                  {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
                 </td>
               </tr>
             ) : (
               items.map((item) => {
                 const createdAt = formatCreatedAt(item.created_at);
+                const isPublishing = publishingId === item.id;
+                const publishButtonStyle = isPublishing || listLoading
+                  ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
+                  : PRIMARY_BUTTON_STYLE;
                 return (
                   <tr key={item.id}>
                     <td style={TABLE_CELL_STYLE}>
@@ -467,7 +587,7 @@ export default function AdminParserTradesPage() {
                           className="button primary"
                           style={publishButtonStyle}
                           onClick={() => publish(item.id)}
-                          disabled={loading}
+                          disabled={isPublishing || listLoading}
                         >
                           Опубликовать
                         </button>
@@ -496,7 +616,7 @@ export default function AdminParserTradesPage() {
         <button
           className="button"
           onClick={() => loadPage(page - 1)}
-          disabled={!canGoPrev || loading}
+          disabled={!canGoPrev || listLoading}
           style={linkButtonStyle}
         >
           {ARROW_LEFT} Назад
@@ -507,7 +627,7 @@ export default function AdminParserTradesPage() {
         <button
           className="button"
           onClick={() => loadPage(page + 1)}
-          disabled={!canGoNext || loading}
+          disabled={!canGoNext || listLoading}
           style={linkButtonStyle}
         >
           Вперёд {ARROW_RIGHT}
