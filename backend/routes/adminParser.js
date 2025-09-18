@@ -98,6 +98,16 @@ function parseDate(value, fieldName = 'date') {
   return date;
 }
 
+function resolveSearchTerm(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed || DEFAULT_SEARCH_TERM;
+}
+
+function resolveSearchKey(value) {
+  return resolveSearchTerm(value).toLowerCase();
+}
+
+
 async function upsertParserTrade(item) {
   const fedresurs = item?.fedresurs_data || {};
   const parsed = item?.parsed_data || item || {};
@@ -244,9 +254,58 @@ router.get('/parser-trades/:id', async (req, res) => {
   }
 });
 
+router.get('/parser-progress', async (req, res) => {
+  try {
+    const search = req.query.search;
+    let row;
+    if (typeof search === 'string' && search.trim()) {
+      const searchKey = resolveSearchKey(search);
+      const { rows } = await query(
+        `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+           from parser_ingest_progress
+          where search_key = $1`,
+        [searchKey],
+      );
+      row = rows[0];
+    } else {
+      const { rows } = await query(
+        `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+           from parser_ingest_progress
+          order by updated_at desc
+          limit 1`,
+        [],
+      );
+      row = rows[0];
+    }
+
+    if (!row) {
+      return res.json({
+        search_key: resolveSearchKey(search),
+        search_term: resolveSearchTerm(search),
+        next_offset: 0,
+        last_offset: 0,
+        last_received: 0,
+        last_upserted: 0,
+        last_limit: 0,
+        total_found: null,
+        has_more: null,
+        updated_at: null,
+      });
+    }
+
+    return res.json(row);
+  } catch (error) {
+    console.error('parser progress fetch error:', error);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 router.post('/actions/ingest', async (req, res) => {
   try {
-    const { search = 'vin', start_date, end_date, limit = DEFAULT_LIMIT, offset = DEFAULT_OFFSET } = req.body || {};
+    const { search, start_date, end_date, limit = DEFAULT_LIMIT, offset = DEFAULT_OFFSET } = req.body || {};
+
+    const searchTerm = resolveSearchTerm(search);
+    const searchKey = resolveSearchKey(search);
 
     const limitNum = Number(limit);
     const offsetNum = Number(offset);
@@ -257,7 +316,7 @@ router.post('/actions/ingest', async (req, res) => {
 
     const baseUrl = process.env.PARSER_BASE_URL || PARSER_FALLBACK_BASE;
     const url = new URL('/parse-fedresurs-trades', baseUrl);
-    url.searchParams.set('search_string', String(search));
+    url.searchParams.set('search_string', searchTerm);
     if (start_date) url.searchParams.set('start_date', String(start_date));
     if (end_date) url.searchParams.set('end_date', String(end_date));
     url.searchParams.set('limit', String(safeLimit));
@@ -294,16 +353,59 @@ router.post('/actions/ingest', async (req, res) => {
       }
     }
 
-    const nextOffset = safeOffset + items.length;
+    const baseOffset = Number.isFinite(meta?.offset) ? Number(meta.offset) : safeOffset;
+    const limitUsed = Number.isFinite(meta?.limit) ? Number(meta.limit) : safeLimit;
+    const receivedCount = Array.isArray(items) ? items.length : 0;
+    const totalFound = Number.isFinite(meta?.total_found) ? Number(meta.total_found) : null;
+    const nextOffset = baseOffset + receivedCount;
+    const hasMore = typeof meta?.has_more === 'boolean'
+      ? meta.has_more
+      : totalFound == null
+        ? null
+        : nextOffset < totalFound;
+
+    await query(
+      `insert into parser_ingest_progress
+         (search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       on conflict (search_key) do update set
+         search_term   = excluded.search_term,
+         next_offset   = excluded.next_offset,
+         last_offset   = excluded.last_offset,
+         last_received = excluded.last_received,
+         last_upserted = excluded.last_upserted,
+         last_limit    = excluded.last_limit,
+         total_found   = excluded.total_found,
+         has_more      = excluded.has_more`,
+      [
+        searchKey,
+        searchTerm,
+        nextOffset,
+        baseOffset,
+        receivedCount,
+        upserted,
+        limitUsed,
+        totalFound,
+        hasMore,
+      ],
+    );
+
+    const { rows: [progress] } = await query(
+      `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+         from parser_ingest_progress
+        where search_key = $1`,
+      [searchKey],
+    );
 
     return res.json({
       ok: true,
-      received: items.length,
+      received: receivedCount,
       upserted,
-      limit: safeLimit,
-      offset: safeOffset,
+      limit: limitUsed,
+      offset: baseOffset,
       parser_meta: meta,
       next_offset: nextOffset,
+      progress: progress || null,
     });
   } catch (error) {
     console.error('ingest call error:', error);
