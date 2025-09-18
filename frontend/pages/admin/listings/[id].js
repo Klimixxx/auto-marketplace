@@ -5,6 +5,15 @@ import Link from 'next/link';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
+function readToken() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('token');
+  } catch {
+    return null;
+  }
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 function fmtPrice(value, currency = 'RUB') {
   try {
@@ -311,9 +320,31 @@ export default function AdminParserTradeCard() {
       setLoading(true);
       setError(null);
       try {
-        const url = API_BASE ? `${API_BASE}/admin/listings/${id}` : `/api/admin/listings/${id}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!API_BASE) {
+          throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+        }
+        const token = readToken();
+        if (!token) {
+          throw new Error('Требуется авторизация администратора.');
+        }
+
+        const url = `${API_BASE}/api/admin/parser-trades/${id}`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (res.status === 404) {
+          if (!aborted) {
+            setItem(null);
+            setError('Лот не найден или удалён.');
+          }
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
         if (!aborted) applyTrade(data);
       } catch (e) {
@@ -422,15 +453,33 @@ export default function AdminParserTradeCard() {
         photos: parsePhotosInput(photosText || ''),
       };
 
-      const url = API_BASE ? `${API_BASE}/admin/listings/${id}` : `/api/admin/listings/${id}`;
+      if (!API_BASE) {
+        throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+      }
+      const token = readToken();
+      if (!token) {
+        throw new Error('Требуется авторизация администратора.');
+      }
+
+      const url = `${API_BASE}/api/admin/parser-trades/${id}`;
       const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         body: JSON.stringify(payload),
       });
+      if (res.status === 404) {
+        throw new Error('Лот не найден или удалён.');
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const saved = await res.json();
       applyTrade(saved);
+      if (typeof window !== 'undefined') {
+        window.alert('Изменения сохранены.');
+      }
     } catch (e) {
       setError(`Ошибка сохранения: ${e.message}`);
     } finally {
@@ -443,9 +492,30 @@ export default function AdminParserTradeCard() {
     setPublishing(true);
     setError(null);
     try {
-      const url = API_BASE ? `${API_BASE}/admin/listings/${id}/publish` : `/api/admin/listings/${id}/publish`;
-      const res = await fetch(url, { method: 'POST' });
+      try {
+      if (!API_BASE) {
+        throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+      }
+      const token = readToken();
+      if (!token) {
+        throw new Error('Требуется авторизация администратора.');
+      }
+
+      const url = `${API_BASE}/api/admin/parser-trades/${id}/publish`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      if (res.status === 404) {
+        throw new Error('Лот не найден или уже удалён.');
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (typeof window !== 'undefined') {
+        window.alert('Лот опубликован и появится в общем списке объявлений.');
+      }
       // no-op: backend handles status
     } catch (e) {
       setError(`Ошибка публикации: ${e.message}`);
@@ -465,7 +535,7 @@ export default function AdminParserTradeCard() {
   if (!item) {
     return (
       <div className="container">
-        <div className="muted">Объект не найден.</div>
+        <div className="muted">{error || 'Объект не найден.'}</div>
         <div style={{ marginTop: 12 }}>
           <Link href="/admin/listings" className="link">← Назад к списку</Link>
         </div>
