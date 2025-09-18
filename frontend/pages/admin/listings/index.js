@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -145,6 +146,7 @@ function resolveSearchTerm(value) {
 }
 
 export default function AdminParserTradesPage() {
+  const router = useRouter();
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -155,6 +157,38 @@ export default function AdminParserTradesPage() {
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
   const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
+  const [view, setView] = useState('drafts');
+  const queryView = router.query?.view;
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+    const rawView = queryView;
+    const viewParam = Array.isArray(rawView) ? rawView[0] : rawView;
+    const normalized = viewParam === 'published' ? 'published' : 'drafts';
+    setView((prev) => (prev === normalized ? prev : normalized));
+  }, [router.isReady, queryView]);
+
+  const changeView = useCallback((nextView) => {
+    setView(nextView);
+    setItems([]);
+    setPage(1);
+    setPageCount(1);
+    setPublishingId(null);
+    setListLoading(true);
+    setIngesting(false);
+    if (!router.isReady) {
+      return;
+    }
+    const nextQuery = { ...router.query };
+    if (nextView === 'published') {
+      nextQuery.view = 'published';
+    } else {
+      delete nextQuery.view;
+    }
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+  }, [router]);
 
   const applyProgress = useCallback((progress) => {
     if (!progress || typeof progress !== 'object') {
@@ -277,6 +311,7 @@ export default function AdminParserTradesPage() {
       }
       params.set('page', String(nextPage));
       params.set('limit', String(PAGE_SIZE));
+      params.set('status', view === 'published' ? 'published' : 'drafts');
 
       setListLoading(true);
       try {
@@ -301,7 +336,7 @@ export default function AdminParserTradesPage() {
         setListLoading(false);
       }
     },
-    [query],
+    [query, view],
   );
 
   useEffect(() => {
@@ -309,16 +344,25 @@ export default function AdminParserTradesPage() {
   }, [loadPage]);
   
   useEffect(() => {
-    fetchProgress();
-  }, [fetchProgress]);
+    if (view === 'drafts') {
+      fetchProgress();
+    } else {
+      applyProgress(null);
+    }
+  }, [view, fetchProgress, applyProgress]);
 
   const handleSearch = useCallback(() => {
     loadPage(1);
-    fetchProgress(resolveSearchTerm(query));
-  }, [loadPage, fetchProgress, query]);
+    if (view === 'drafts') {
+      fetchProgress(resolveSearchTerm(query));
+    }
+  }, [loadPage, fetchProgress, query, view]);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
+      if (view !== 'drafts') {
+        return;
+      }
       if (!API_BASE) {
         alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
         return;
@@ -389,11 +433,14 @@ export default function AdminParserTradesPage() {
         setIngesting(false);
       }
     },
-    [query, loadPage, nextOffset, applyProgress, fetchProgress],
+    [query, loadPage, nextOffset, applyProgress, fetchProgress, view],
   );
 
   const publish = useCallback(
     async (id) => {
+      if (view !== 'drafts') {
+        return;
+      }
       if (!API_BASE) {
         alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
         return;
@@ -429,9 +476,13 @@ export default function AdminParserTradesPage() {
         setPublishingId(null);
       }
     },
-    [page, loadPage],
+    [page, loadPage, view],
   );
 
+  const isPublishedView = view === 'published';
+  const pageTitle = isPublishedView
+    ? 'Админка — Опубликованные объявления'
+    : 'Админка — Объявления (из парсера)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
   const searchButtonStyle = listLoading
@@ -443,10 +494,34 @@ export default function AdminParserTradesPage() {
   const linkButtonStyle = listLoading
     ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' }
     : ACTION_BUTTON_STYLE;
+  const resolveTabStyle = (tabKey) => (tabKey === view
+    ? { ...PRIMARY_BUTTON_STYLE, cursor: 'default' }
+    : ACTION_BUTTON_STYLE);
 
   return (
     <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-      <h1>Админка — Объявления (из парсера)</h1>
+      <h1>{pageTitle}</h1>
+
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="button"
+          onClick={() => changeView('drafts')}
+          disabled={view === 'drafts'}
+          style={resolveTabStyle('drafts')}
+        >
+          Неопубликованные
+        </button>
+        <button
+          type="button"
+          className="button"
+          onClick={() => changeView('published')}
+          disabled={view === 'published'}
+          style={resolveTabStyle('published')}
+        >
+          Опубликованные
+        </button>
+      </div>
 
       <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
         <input
@@ -470,42 +545,54 @@ export default function AdminParserTradesPage() {
         >
           Найти
         </button>
-        <button
-          className="button primary"
-          onClick={() => runIngest({ reset: true })}
-          disabled={ingesting}
-          style={ingestButtonStyle}
-        >
-          Получить новые
-        </button>
-        <button
-          className="button primary"
-          onClick={() => runIngest({ reset: false })}
-          disabled={ingesting}
-          style={ingestButtonStyle}
-        >
-          ПОЛУЧИТЬ ЕЩЁ
-        </button>
+        {isPublishedView ? null : (
+          <>
+            <button
+              className="button primary"
+              onClick={() => runIngest({ reset: true })}
+              disabled={ingesting}
+              style={ingestButtonStyle}
+            >
+              Получить новые
+            </button>
+            <button
+              className="button primary"
+              onClick={() => runIngest({ reset: false })}
+              disabled={ingesting}
+              style={ingestButtonStyle}
+            >
+              ПОЛУЧИТЬ ЕЩЁ
+            </button>
+          </>
+        )}
       </div>
 
-      <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-        Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Текущий поисковый запрос:{' '}
-        <span style={{ fontWeight: 600 }}>{progressSearchTerm}</span>. Следующий offset: {nextOffset}.{' '}
-        {lastIngest?.totalFound ? `Всего найдено: ${lastIngest.totalFound}.` : null}
-      </div>
-
-      {lastIngest && (
-        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено {lastIngest.received},
-          обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
+      {isPublishedView ? (
+        <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+          Здесь отображаются объявления, которые уже опубликованы на сайте. Откройте карточку, чтобы отредактировать данные
+          или переопубликовать их при необходимости.
         </div>
-      )}
+      ) : (
+        <>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+            Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Текущий поисковый запрос:{' '}
+            <span style={{ fontWeight: 600 }}>{progressSearchTerm}</span>. Следующий offset: {nextOffset}.{' '}
+            {lastIngest?.totalFound ? `Всего найдено: ${lastIngest.totalFound}.` : null}
+          </div>
 
-      {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          Новых объявлений в текущей выборке больше нет. Нажмите «Получить новые», чтобы начать загрузку сначала.
-        </div>
-      )}
+          {lastIngest && (
+            <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+              Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено {lastIngest.received},
+              обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
+            </div>
+          )}
+
+          {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Новых объявлений в текущей выборке больше нет. Нажмите «Получить новые», чтобы начать загрузку сначала.
+            </div>
+          )}
+        </>
 
       <div
         className="table-wrapper"
@@ -538,10 +625,15 @@ export default function AdminParserTradesPage() {
             ) : (
               items.map((item) => {
                 const createdAt = formatCreatedAt(item.created_at);
+                const publishedAt = formatCreatedAt(item.published_at);
                 const isPublishing = publishingId === item.id;
                 const publishButtonStyle = isPublishing || listLoading
                   ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
                   : PRIMARY_BUTTON_STYLE;
+                const detailHref = {
+                  pathname: '/admin/listings/[id]',
+                  query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
+                };
                 return (
                   <tr key={item.id}>
                     <td style={TABLE_CELL_STYLE}>
@@ -556,6 +648,11 @@ export default function AdminParserTradesPage() {
                         )}
                         {createdAt ? ` • Создано: ${createdAt}` : null}
                       </div>
+                      {publishedAt ? (
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                          Опубликовано: {publishedAt}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={TABLE_CELL_STYLE}>{item.region || DASH}</td>
                     <td style={TABLE_CELL_STYLE}>
@@ -576,21 +673,23 @@ export default function AdminParserTradesPage() {
                     <td style={TABLE_CELL_STYLE}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <Link
-                          href={`/admin/listings/${item.id}`}
+                          href={detailHref}
                           className="button"
                           style={linkButtonStyle}
                         >
-                          Открыть
+                          Редактировать
                         </Link>
-                        <button
-                          type="button"
-                          className="button primary"
-                          style={publishButtonStyle}
-                          onClick={() => publish(item.id)}
-                          disabled={isPublishing || listLoading}
-                        >
-                          Опубликовать
-                        </button>
+                        {isPublishedView ? null : (
+                          <button
+                            type="button"
+                            className="button primary"
+                            style={publishButtonStyle}
+                            onClick={() => publish(item.id)}
+                            disabled={isPublishing || listLoading}
+                          >
+                            Опубликовать
+                          </button>
+                        )}
                         {item.source_url ? (
                           <a
                             href={item.source_url}
