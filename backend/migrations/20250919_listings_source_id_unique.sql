@@ -1,3 +1,5 @@
+-- Ensure listings.source_id can be used for UPSERT operations
+-- Normalize blank source identifiers
 UPDATE listings
 SET source_id = NULL
 WHERE source_id IS NOT NULL AND btrim(source_id) = '';
