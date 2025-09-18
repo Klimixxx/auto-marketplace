@@ -9,6 +9,31 @@ const DEFAULT_OFFSET = 0;
 const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
 const DEFAULT_SEARCH_TERM = 'vin';
 
+function parseJson(value, label = 'value') {
+  if (value == null) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      console.warn(`Failed to parse JSON field ${label}:`, error?.message);
+      return null;
+    }
+  }
+  return null;
+}
+
+function parseJsonObject(value, label = 'value') {
+  const parsed = parseJson(value, label);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+}
+
+function parseJsonArray(value, label = 'value') {
+  if (Array.isArray(value)) return value;
+  const parsed = parseJson(value, label);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
 function toNumberSafe(value) {
   if (value == null) return null;
   const num = Number(String(value).replace(/\s/g, '').replace(',', '.'));
@@ -610,20 +635,30 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
 
     const trade = rows[0];
     const currency = 'RUB';
-    const prices = Array.isArray(trade.prices) ? trade.prices : [];
-    const lastPrice = prices.length
-      ? Number(String(prices[prices.length - 1]?.price ?? prices[prices.length - 1]?.currentPrice ?? prices[prices.length - 1]?.current_price ?? '').replace(/\s/g, '').replace(',', '.'))
+    const prices = parseJsonArray(trade.prices, 'parser_trades.prices');
+    const lastPriceEntry = prices.length ? prices[prices.length - 1] : null;
+    const lastPrice = lastPriceEntry
+      
+      ? toNumberSafe(lastPriceEntry.price ?? lastPriceEntry.currentPrice ?? lastPriceEntry.current_price)
       : null;
-    const currentPrice = lastPrice || trade.start_price || null;
+    const currentPrice = lastPrice ?? toNumberSafe(trade.start_price) ?? null;
+
+    const lotDetails = parseJsonObject(trade.lot_details, 'parser_trades.lot_details');
+    const debtorDetails = parseJsonObject(trade.debtor_details, 'parser_trades.debtor_details');
+    const contactDetails = parseJsonObject(trade.contact_details, 'parser_trades.contact_details');
+    const documents = parseJsonArray(trade.documents, 'parser_trades.documents');
+    const storedPhotos = parseJsonArray(trade.photos, 'parser_trades.photos');
+    const normalizedPhotos = storedPhotos.length ? normalizePhotos(storedPhotos) : [];
+    const rawPayload = parseJsonObject(trade.raw_payload, 'parser_trades.raw_payload');
 
     const details = {
-      lot_details: trade.lot_details || null,
-      debtor_details: trade.debtor_details || null,
-      contact_details: trade.contact_details || null,
+      lot_details: lotDetails,
+      debtor_details: debtorDetails,
+      contact_details: contactDetails,
       prices: prices.length ? prices : null,
-      documents: Array.isArray(trade.documents) ? trade.documents : null,
-      fedresurs_meta: trade.raw_payload?.fedresurs_data || null,
-      photos: Array.isArray(trade.photos) && trade.photos.length ? trade.photos : null,
+      documents: documents.length ? documents : null,
+      fedresurs_meta: rawPayload?.fedresurs_data || null,
+      photos: normalizedPhotos.length ? normalizedPhotos : null,
     };
 
     const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
