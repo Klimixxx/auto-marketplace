@@ -129,6 +129,76 @@ function getPhotoPreview(text) {
   }
 }
 
+function ContactSection({ contact }) {
+  if (!contact || typeof contact !== 'object') {
+    return null;
+  }
+
+  const {
+    organizer_name: organizerName,
+    organizer_inn: organizerInn,
+    phone,
+    email,
+    address,
+    inspection_procedure: inspectionProcedure,
+  } = contact;
+
+  if (
+    !organizerName &&
+    !organizerInn &&
+    !phone &&
+    !email &&
+    !address &&
+    !inspectionProcedure
+  ) {
+    return null;
+  }
+
+  return (
+    <section style={{ marginTop: 24 }}>
+      <h2>Контакты</h2>
+      <div className="panel" style={{ display: 'grid', gap: 6 }}>
+        {organizerName ? (
+          <div>
+            <span className="muted">Организатор: </span>
+            {organizerName}
+          </div>
+        ) : null}
+        {organizerInn ? (
+          <div>
+            <span className="muted">ИНН: </span>
+            {organizerInn}
+          </div>
+        ) : null}
+        {phone ? (
+          <div>
+            <span className="muted">Телефон: </span>
+            {phone}
+          </div>
+        ) : null}
+        {email ? (
+          <div>
+            <span className="muted">Email: </span>
+            <a className="link" href={`mailto:${email}`}>
+              {email}
+            </a>
+          </div>
+        ) : null}
+        {address ? (
+          <div>
+            <span className="muted">Адрес: </span>
+            {address}
+          </div>
+        ) : null}
+        {inspectionProcedure ? (
+          <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
+            Осмотр: {inspectionProcedure}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 export default function AdminParserTradeCard() {
   const router = useRouter();
@@ -767,34 +837,7 @@ export default function AdminParserTradeCard() {
         </section>
       )}
 
-      {d.contact_details && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Контакты</h2>
-@@ -184,82 +789,108 @@ export default function AdminParserTradeCard() {
-              </div>
-            )}
-            {d.contact_details.email && (
-              <div>
-                <span className="muted">Email: </span>
-                <a className="link" href={`mailto:${d.contact_details.email}`}>
-                  {d.contact_details.email}
-                </a>
-              </div>
-            )}
-            {d.contact_details.address && (
-              <div>
-                <span className="muted">Адрес: </span>
-                {d.contact_details.address}
-              </div>
-            )}
-            {d.contact_details.inspection_procedure && (
-              <div className="muted" style={{ whiteSpace: 'pre-wrap' }}>
-                Осмотр: {d.contact_details.inspection_procedure}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+      <ContactSection contact={d.contact_details} />
 
       {Array.isArray(d.photos) && d.photos.length > 0 && (
         <section style={{ marginTop: 24 }}>
@@ -816,66 +859,3 @@ export default function AdminParserTradeCard() {
                 </div>
               );
             })}
-          </div>
-        </section>
-      )}
-
-      {Array.isArray(d.documents) && d.documents.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Документы</h2>
-          <ul style={{ paddingLeft: 18 }}>
-            {d.documents.map((doc, index) => (
-              <li key={index}>
-                <a href={doc.url} target="_blank" rel="noreferrer" className="link">
-                  {doc.name || doc.url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {Array.isArray(d.prices) && d.prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Периоды цен</h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Период</th>
-                  <th>Цена</th>
-                  <th>Задаток</th>
-                  <th>Примечание</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.prices.map((price, index) => (
-                  <tr key={index}>
-                    <td>
-                      {[price?.startDate || price?.start_date, price?.endDate || price?.end_date]
-                        .filter(Boolean)
-                        .join(' — ') || '—'}
-                    </td>
-                    <td>
-                      {fmtPrice(
-                        Number(price?.price ?? price?.currentPrice ?? price?.current_price) || null,
-                        d.currency || 'RUB',
-                      )}
-                    </td>
-                    <td>
-                      {fmtPrice(
-                        Number(price?.deposit ?? price?.depositAmount ?? price?.deposit_amount) || null,
-                        d.currency || 'RUB',
-                      )}
-                    </td>
-                    <td>{price?.note || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
