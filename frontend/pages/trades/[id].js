@@ -12,6 +12,45 @@ function fmtPrice(v, currency = 'RUB') {
   }
 }
 
+function normalizePhoto(photo) {
+  if (!photo) return null;
+  if (typeof photo === 'string') {
+    const trimmed = photo.trim();
+    return trimmed ? { url: trimmed } : null;
+  }
+  if (typeof photo === 'object') {
+    const url = photo.url || photo.href || photo.link || photo.download_url || photo.src || null;
+    if (!url) return null;
+    const title = photo.title || photo.name || photo.caption || null;
+    return title ? { url, title } : { url };
+  }
+  return null;
+}
+
+function collectPhotos(details) {
+  const list = [];
+  const seen = new Set();
+  const sources = [
+    details?.photos,
+    details?.lot_details?.photos,
+    details?.lot_details?.images,
+    details?.lot_details?.gallery,
+  ];
+
+  for (const source of sources) {
+    if (!Array.isArray(source)) continue;
+    for (const photo of source) {
+      const normalized = normalizePhoto(photo);
+      if (normalized && !seen.has(normalized.url)) {
+        seen.add(normalized.url);
+        list.push(normalized);
+      }
+    }
+  }
+
+  return list;
+}
+
 export async function getServerSideProps({ params }) {
   const r = await fetch(`${API}/api/listings/${params.id}`, { cache: 'no-store' });
   if (!r.ok) return { notFound: true };
@@ -21,6 +60,7 @@ export async function getServerSideProps({ params }) {
 
 export default function ListingPage({ item }) {
   const d = item?.details || {};
+  const photos = collectPhotos(d);
 
   return (
     <div className="container" style={{paddingTop:16, paddingBottom:32}}>
@@ -59,6 +99,26 @@ export default function ListingPage({ item }) {
         </div>
       )}
 
+      {photos.length > 0 && (
+        <section style={{marginTop:24}}>
+          <h2>Фотографии</h2>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12}}>
+            {photos.map((photo, index) => (
+              <div key={photo.url || index} className="panel" style={{padding:8}}>
+                <img
+                  src={photo.url}
+                  alt={photo.title || `Фото ${index + 1}`}
+                  style={{width:'100%', height:200, objectFit:'cover', borderRadius:8}}
+                />
+                <div className="muted" style={{marginTop:6, fontSize:12, wordBreak:'break-word'}}>
+                  {photo.title || photo.url}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Описание */}
       {(item?.description || d?.lot_details?.description) && (
         <section style={{marginTop:24}}>
@@ -84,70 +144,3 @@ export default function ListingPage({ item }) {
 
       {/* Контакты */}
       {d?.contact_details && (
-        <section style={{marginTop:24}}>
-          <h2>Контакты</h2>
-          <div className="panel" style={{display:'grid', gap:6}}>
-            {d.contact_details.organizer_name && <div><span className="muted">Организатор: </span>{d.contact_details.organizer_name}</div>}
-            {d.contact_details.organizer_inn && <div><span className="muted">ИНН организатора: </span>{d.contact_details.organizer_inn}</div>}
-            {d.contact_details.phone && <div><span className="muted">Телефон: </span>{d.contact_details.phone}</div>}
-            {d.contact_details.email && (
-              <div>
-                <span className="muted">Email: </span>
-                <a className="link" href={`mailto:${d.contact_details.email}`}>{d.contact_details.email}</a>
-              </div>
-            )}
-            {d.contact_details.address && <div><span className="muted">Адрес: </span>{d.contact_details.address}</div>}
-            {d.contact_details.inspection_procedure && (
-              <div className="muted" style={{whiteSpace:'pre-wrap'}}>
-                Осмотр: {d.contact_details.inspection_procedure}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Документы */}
-      {Array.isArray(d?.documents) && d.documents.length > 0 && (
-        <section style={{marginTop:24}}>
-          <h2>Документы</h2>
-          <ul style={{paddingLeft:18}}>
-            {d.documents.map((doc, i) => (
-              <li key={i}>
-                <a href={doc.url} target="_blank" rel="noreferrer" className="link">{doc.name || doc.url}</a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Периоды цен (Public Offer) */}
-      {Array.isArray(d?.prices) && d.prices.length > 0 && (
-        <section style={{marginTop:24}}>
-          <h2>Периоды цен</h2>
-          <div style={{overflowX:'auto'}}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Период</th>
-                  <th>Цена</th>
-                  <th>Задаток</th>
-                  <th>Примечание</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.prices.map((p, i) => (
-                  <tr key={i}>
-                    <td>{[p?.startDate || p?.start_date, p?.endDate || p?.end_date].filter(Boolean).join(' — ') || '—'}</td>
-                    <td>{fmtPrice(Number(p?.price ?? p?.currentPrice ?? p?.current_price) || null, item?.currency || 'RUB')}</td>
-                    <td>{fmtPrice(Number(p?.deposit ?? p?.depositAmount ?? p?.deposit_amount) || null, item?.currency || 'RUB')}</td>
-                    <td>{p?.note || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
