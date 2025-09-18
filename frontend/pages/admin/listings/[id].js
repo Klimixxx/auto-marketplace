@@ -282,7 +282,7 @@ export default function AdminParserTradeCard() {
       region: trade.region || '',
       brand: trade.brand || '',
       model: trade.model || '',
-@@ -659,63 +716,84 @@ export default function AdminParserTradeCard() {
+export default function AdminParserTradeCard() {
             <span className="muted">Категория</span>
             <input className="input" value={form.category} onChange={updateFormField('category')} />
           </label>
