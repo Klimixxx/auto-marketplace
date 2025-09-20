@@ -334,7 +334,7 @@ export default function ListingPage({ item }) {
 </div>
 
 <InspectionModal
-  listingId={item?.id}
+  listingId={Number(item?.id)}   // обязательно Number(...)
   isOpen={openInspection}
   onClose={() => setOpenInspection(false)}
 />
