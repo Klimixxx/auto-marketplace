@@ -84,10 +84,21 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
 }
 
 const S = {
-  backdrop:{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000},
-  modal:{background:'#fff',borderRadius:12,padding:16,width:'min(720px,92vw)',boxShadow:'0 10px 30px rgba(0,0,0,.2)'},
-  header:{display:'flex',alignItems:'center',justifyContent:'space-between'},
-  close:{fontSize:22,background:'transparent',border:'none',cursor:'pointer',lineHeight:1},
-  link:{display:'inline-block',border:'1px solid #ddd',padding:'6px 10px',borderRadius:8,textDecoration:'none'},
-  primary:{background:'#111',color:'#fff',border:'none',borderRadius:8,padding:'10px 16px',cursor:'pointer'}
+  backdrop: {
+    position:'fixed', inset:0, background:'rgba(2, 6, 12, 0.85)',
+    display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000
+  },
+  modal: {
+    background:'#0F1115', color:'#EDEDED',
+    border:'1px solid #232634',
+    borderRadius:12, padding:20,
+    width:'min(720px, 92vw)',
+    boxShadow:'0 10px 30px rgba(0,0,0,.45)'
+  },
+  header: { display:'flex', alignItems:'center', justifyContent:'space-between' },
+  close: { fontSize:22, background:'transparent', color:'#A0A6B0', border:'none', cursor:'pointer', lineHeight:1 },
+  link: { display:'inline-block', border:'1px solid #2A2F3B', color:'#EDEDED',
+          padding:'8px 12px', borderRadius:8, textDecoration:'none', background:'#141823' },
+  primary: { background:'#1E90FF', color:'#fff', border:'none', borderRadius:8, padding:'10px 16px', cursor:'pointer' }
 };
+
