@@ -50,7 +50,7 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
 
         <div style={{marginTop:12}}>
           <b>Стоимость услуги:</b> 12 000 ₽
-          <div style={{color:'#666'}}>С подпиской <b>PRO</b> действует <b>50%</b> скидка на любой осмотр</div>
+          <div style={{color:'#A0A6B0'}}>С подпиской <b>PRO</b> действует <b>50%</b> скидка на любой осмотр</div>
         </div>
 
         <div style={{marginTop:12}}>
