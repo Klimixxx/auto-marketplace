@@ -75,6 +75,7 @@ export default function AdminLayout({ me, title, children }) {
               <NavLink href="/admin/users">Пользователи</NavLink>
               <NavLink href="/admin/admins">Администраторы</NavLink>
               <NavLink href="/admin/listings">Объявления</NavLink>
+              <NavLink href="/admin/inspections">Осмотры</NavLink>
             </nav>
           </div>
         </aside>
