@@ -44,7 +44,7 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
     <div style={S.backdrop}>
       <div style={S.modal}>
         <div style={S.header}>
-          <h3 style={{margin:0}}>Заказать отчет по осмотру данной машины</h3>
+          <h3 style={{margin:0, color:'#FFFFFF'}}>Заказать отчет по осмотру данной машины</h3>
           <button onClick={onClose} style={S.close}>×</button>
         </div>
 
