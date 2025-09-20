@@ -8,26 +8,27 @@ const BASE_PRICE = 12000;
 // Создать заказ на осмотр
 router.post('/', async (req, res) => {
   try {
-    // ВНИМАНИЕ: этот роут должен быть навешан под app.use('/api/inspections', auth, router)
-    // тогда req.user будет заполнен (см. backend/index.js)
     const userId = req.user?.sub;
-    const listingId = Number(req.body?.listingId);
     if (!userId) return res.status(401).json({ error: 'No user' });
-    if (!listingId) return res.status(400).json({ error: 'listingId required' });
+
+    // мягкий парсинг listingId
+    const rawId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
+    const listingId = Number.parseInt(rawId, 10);
+    if (!Number.isFinite(listingId) || listingId <= 0) {
+      return res.status(400).json({ error: 'listingId required' });
+    }
 
     // Проверим, что объявление существует
     const l = await query('SELECT id, title FROM listings WHERE id=$1', [listingId]);
     if (!l.rows[0]) return res.status(404).json({ error: 'Listing not found' });
 
     // Получим пользователя, баланс и статус подписки
+    await query('BEGIN');
     const u = await query(
       `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
          FROM users WHERE id=$1 FOR UPDATE`,
       [userId]
     );
-
-    // Чтобы FOR UPDATE сработал, оборачиваем всё в транзакцию
-    await query('BEGIN');
     const user = u.rows[0];
     if (!user) { await query('ROLLBACK'); return res.status(404).json({ error: 'User not found' }); }
 
