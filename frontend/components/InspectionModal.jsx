@@ -1,6 +1,12 @@
 // frontend/components/InspectionModal.jsx
 import { useState } from 'react';
+import { apiFetch } from '../lib/api';
 const API = process.env.NEXT_PUBLIC_API_BASE || '';
+
+const res = await apiFetch('/api/inspections', {
+  method: 'POST',
+  body: { listingId: Number(listingId) }  // гарантируем число
+});
 
 export default function InspectionModal({ listingId, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
