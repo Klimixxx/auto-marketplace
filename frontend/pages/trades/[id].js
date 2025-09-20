@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { useState } from 'react';
+import InspectionModal from '../../components/InspectionModal';
+
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -282,6 +285,18 @@ function KeyValueList({ entries }) {
 
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
+    const [openInspection, setOpenInspection] = useState(false);
+
+  function handleOrderClick() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      const next = `/trades/${item?.id}`;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      return;
+    }
+    setOpenInspection(true);
+  }
+
   const photos = collectPhotos(details);
   const lotEntries = makeKeyValueEntries(details?.lot_details);
   const contactEntries = makeKeyValueEntries(details?.contact_details);
@@ -314,6 +329,17 @@ export default function ListingPage({ item }) {
           <div className="big">{fmtPrice(item?.current_price, currency)}</div>
         </div>
       </div>
+<div style={{ marginTop: 12 }}>
+  <button onClick={handleOrderClick} className="btn">Заказать осмотр</button>
+</div>
+
+<InspectionModal
+  listingId={item?.id}
+  isOpen={openInspection}
+  onClose={() => setOpenInspection(false)}
+/>
+
+
 
       {(item?.status || item?.end_date) && (
         <div style={{ marginTop: 8, color: '#9aa6b2' }}>
