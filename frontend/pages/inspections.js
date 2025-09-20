@@ -1,6 +1,6 @@
-// pages/inspections.js
+// frontend/pages/inspections.js
 import { useEffect, useState } from 'react';
-const API = process.env.NEXT_PUBLIC_API_BASE || '';
+import { apiFetch, getToken } from '../lib/api';
 
 export default function Inspections() {
   const [items, setItems] = useState([]);
@@ -8,10 +8,13 @@ export default function Inspections() {
 
   useEffect(() => {
     (async () => {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) { window.location.href = '/login?next=/inspections'; return; }
-      const res = await fetch(`${API}/api/inspections/me`, { headers: { Authorization: 'Bearer ' + token } });
-      if (!res.ok) { window.location.href = '/login?next=/inspections'; return; }
+
+      const res = await apiFetch('/api/inspections/me'); // токен подставится сам
+      if (res.status === 401) { window.location.href = '/login?next=/inspections'; return; }
+      if (!res.ok) { console.error('Failed to load inspections:', res.status); setLoading(false); return; }
+
       const data = await res.json();
       setItems(data?.items || []);
       setLoading(false);
@@ -38,7 +41,11 @@ export default function Inspections() {
             {items.map(it => (
               <tr key={it.id}>
                 <td style={td}>{new Date(it.created_at).toLocaleString('ru-RU')}</td>
-                <td style={td}><a href={`/trades/${it.listing_id}`} target="_blank" rel="noreferrer">{it.listing_title || it.listing_id}</a></td>
+                <td style={td}>
+                  <a href={`/trades/${it.listing_id}`} target="_blank" rel="noreferrer">
+                    {it.listing_title || it.listing_id}
+                  </a>
+                </td>
                 <td style={td}>{it.status}</td>
                 <td style={td}>{(it.final_amount || 0).toLocaleString('ru-RU')} ₽</td>
                 <td style={td}>
@@ -54,5 +61,6 @@ export default function Inspections() {
     </div>
   );
 }
+
 const th = { textAlign:'left', borderBottom:'1px solid #eee', padding:'8px' };
 const td = { borderBottom:'1px solid #f3f3f3', padding:'8px' };
