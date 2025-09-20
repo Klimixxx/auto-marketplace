@@ -11,8 +11,6 @@ import { fileURLToPath } from 'url';
 import adminParserRouter from './routes/adminParser.js';
 import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,8 +53,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 // ==== МИГРАЦИИ (выполнить все .sql из /backend/migrations по алфавиту) ====
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 async function runMigrations() {
   try {
