@@ -9,6 +9,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import adminParserRouter from './routes/adminParser.js';
+import inspectionsRouter from './routes/inspections.js';
+import adminInspectionsRouter from './routes/adminInspections.js';
+
 
 
 dotenv.config();
@@ -42,6 +45,8 @@ async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // ==== МИГРАЦИИ (выполнить все .sql из /backend/migrations по алфавиту) ====
 const __filename = fileURLToPath(import.meta.url);
@@ -471,6 +476,9 @@ app.patch('/api/me', auth, async (req, res) => {
 });
 
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
+app.use('/api/inspections', auth, inspectionsRouter);
+app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
+
 
 
 // === Admin API ===
