@@ -103,7 +103,10 @@ export default function Login() {
         throw new Error(data.error || 'Ошибка проверки кода');
       }
       localStorage.setItem('token', data.token);
-      window.location.href = '/';
+      const params = new URLSearchParams(window.location.search);
+const next = params.get('next') || '/';
+window.location.href = next;
+
     } catch (e) {
       setErr(e.message || 'Ошибка проверки кода');
     } finally {
