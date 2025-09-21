@@ -67,16 +67,12 @@ function formatValue(value) {
       if (item == null) return '';
       if (typeof item === 'string') return item;
       if (typeof item === 'number' || typeof item === 'boolean') return String(item);
-      if (typeof item === 'object') {
-        try { return JSON.stringify(item); } catch { return String(item); }
-      }
+      if (typeof item === 'object') { try { return JSON.stringify(item); } catch { return String(item); } }
       return String(item);
     }).filter(Boolean);
     return mapped.length ? mapped.join(', ') : '—';
   }
-  if (typeof value === 'object') {
-    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
-  }
+  if (typeof value === 'object') { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
   return String(value);
 }
 
@@ -123,18 +119,12 @@ function hasData(value) {
 }
 
 const PRICE_HEADER_STYLE = {
-  textAlign: 'left',
-  padding: '8px 10px',
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#9aa6b2',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
+  textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 600,
+  color: '#9aa6b2', borderBottom: '1px solid rgba(255,255,255,0.08)',
 };
 const PRICE_CELL_STYLE = {
-  padding: '8px 10px',
-  borderBottom: '1px solid rgba(255,255,255,0.05)',
-  verticalAlign: 'top',
-  fontSize: 13,
+  padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)',
+  verticalAlign: 'top', fontSize: 13,
 };
 
 export async function getServerSideProps({ params }) {
@@ -186,7 +176,7 @@ export default function ListingPage({ item }) {
   const router = useRouter();
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
 
-  // Безопасный числовой ID лота (на SSR берём из item.id)
+  // ЕДИНСТВЕННЫЙ ID, которым мы пользуемся в файле:
   const listingIdNum = Number(item?.id || 0);
 
   const [openInspection, setOpenInspection] = useState(false);
