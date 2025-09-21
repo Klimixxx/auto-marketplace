@@ -12,10 +12,17 @@ export default function AdminInspectionsList() {
       const user = await me.json();
       if (user?.role !== 'admin') { location.href = '/'; return; }
 
-      const res = await fetch(`${API}/api/admin/inspections`, { headers:{ Authorization:'Bearer '+token } });
-      if (!res.ok) { alert('Нет доступа'); location.href = '/'; return; }
-      const data = await res.json();
-      setItems(data?.items || []);
+      try {
+        const res = await fetch(`${API}/api/admin/inspections`, { headers:{ Authorization:'Bearer '+token } });
+        if (res.status === 403) { alert('Нет доступа'); location.href = '/'; return; }
+        if (!res.ok) { throw new Error('failed'); }
+        const data = await res.json();
+        setItems(data?.items || []);
+      } catch (err) {
+        console.error('Failed to load admin inspections', err);
+        alert('Не удалось загрузить заказы на осмотр. Попробуйте позже.');
+        setItems([]);
+      }
     })();
   }, []);
 
