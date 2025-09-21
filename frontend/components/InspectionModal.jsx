@@ -48,7 +48,6 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
-        const next = `/trades/${Number(listingId) || ''}`;
         const nextId = listingId != null ? String(listingId).trim() : '';
         const next = `/trades/${nextId || ''}`;
         window.location.href = `/login?next=${encodeURIComponent(next)}`;
@@ -62,7 +61,6 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
       const res = await fetch(`${API}/api/inspections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ listingId: Number(listingId) })
         body: JSON.stringify({ listingId: normalizedId })
       });
       if (!res.ok) {
@@ -74,7 +72,6 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
         if (res.status === 400) { setErr('Неверные данные запроса'); return; }
         if (res.status === 404) { setErr('Объявление не найдено'); return; }
         if (res.status === 401) {
-          const next = `/trades/${Number(listingId) || ''}`;
           const nextId = listingId != null ? String(listingId).trim() : '';
           const next = `/trades/${nextId || ''}`;
           window.location.href = `/login?next=${encodeURIComponent(next)}`;
