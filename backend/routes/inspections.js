@@ -5,6 +5,34 @@ import { query } from '../db.js';
 const router = express.Router();
 const BASE_PRICE = 12000;
 
+function normalizeListingId(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    const truncated = Math.trunc(value);
+    return truncated > 0 ? truncated : null;
+  }
+
+  const str = String(value).trim();
+  if (!str) return null;
+
+  const asNumber = Number(str);
+  if (Number.isFinite(asNumber) && asNumber > 0) {
+    return Math.trunc(asNumber);
+  }
+
+  const match = str.match(/\d+/);
+  if (match) {
+    const parsed = Number.parseInt(match[0], 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+
 // Создать заказ на осмотр
 router.post('/', async (req, res) => {
   try {
@@ -13,8 +41,8 @@ router.post('/', async (req, res) => {
 
     // мягкий парсинг listingId
     const rawId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
-    const listingId = Number.parseInt(rawId, 10);
-    if (!Number.isFinite(listingId) || listingId <= 0) {
+    const listingId = normalizeListingId(rawId);
+    if (!listingId) {
       return res.status(400).json({ error: 'listingId required' });
     }
 
