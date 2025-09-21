@@ -274,3 +274,137 @@ export default function ListingPage({ item }) {
             {activePhoto ? (
               <div className="detail-gallery__main">
                 <img src={activePhoto.url} alt={activePhoto.title || item?.title || 'Фотография лота'} />
+              </div>
+            ) : (
+              <div className="panel" style={{ textAlign: 'center' }}>
+                <div className="big">Фотографии отсутствуют</div>
+                <div className="muted">Организатор не загрузил изображения для этого лота.</div>
+              </div>
+            )}
+            {photos.length > 1 && (
+              <div className="detail-gallery__thumbs">
+                {photos.map((photo, index) => (
+                  <button
+                    key={photo.url || index}
+                    type="button"
+                    className={`detail-gallery__thumb${index === activePhotoIndex ? ' is-active' : ''}`}
+                    onClick={() => setActivePhotoIndex(index)}
+                  >
+                    <img src={photo.url} alt={photo.title || `Фото ${index + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {(item?.description || details?.lot_details?.description) && (
+            <section className="detail-section">
+              <h2>Описание</h2>
+              <div className="panel" style={{ whiteSpace: 'pre-wrap' }}>
+                {item?.description || details?.lot_details?.description}
+              </div>
+            </section>
+          )}
+
+          {lotEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Характеристики</h2>
+              <KeyValueGrid entries={lotEntries} />
+            </section>
+          )}
+
+          {prices.length > 0 && (
+            <section className="detail-section">
+              <h2>История цен</h2>
+              <div className="panel table-scroll" style={{ padding: 0 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={PRICE_HEADER_STYLE}>Этап</th>
+                      <th style={PRICE_HEADER_STYLE}>Цена</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата</th>
+                      <th style={PRICE_HEADER_STYLE}>Комментарий</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prices.map((entry, index) => {
+                      const label = entry.stage || entry.stage_name || entry.stageName || entry.round || entry.type || entry.name || entry.title || `Запись ${index + 1}`;
+                      const numericPrice = parseNumberValue(
+                        entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount
+                      );
+                      const priceText = numericPrice != null
+                        ? fmtPrice(numericPrice, currency)
+                        : formatValue(
+                          entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount ?? '—'
+                        );
+                      const dateValue = entry.date || entry.date_start || entry.dateStart || entry.date_finish || entry.dateFinish || entry.updated_at || entry.updatedAt;
+                      const comment = entry.comment || entry.description || entry.info || entry.status || entry.note || entry.result || null;
+
+                      return (
+                        <tr key={entry.id || `${label}-${index}`}>
+                          <td style={PRICE_CELL_STYLE}>{label}</td>
+                          <td style={PRICE_CELL_STYLE}>{priceText}</td>
+                          <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
+                          <td style={PRICE_CELL_STYLE}>{comment ? <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span> : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {documents.length > 0 && (
+            <section className="detail-section">
+              <h2>Документы</h2>
+              <div className="panel" style={{ display: 'grid', gap: 12 }}>
+                {documents.map((doc, index) => {
+                  const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
+                  const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
+                  const description = doc?.description || doc?.comment || doc?.note || null;
+                  const date = doc?.date || doc?.created_at || doc?.updated_at || null;
+
+                  return (
+                    <div key={url || `${title}-${index}`}>
+                      {url ? <a href={url} target="_blank" rel="noreferrer" className="link">{title}</a> : <div>{title}</div>}
+                      {date ? <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Дата: {formatDate(date)}</div> : null}
+                      {description ? <div className="muted" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{description}</div> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {hasData(fedresursMeta) && (
+            <section className="detail-section">
+              <h2>Дополнительные данные</h2>
+              <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(fedresursMeta, null, 2)}
+                </pre>
+              </div>
+            </section>
+          )}
+        </div>
+
+        <aside className="detail-aside">
+          {contactEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Контакты</h2>
+              <KeyValueList entries={contactEntries} />
+            </section>
+          )}
+
+          {debtorEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Данные должника</h2>
+              <KeyValueList entries={debtorEntries} />
+            </section>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
