@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 function formatPrice(value, currency = 'RUB') {
   try {
     if (value == null || value === '') return null;
@@ -32,53 +34,143 @@ function getCoverPhoto(listing) {
   return null;
 }
 
-export default function ListingCard({ l, onFav, fav }) {
+function pickDetailValue(listing, keys = []) {
+  if (!listing || !keys.length) return null;
+  const sources = [listing, listing?.details, listing?.details?.lot_details];
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    for (const key of keys) {
+      const value = source[key];
+      if (value != null && value !== '') return value;
+    }
+  }
+  return null;
+}
+
+function normalizeNumber(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.,-]/g, '').replace(',', '.');
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatMileage(value) {
+  const numeric = normalizeNumber(value);
+  if (numeric == null) return null;
+  const rounded = Math.round(numeric);
+  return `${new Intl.NumberFormat('ru-RU').format(rounded)} км`;
+}
+
+function formatEngine(value) {
+  if (value == null || value === '') return null;
+  const numeric = normalizeNumber(value);
+  if (numeric != null) {
+    const liters = numeric > 25 ? numeric / 1000 : numeric;
+    const normalized = Math.max(liters, 0.1);
+    const display = Math.round(normalized * 10) / 10;
+    return `${String(display).replace('.', ',')} л`;
+  }
+  const str = String(value).trim();
+  return str ? str : null;
+}
+
+export default function ListingCard({ l, onFav, fav, detailHref, sourceHref }) {
   const cover = getCoverPhoto(l);
   const price = l.current_price ?? l.start_price;
-  const priceLabel = formatPrice(price, l.currency || 'RUB');
+  const priceLabel = formatPrice(price, l.currency || 'RUB') || 'Цена уточняется';
   const description = l.description || l.details?.lot_details?.description || '';
-  const shortDescription = description.length > 180 ? `${description.slice(0, 177)}…` : description;
+  const shortDescription = description.length > 220 ? `${description.slice(0, 217)}…` : description;
+
+  const metaSet = new Set();
+  const metaItems = [];
+  const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue']);
+  if (year && !metaSet.has(year)) { metaSet.add(year); metaItems.push(`${year} г.`); }
+  const mileage = formatMileage(pickDetailValue(l, ['mileage', 'run', 'probeg', 'mileage_km']));
+  if (mileage && !metaSet.has(mileage)) { metaSet.add(mileage); metaItems.push(mileage); }
+  const engine = formatEngine(pickDetailValue(l, ['engine_volume', 'engine_volume_l', 'engine', 'engine_volume_liters']));
+  if (engine && !metaSet.has(engine)) { metaSet.add(engine); metaItems.push(engine); }
+  const transmission = pickDetailValue(l, ['transmission', 'gearbox', 'kpp']);
+  if (transmission) {
+    const text = String(transmission);
+    if (text && !metaSet.has(text)) { metaSet.add(text); metaItems.push(text); }
+  }
+
+  const location = l.region || pickDetailValue(l, ['city', 'location']);
+  const assetType = l.asset_type || pickDetailValue(l, ['assetType', 'type']);
+  const rawBadge = l.status || l.stage || l.stage_name || assetType || 'Лот';
+  const badge = rawBadge == null ? 'Лот' : String(rawBadge);
+  const eyebrowParts = [assetType, location].filter(Boolean);
+  const eyebrow = eyebrowParts.join(' • ');
 
   return (
-    <div className="card">
-      {cover && (
-        <div style={{ marginBottom: 12, borderRadius: 8, overflow: 'hidden' }}>
-          <img
-            src={cover}
-            alt={l.title || 'Объявление'}
-            style={{ width: '100%', height: 160, objectFit: 'cover' }}
-          />
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ flex: '1 1 auto' }}>
-          <div style={{ fontWeight: 600 }}>{l.title}</div>
-          <div className="badge" style={{ marginTop: 8 }}>{l.asset_type || '—'}</div>
-        </div>
-        <button className="button" onClick={onFav}>
-          {fav ? '★ В избранном' : '☆ В избранное'}
-        </button>
+    <article className="listing-card">
+      <div className="listing-card__media">
+        {cover ? (
+          <img src={cover} alt={l.title || 'Объявление'} />
+        ) : (
+          <div className="listing-card__placeholder" aria-hidden="true">🚗</div>
+        )}
+        {badge ? <div className="listing-card__badge">{badge}</div> : null}
       </div>
 
-      <div style={{ marginTop: 8, color: 'var(--muted)' }}>
-        Регион: {l.region || '—'}
-        {priceLabel ? ` • Цена: ${priceLabel}` : ''}
+      <div className="listing-card__body">
+        {eyebrow ? <div className="listing-card__eyebrow">{eyebrow}</div> : null}
+        <h3 className="listing-card__title">{l.title || 'Лот'}</h3>
+        <div className="listing-card__price-row">
+          <div className="listing-card__price">{priceLabel}</div>
+          {onFav ? (
+            <button
+              type="button"
+              className={`bookmark-button${fav ? ' is-active' : ''}`}
+              onClick={onFav}
+            >
+              <span aria-hidden="true">{fav ? '★' : '☆'}</span>
+              {fav ? 'В избранном' : 'В избранное'}
+            </button>
+          ) : null}
+        </div>
+
+        {metaItems.length ? (
+          <div className="listing-card__meta">
+            {metaItems.slice(0, 3).map((item, index) => (
+              <span key={`${item}-${index}`} className="chip">{item}</span>
+            ))}
+          </div>
+        ) : null}
+
+        {shortDescription && (
+          <div className="listing-card__description" style={{ whiteSpace: 'pre-line' }}>
+            {shortDescription}
+          </div>
+        )}
       </div>
 
-      {shortDescription && (
-        <div style={{ marginTop: 8, fontSize: 14, color: '#333', whiteSpace: 'pre-line' }}>
-          {shortDescription}
+      {(detailHref || sourceHref || l.source_url) && (
+        <div className="listing-card__footer">
+          {detailHref ? (
+            <Link href={detailHref} className="button button-small">
+              Подробнее
+            </Link>
+          ) : null}
+          {(sourceHref || l.source_url) ? (
+            <a
+              href={sourceHref || l.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="button button-small button-outline"
+            >
+              Источник
+            </a>
+          ) : null}
         </div>
       )}
-
-      {l.source_url && (
-        <div style={{ marginTop: 12 }}>
-          <a href={l.source_url} target="_blank" rel="noreferrer" className="link">
-            Открыть источник →
-          </a>
-        </div>
-      )}
-    </div>
+    </article>
   );
 }
