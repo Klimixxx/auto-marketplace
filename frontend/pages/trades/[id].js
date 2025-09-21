@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import InspectionModal from '../../components/InspectionModal';
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
@@ -26,74 +25,7 @@ function fmtPrice(value, currency = 'RUB') {
   }
 }
 
-function normalizePhoto(photo) {
-  if (!photo) return null;
-  if (typeof photo === 'string') {
-    const trimmed = photo.trim();
-    return trimmed ? { url: trimmed } : null;
-  }
-  if (typeof photo === 'object') {
-    const url = photo.url || photo.href || photo.link || photo.download_url || photo.src || null;
-    if (!url) return null;
-    const title = photo.title || photo.name || photo.caption || null;
-    return title ? { url, title } : { url };
-  }
-  return null;
-}
-
-function collectPhotos(details) {
-  if (!details || typeof details !== 'object') return [];
-  const list = [];
-  const seen = new Set();
-  const sources = [details.photos, details.lot_details?.photos, details.lot_details?.images, details.lot_details?.gallery];
-  for (const source of sources) {
-    if (!Array.isArray(source)) continue;
-    for (const photo of source) {
-      const normalized = normalizePhoto(photo);
-      if (normalized && normalized.url && !seen.has(normalized.url)) {
-        seen.add(normalized.url);
-        list.push(normalized);
-      }
-    }
-  }
-  return list;
-}
-
-function formatValue(value) {
-  if (value == null || value === '') return '—';
-  if (Array.isArray(value)) {
-    if (!value.length) return '—';
-    const mapped = value.map((item) => {
-      if (item == null) return '';
-      if (typeof item === 'string') return item;
-      if (typeof item === 'number' || typeof item === 'boolean') return String(item);
-      if (typeof item === 'object') { try { return JSON.stringify(item); } catch { return String(item); } }
-      return String(item);
-    }).filter(Boolean);
-    return mapped.length ? mapped.join(', ') : '—';
-  }
-  if (typeof value === 'object') { try { return JSON.stringify(value, null, 2); } catch { return String(value); } }
-  return String(value);
-}
-
-function makeKeyValueEntries(source) {
-  if (!source) return [];
-  const entries = [];
-  if (Array.isArray(source)) {
-    source.forEach((item, index) => {
-      if (item && typeof item === 'object' && !Array.isArray(item)) {
-        const label = item.label || item.title || item.name || item.type || item.key || item.stage || `#${index + 1}`;
-        const value = 'value' in item ? item.value : item;
-        entries.push({ key: label, value });
-      } else {
-        entries.push({ key: `#${index + 1}`, value: item });
-      }
-    });
-  } else if (typeof source === 'object') {
-    Object.entries(source).forEach(([key, value]) => entries.push({ key, value }));
-  } else {
-    entries.push({ key: 'Значение', value: source });
-  }
+@@ -97,272 +96,351 @@ function makeKeyValueEntries(source) {
   return entries.map(({ key, value }, index) => ({ key: key || `#${index + 1}`, value: formatValue(value) }));
 }
 
@@ -119,12 +51,21 @@ function hasData(value) {
 }
 
 const PRICE_HEADER_STYLE = {
-  textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 600,
-  color: '#9aa6b2', borderBottom: '1px solid rgba(255,255,255,0.08)',
+  textAlign: 'left',
+  padding: '12px 16px',
+  fontSize: 12,
+  fontWeight: 600,
+  color: '#6b7a90',
+  borderBottom: '1px solid #d6e2f5',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 };
 const PRICE_CELL_STYLE = {
-  padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-  verticalAlign: 'top', fontSize: 13,
+  padding: '12px 16px',
+  borderBottom: '1px solid #e3ecf9',
+  verticalAlign: 'top',
+  fontSize: 14,
+  color: '#1f2933',
 };
 
 export async function getServerSideProps({ params }) {
@@ -173,13 +114,13 @@ function KeyValueList({ entries }) {
 }
 
 export default function ListingPage({ item }) {
-  const router = useRouter();
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
 
   // ЕДИНСТВЕННЫЙ ID, которым мы пользуемся в файле:
   const listingIdNum = Number(item?.id || 0);
 
   const [openInspection, setOpenInspection] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
   function handleOrderClick() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -192,6 +133,10 @@ export default function ListingPage({ item }) {
   }
 
   const photos = collectPhotos(details);
+  useEffect(() => {
+    setActivePhotoIndex(0);
+  }, [item?.id, photos.length]);
+  const activePhoto = photos[activePhotoIndex] || photos[0] || null;
   const lotEntries = makeKeyValueEntries(details?.lot_details);
   const contactEntries = makeKeyValueEntries(details?.contact_details);
   const debtorEntries = makeKeyValueEntries(details?.debtor_details);
@@ -200,30 +145,89 @@ export default function ListingPage({ item }) {
   const fedresursMeta = details?.fedresurs_meta;
   const currency = item?.currency || 'RUB';
 
+  const lotDetails = details?.lot_details && typeof details.lot_details === 'object' ? details.lot_details : {};
+  const heroChips = [];
+  const heroChipSet = new Set();
+  const addChip = (value) => {
+    if (!value && value !== 0) return;
+    const text = String(value).trim();
+    if (!text || heroChipSet.has(text)) return;
+    heroChipSet.add(text);
+    heroChips.push(text);
+  };
+  addChip(item?.region);
+  addChip(item?.asset_type);
+  if (item?.lot_number) addChip(`Лот № ${item.lot_number}`);
+  const yearValue = lotDetails?.year || lotDetails?.production_year || lotDetails?.manufacture_year || item?.year;
+  if (yearValue) addChip(`Год выпуска ${yearValue}`);
+  const mileageValue = lotDetails?.mileage || lotDetails?.probeg || lotDetails?.run || item?.mileage;
+  if (mileageValue) {
+    const numericMileage = parseNumberValue(mileageValue);
+    const formattedMileage = numericMileage != null
+      ? `${new Intl.NumberFormat('ru-RU').format(Math.round(numericMileage))} км`
+      : formatValue(mileageValue);
+    addChip(`Пробег ${formattedMileage}`);
+  }
+  const vinValue = lotDetails?.vin || lotDetails?.VIN || item?.vin;
+  if (vinValue) addChip(`VIN ${vinValue}`);
+
   return (
-    <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-      <div style={{ marginBottom: 12 }}>
+    <div className="container detail-page">
+      <div className="back-link">
         <Link href="/trades" className="link">← Назад к списку</Link>
       </div>
 
-      <h1 style={{ marginBottom: 4 }}>{item?.title || 'Лот'}</h1>
-      <div style={{ color: '#9aa6b2', marginBottom: 12 }}>
-        {(item?.region || 'Регион не указан')} • {(item?.asset_type || 'тип имущества')}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
-        <div className="panel">
-          <div className="muted">Стартовая цена</div>
-          <div className="big">{fmtPrice(item?.start_price, currency)}</div>
+      <div className="detail-hero">
+        <div className="detail-hero__info">
+          <div className="eyebrow">{item?.asset_type || 'Объявление'}</div>
+          <h1 className="detail-hero__title">{item?.title || 'Лот'}</h1>
+          {heroChips.length ? (
+            <div className="detail-hero__meta">
+              {heroChips.slice(0, 5).map((chip, index) => (
+                <span key={`${chip}-${index}`} className="chip">{chip}</span>
+              ))}
+            </div>
+          ) : null}
+          {(item?.description || details?.lot_details?.description) && (
+            <div className="muted" style={{ whiteSpace: 'pre-line' }}>
+              {(item?.description || details?.lot_details?.description || '').slice(0, 260)}
+              {(item?.description || details?.lot_details?.description || '').length > 260 ? '…' : ''}
+            </div>
+          )}
         </div>
-        <div className="panel">
-          <div className="muted">Текущая цена</div>
-          <div className="big">{fmtPrice(item?.current_price, currency)}</div>
-        </div>
-      </div>
 
-      <div style={{ marginTop: 12 }}>
-        <button onClick={handleOrderClick} className="btn">Заказать осмотр</button>
+        <aside className="detail-summary-card">
+          <div className="detail-summary__prices">
+            <div className="detail-summary__price">
+              <div className="detail-summary__price-label">Стартовая цена</div>
+              <div className="detail-summary__price-value">{fmtPrice(item?.start_price, currency)}</div>
+            </div>
+            <div className="detail-summary__price">
+              <div className="detail-summary__price-label">Текущая цена</div>
+              <div className="detail-summary__price-value">{fmtPrice(item?.current_price, currency)}</div>
+            </div>
+          </div>
+
+          {(item?.status || item?.end_date) && (
+            <div className="detail-summary__status">
+              <div><strong>Статус:</strong> {item?.status ?? '—'}</div>
+              {item?.end_date ? <div><strong>Дата окончания:</strong> {formatDate(item.end_date)}</div> : null}
+            </div>
+          )}
+
+          <div className="detail-summary__actions">
+            <button onClick={handleOrderClick} className="button">Заказать осмотр</button>
+            {item?.source_url ? (
+              <a href={item.source_url} target="_blank" rel="noreferrer" className="button button-outline">
+                Перейти к источнику
+              </a>
+            ) : null}
+          </div>
+
+          <div className="muted" style={{ fontSize: 13 }}>
+            ID объявления: {item?.id}
+          </div>
+        </aside>
       </div>
 
       <InspectionModal
@@ -232,137 +236,144 @@ export default function ListingPage({ item }) {
         onClose={() => setOpenInspection(false)}
       />
 
-      {(item?.status || item?.end_date) && (
-        <div style={{ marginTop: 8, color: '#9aa6b2' }}>
-          Статус: {item?.status ?? '—'}
-          {item?.end_date ? ` • Окончание: ${formatDate(item.end_date)}` : null}
-        </div>
-      )}
-
-      {item?.source_url && (
-        <div style={{ marginTop: 8 }}>
-          <a href={item.source_url} target="_blank" rel="noreferrer" className="link">Перейти к источнику</a>
-        </div>
-      )}
-
-      {photos.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Фотографии</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-            {photos.map((photo, index) => (
-              <div key={photo.url || index} className="panel" style={{ padding: 8 }}>
-                <img src={photo.url} alt={photo.title || `Фото ${index + 1}`} style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 8 }} />
-                <div className="muted" style={{ marginTop: 6, fontSize: 12, wordBreak: 'break-word' }}>
-                  {photo.title || photo.url}
-                </div>
+      <div className="detail-layout">
+        <div className="detail-main">
+          <section className="detail-section detail-gallery">
+            <h2>Фотографии</h2>
+            {activePhoto ? (
+              <div className="detail-gallery__main">
+                <img src={activePhoto.url} alt={activePhoto.title || item?.title || 'Фотография лота'} />
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+            ) : (
+              <div className="panel" style={{ textAlign: 'center' }}>
+                <div className="big">Фотографии отсутствуют</div>
+                <div className="muted">Организатор не загрузил изображения для этого лота.</div>
+              </div>
+            )}
+            {photos.length > 1 && (
+              <div className="detail-gallery__thumbs">
+                {photos.map((photo, index) => (
+                  <button
+                    key={photo.url || index}
+                    type="button"
+                    className={`detail-gallery__thumb${index === activePhotoIndex ? ' is-active' : ''}`}
+                    onClick={() => setActivePhotoIndex(index)}
+                  >
+                    <img src={photo.url} alt={photo.title || `Фото ${index + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
 
-      {(item?.description || details?.lot_details?.description) && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Описание</h2>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{item?.description || details?.lot_details?.description}</div>
-        </section>
-      )}
+          {(item?.description || details?.lot_details?.description) && (
+            <section className="detail-section">
+              <h2>Описание</h2>
+              <div className="panel" style={{ whiteSpace: 'pre-wrap' }}>
+                {item?.description || details?.lot_details?.description}
+              </div>
+            </section>
+          )}
 
-      {lotEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Характеристики</h2>
-          <KeyValueGrid entries={lotEntries} />
-        </section>
-      )}
+          {lotEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Характеристики</h2>
+              <KeyValueGrid entries={lotEntries} />
+            </section>
+          )}
 
-      {contactEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Контакты</h2>
-          <KeyValueList entries={contactEntries} />
-        </section>
-      )}
+          {prices.length > 0 && (
+            <section className="detail-section">
+              <h2>История цен</h2>
+              <div className="panel table-scroll" style={{ padding: 0 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={PRICE_HEADER_STYLE}>Этап</th>
+                      <th style={PRICE_HEADER_STYLE}>Цена</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата</th>
+                      <th style={PRICE_HEADER_STYLE}>Комментарий</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prices.map((entry, index) => {
+                      const label = entry.stage || entry.stage_name || entry.stageName || entry.round || entry.type || entry.name || entry.title || `Запись ${index + 1}`;
+                      const numericPrice = parseNumberValue(
+                        entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount
+                      );
+                      const priceText = numericPrice != null
+                        ? fmtPrice(numericPrice, currency)
+                        : formatValue(
+                          entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount ?? '—'
+                        );
+                      const dateValue = entry.date || entry.date_start || entry.dateStart || entry.date_finish || entry.dateFinish || entry.updated_at || entry.updatedAt;
+                      const comment = entry.comment || entry.description || entry.info || entry.status || entry.note || entry.result || null;
 
-      {debtorEntries.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Данные должника</h2>
-          <KeyValueList entries={debtorEntries} />
-        </section>
-      )}
+                      return (
+                        <tr key={entry.id || `${label}-${index}`}>
+                          <td style={PRICE_CELL_STYLE}>{label}</td>
+                          <td style={PRICE_CELL_STYLE}>{priceText}</td>
+                          <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
+                          <td style={PRICE_CELL_STYLE}>{comment ? <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span> : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
-      {prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>История цен</h2>
-          <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-              <thead>
-                <tr>
-                  <th style={PRICE_HEADER_STYLE}>Этап</th>
-                  <th style={PRICE_HEADER_STYLE}>Цена</th>
-                  <th style={PRICE_HEADER_STYLE}>Дата</th>
-                  <th style={PRICE_HEADER_STYLE}>Комментарий</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prices.map((entry, index) => {
-                  const label = entry.stage || entry.stage_name || entry.stageName || entry.round || entry.type || entry.name || entry.title || `Запись ${index + 1}`;
-                  const numericPrice = parseNumberValue(
-                    entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount
-                  );
-                  const priceText = numericPrice != null
-                    ? fmtPrice(numericPrice, currency)
-                    : formatValue(
-                      entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount ?? '—'
-                    );
-                  const dateValue = entry.date || entry.date_start || entry.dateStart || entry.date_finish || entry.dateFinish || entry.updated_at || entry.updatedAt;
-                  const comment = entry.comment || entry.description || entry.info || entry.status || entry.note || entry.result || null;
+          {documents.length > 0 && (
+            <section className="detail-section">
+              <h2>Документы</h2>
+              <div className="panel" style={{ display: 'grid', gap: 12 }}>
+                {documents.map((doc, index) => {
+                  const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
+                  const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
+                  const description = doc?.description || doc?.comment || doc?.note || null;
+                  const date = doc?.date || doc?.created_at || doc?.updated_at || null;
 
                   return (
-                    <tr key={entry.id || `${label}-${index}`}>
-                      <td style={PRICE_CELL_STYLE}>{label}</td>
-                      <td style={PRICE_CELL_STYLE}>{priceText}</td>
-                      <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
-                      <td style={PRICE_CELL_STYLE}>{comment ? <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span> : '—'}</td>
-                    </tr>
+                    <div key={url || `${title}-${index}`}>
+                      {url ? <a href={url} target="_blank" rel="noreferrer" className="link">{title}</a> : <div>{title}</div>}
+                      {date ? <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Дата: {formatDate(date)}</div> : null}
+                      {description ? <div className="muted" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{description}</div> : null}
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+              </div>
+            </section>
+          )}
 
-      {documents.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Документы</h2>
-          <div className="panel" style={{ display: 'grid', gap: 8 }}>
-            {documents.map((doc, index) => {
-              const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
-              const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
-              const description = doc?.description || doc?.comment || doc?.note || null;
-              const date = doc?.date || doc?.created_at || doc?.updated_at || null;
+          {hasData(fedresursMeta) && (
+            <section className="detail-section">
+              <h2>Дополнительные данные</h2>
+              <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
+                <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(fedresursMeta, null, 2)}
+                </pre>
+              </div>
+            </section>
+          )}
+        </div>
 
-              return (
-                <div key={url || `${title}-${index}`}>
-                  {url ? <a href={url} target="_blank" rel="noreferrer" className="link">{title}</a> : <div>{title}</div>}
-                  {date ? <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Дата: {formatDate(date)}</div> : null}
-                  {description ? <div className="muted" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{description}</div> : null}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+        <aside className="detail-aside">
+          {contactEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Контакты</h2>
+              <KeyValueList entries={contactEntries} />
+            </section>
+          )}
 
-      {hasData(fedresursMeta) && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Дополнительные данные</h2>
-          <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
-            <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(fedresursMeta, null, 2)}
-            </pre>
-          </div>
-        </section>
-      )}
+          {debtorEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Данные должника</h2>
+              <KeyValueList entries={debtorEntries} />
+            </section>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
