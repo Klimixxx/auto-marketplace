@@ -25,7 +25,7 @@ function fmtPrice(value, currency = 'RUB') {
   }
 }
 
-@@ -97,272 +96,351 @@ function makeKeyValueEntries(source) {
+function makeKeyValueEntries(source) {
   return entries.map(({ key, value }, index) => ({ key: key || `#${index + 1}`, value: formatValue(value) }));
 }
 
