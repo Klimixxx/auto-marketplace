@@ -35,7 +35,7 @@ function normalizeListingId(value) {
 
 // Создать заказ на осмотр
 router.post('/', async (req, res) => {
-    const userId = req.user?.sub;
+  const userId = req.user?.sub;
   if (!userId) return res.status(401).json({ error: 'No user' });
 
   // мягкий парсинг listingId
@@ -44,11 +44,10 @@ router.post('/', async (req, res) => {
   if (!listingId) {
     return res.status(400).json({ error: 'listingId required' });
   }
-    let client;
+  let client;
   let transactionStarted = false;
 
-    // Проверим, что объявление существует
-    try {
+  try {
     // Проверим, что объявление существует (отдельно от транзакции)
     const l = await query('SELECT id, title FROM listings WHERE id=$1', [listingId]);
     if (!l.rows[0]) return res.status(404).json({ error: 'Listing not found' });
@@ -58,58 +57,59 @@ router.post('/', async (req, res) => {
     transactionStarted = true;
 
     const u = await client.query(
-        `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
-           FROM users WHERE id=$1 FOR UPDATE`,
-        [userId]
-      );
-      const user = u.rows[0];
-      if (!user) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({ error: 'User not found' });
-      }
+      `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
+         FROM users WHERE id=$1 FOR UPDATE`,
+      [userId]
+    );
+    const user = u.rows[0];
+    if (!user) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-      const isPro = String(user.subscription_status).toLowerCase() === 'pro';
-      const discountPercent = isPro ? 50 : 0;
-      const finalAmount = Math.round(BASE_PRICE * (100 - discountPercent) / 100);
+    const isPro = String(user.subscription_status).toLowerCase() === 'pro';
+    const discountPercent = isPro ? 50 : 0;
+    const finalAmount = Math.round((BASE_PRICE * (100 - discountPercent)) / 100);
 
-      const currentBalance = Number(user.balance ?? 0);
+    const currentBalance = Number(user.balance ?? 0);
     if (!Number.isFinite(currentBalance) || currentBalance < finalAmount) {
       await client.query('ROLLBACK');
       transactionStarted = false;
-      return res.status(402).json({ error: 'INSUFFICIENT_FUNDS', message: 'Недостаточно средств, пополните счет' });
+      return res
+        .status(402)
+        .json({ error: 'INSUFFICIENT_FUNDS', message: 'Недостаточно средств, пополните счет' });
     }
 
-      await client.query(
-        'UPDATE users SET balance = balance - $1, updated_at = now() WHERE id=$2',
-        [finalAmount, userId]
-      );
+    await client.query(
+      'UPDATE users SET balance = balance - $1, updated_at = now() WHERE id=$2',
+      [finalAmount, userId]
+    );
 
-      const ins = await client.query(
-        `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
+    const ins = await client.query(
+      `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
          VALUES ($1,$2,'Идет модерация',$3,$4,$5)
          RETURNING *`,
-        [userId, listingId, BASE_PRICE, discountPercent, finalAmount]
-      );
+      [userId, listingId, BASE_PRICE, discountPercent, finalAmount]
+    );
 
-      await client.query('COMMIT');
-      transactionStarted = false;
-      return res.json({ ok: true, order: ins.rows[0] });
-    } catch (e) {
+    await client.query('COMMIT');
+    transactionStarted = false;
+    return res.json({ ok: true, order: ins.rows[0] });
+  } catch (e) {
     if (client && transactionStarted) {
-      await client.query('ROLLBACK').catch(() => {});
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('rollback error:', rollbackError);
+      }
     }
-      console.error('create inspection error:', e);
-      return res.status(500).json({ error: 'SERVER_ERROR' });
-      } finally {
+    console.error('create inspection error:', e);
+    return res.status(500).json({ error: 'SERVER_ERROR' });
+  } finally {
     if (client) {
       client.release();
     }
-      // гарантируем освобождение соединения даже при ранних return
-      client.release();
-    }
-
-   console.error('create inspection outer error:', e);
-    return res.status(500).json({ error: 'SERVER_ERROR' });
   }
 });
 
