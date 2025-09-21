@@ -1,6 +1,6 @@
 // backend/routes/inspections.js
 import express from 'express';
-import { query } from '../db.js';
+import { pool, query } from '../db.js';
 
 const router = express.Router();
 const BASE_PRICE = 12000;
@@ -35,56 +35,70 @@ function normalizeListingId(value) {
 
 // Создать заказ на осмотр
 router.post('/', async (req, res) => {
-  try {
     const userId = req.user?.sub;
-    if (!userId) return res.status(401).json({ error: 'No user' });
+  if (!userId) return res.status(401).json({ error: 'No user' });
 
-    // мягкий парсинг listingId
-    const rawId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
-    const listingId = normalizeListingId(rawId);
-    if (!listingId) {
-      return res.status(400).json({ error: 'listingId required' });
-    }
-
+  // мягкий парсинг listingId
+  const rawId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
+  const listingId = normalizeListingId(rawId);
+  if (!listingId) {
+    return res.status(400).json({ error: 'listingId required' });
+  }
     // Проверим, что объявление существует
+    try {
+    // Проверим, что объявление существует (отдельно от транзакции)
     const l = await query('SELECT id, title FROM listings WHERE id=$1', [listingId]);
     if (!l.rows[0]) return res.status(404).json({ error: 'Listing not found' });
 
-    // Получим пользователя, баланс и статус подписки
-    await query('BEGIN');
-    const u = await query(
-      `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
-         FROM users WHERE id=$1 FOR UPDATE`,
-      [userId]
-    );
-    const user = u.rows[0];
-    if (!user) { await query('ROLLBACK'); return res.status(404).json({ error: 'User not found' }); }
+const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const isPro = String(user.subscription_status).toLowerCase() === 'pro';
-    const discountPercent = isPro ? 50 : 0;
-    const finalAmount = Math.round(BASE_PRICE * (100 - discountPercent) / 100);
+      const u = await client.query(
+        `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
+           FROM users WHERE id=$1 FOR UPDATE`,
+        [userId]
+      );
+      const user = u.rows[0];
+      if (!user) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'User not found' });
+      }
 
-    if (Number(user.balance) < finalAmount) {
-      await query('ROLLBACK');
-      return res.status(402).json({ error: 'INSUFFICIENT_FUNDS', message: 'Недостаточно средств, пополните счет' });
+      const isPro = String(user.subscription_status).toLowerCase() === 'pro';
+      const discountPercent = isPro ? 50 : 0;
+      const finalAmount = Math.round(BASE_PRICE * (100 - discountPercent) / 100);
+
+      const currentBalance = Number(user.balance ?? 0);
+      if (!Number.isFinite(currentBalance) || currentBalance < finalAmount) {
+        await client.query('ROLLBACK');
+        return res.status(402).json({ error: 'INSUFFICIENT_FUNDS', message: 'Недостаточно средств, пополните счет' });
+      }
+
+      await client.query(
+        'UPDATE users SET balance = balance - $1, updated_at = now() WHERE id=$2',
+        [finalAmount, userId]
+      );
+
+      const ins = await client.query(
+        `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
+         VALUES ($1,$2,'Идет модерация',$3,$4,$5)
+         RETURNING *`,
+        [userId, listingId, BASE_PRICE, discountPercent, finalAmount]
+      );
+
+      await client.query('COMMIT');
+      return res.json({ ok: true, order: ins.rows[0] });
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('create inspection error:', e);
+      return res.status(500).json({ error: 'SERVER_ERROR' });
+    } finally {
+      // гарантируем освобождение соединения даже при ранних return
+      client.release();
     }
 
-    // Списание
-    await query('UPDATE users SET balance = balance - $1 WHERE id=$2', [finalAmount, userId]);
-
-    // Создание заказа
-    const ins = await query(
-      `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
-       VALUES ($1,$2,'Идет модерация',$3,$4,$5)
-       RETURNING *`,
-      [userId, listingId, BASE_PRICE, discountPercent, finalAmount]
-    );
-
-    await query('COMMIT');
-    return res.json({ ok: true, order: ins.rows[0] });
-  } catch (e) {
-    await query('ROLLBACK').catch(()=>{});
-    console.error('create inspection error:', e);
+   console.error('create inspection outer error:', e);
     return res.status(500).json({ error: 'SERVER_ERROR' });
   }
 });
