@@ -2,6 +2,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import {
+  makeKeyValueEntries,
+  translateValueByKey,
+} from '../../../lib/lotFormatting';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
@@ -140,6 +144,62 @@ function getPhotoPreview(text) {
   }
 }
 
+const LOT_DETAIL_SYNC_MAP = {
+  title: 'title',
+  description: 'description',
+  category: 'category',
+  region: 'region',
+  brand: 'brand',
+  model: 'model',
+  year: 'year',
+  vin: 'vin',
+  start_price: 'start_price',
+  applications_count: 'applications_count',
+  trade_place: 'trade_place',
+  source_url: 'source_url',
+};
+
+function syncLotDetailsWithForm(lot, form) {
+  const base = lot && typeof lot === 'object' && !Array.isArray(lot) ? { ...lot } : {};
+  if (!form || typeof form !== 'object') return base;
+
+  Object.entries(LOT_DETAIL_SYNC_MAP).forEach(([formKey, lotKey]) => {
+    if (!(formKey in form)) return;
+    const value = form[formKey];
+    if (value === '' || value === null || value === undefined) {
+      delete base[lotKey];
+      return;
+    }
+
+    if (lotKey === 'start_price') {
+      const numeric = Number(String(value).replace(/\s/g, '').replace(',', '.'));
+      base[lotKey] = Number.isFinite(numeric) ? numeric : value;
+      return;
+    }
+
+    if (lotKey === 'applications_count') {
+      const numeric = Number(value);
+      base[lotKey] = Number.isFinite(numeric) ? numeric : value;
+      return;
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = trimOrNull(value);
+      if (trimmed == null) {
+        delete base[lotKey];
+        return;
+      }
+      base[lotKey] = trimmed;
+      return;
+    }
+
+    base[lotKey] = value;
+  });
+
+  return base;
+}
+
+
 const PRICE_TABLE_HEADER_STYLE = {
   textAlign: 'left',
   padding: '8px 10px',
@@ -218,20 +278,15 @@ function ContactSection({ contact }) {
 }
 
 function KeyValueList({ data }) {
-  if (!data || typeof data !== 'object') return null;
-  const entries = Object.entries(data);
+  const entries = makeKeyValueEntries(data);
   if (!entries.length) return null;
 
   return (
     <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
-      {entries.map(([key, value]) => {
-        const text =
-          value && typeof value === 'object'
-            ? JSON.stringify(value, null, 2)
-            : String(value ?? '—');
-        const isMultiline = text.includes('\n');
+      {entries.map(({ key, value }, index) => {
+        const isMultiline = typeof value === 'string' && value.includes('\n');
         return (
-          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <div key={`${key}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
             <div className="muted">{key}</div>
             {isMultiline ? (
               <pre
@@ -243,10 +298,10 @@ function KeyValueList({ data }) {
                   wordBreak: 'break-word',
                 }}
               >
-                {text}
+                {value}
               </pre>
             ) : (
-              <div style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{text}</div>
+              <div style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{value}</div>
             )}
           </div>
         );
@@ -393,10 +448,12 @@ export default function AdminParserTradeCard() {
     try { documents = JSON.parse(documentsText || '[]'); } catch {}
     try { photos = parsePhotosInput(photosText || ''); } catch {}
 
+    const syncedLot = syncLotDetailsWithForm(lot, form);
+
     const merged = {
       ...(item || {}),
       ...form,
-      lot_details: lot,
+      lot_details: syncedLot,
       contact_details: contact,
       debtor_details: debtor,
       prices,
@@ -425,6 +482,13 @@ export default function AdminParserTradeCard() {
     setSaving(true);
     setError(null);
     try {
+      const parsedLotDetails = JSON.parse(lotDetailsText || '{}');
+      const parsedContactDetails = JSON.parse(contactDetailsText || '{}');
+      const parsedDebtorDetails = JSON.parse(debtorDetailsText || '{}');
+      const parsedPrices = JSON.parse(pricesText || '[]');
+      const parsedDocuments = JSON.parse(documentsText || '[]');
+      const parsedPhotos = parsePhotosInput(photosText || '');
+      const syncedLotDetails = syncLotDetailsWithForm(parsedLotDetails, form);
       // build payload
       const payload = {
         ...d,
@@ -449,12 +513,12 @@ export default function AdminParserTradeCard() {
         trade_place: trimOrNull(form.trade_place),
         source_url: trimOrNull(form.source_url),
 
-        lot_details: JSON.parse(lotDetailsText || '{}'),
-        contact_details: JSON.parse(contactDetailsText || '{}'),
-        debtor_details: JSON.parse(debtorDetailsText || '{}'),
-        prices: JSON.parse(pricesText || '[]'),
-        documents: JSON.parse(documentsText || '[]'),
-        photos: parsePhotosInput(photosText || ''),
+        lot_details: syncedLotDetails,
+        contact_details: parsedContactDetails,
+        debtor_details: parsedDebtorDetails,
+        prices: parsedPrices,
+        documents: parsedDocuments,
+        photos: parsedPhotos,
       };
 
       if (!API_BASE) {
@@ -786,6 +850,7 @@ export default function AdminParserTradeCard() {
                     entry.name ||
                     entry.title ||
                     `Запись ${index + 1}`;
+                  const stageText = translateValueByKey('stage', stage) || stage;
                   const rawPrice =
                     entry.price ||
                     entry.currentPrice ||
@@ -828,7 +893,7 @@ export default function AdminParserTradeCard() {
                   const commentMultiline = commentText.includes('\n');
                   return (
                     <tr key={entry.id || `${stage}-${index}`}>
-                      <td style={PRICE_TABLE_CELL_STYLE}>{stage}</td>
+                      <td style={PRICE_TABLE_CELL_STYLE}>{stageText}</td>
                       <td style={PRICE_TABLE_CELL_STYLE}>{priceText}</td>
                       <td style={PRICE_TABLE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
                       <td style={PRICE_TABLE_CELL_STYLE}>
