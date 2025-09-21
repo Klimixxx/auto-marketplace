@@ -1,4 +1,8 @@
 import Link from 'next/link';
+import {
+  localizeListingBadge,
+  translateValueByKey,
+} from '../lib/lotFormatting';
 
 function formatPrice(value, currency = 'RUB') {
   try {
@@ -96,17 +100,22 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref }) {
   if (mileage && !metaSet.has(mileage)) { metaSet.add(mileage); metaItems.push(mileage); }
   const engine = formatEngine(pickDetailValue(l, ['engine_volume', 'engine_volume_l', 'engine', 'engine_volume_liters']));
   if (engine && !metaSet.has(engine)) { metaSet.add(engine); metaItems.push(engine); }
-  const transmission = pickDetailValue(l, ['transmission', 'gearbox', 'kpp']);
+  const transmission = translateValueByKey('transmission', pickDetailValue(l, ['transmission', 'gearbox', 'kpp']));
   if (transmission) {
     const text = String(transmission);
     if (text && !metaSet.has(text)) { metaSet.add(text); metaItems.push(text); }
   }
 
   const location = l.region || pickDetailValue(l, ['city', 'location']);
-  const assetType = l.asset_type || pickDetailValue(l, ['assetType', 'type']);
+  const assetType = translateValueByKey('asset_type', l.asset_type || pickDetailValue(l, ['assetType', 'type']));
   const rawBadge = l.status || l.stage || l.stage_name || assetType || 'Лот';
-  const badge = rawBadge == null ? 'Лот' : String(rawBadge);
-  const eyebrowParts = [assetType, location].filter(Boolean);
+  const badgeText = localizeListingBadge(rawBadge) || translateValueByKey('asset_type', rawBadge) || rawBadge;
+  const badge = badgeText == null ? 'Лот' : String(badgeText);
+  const eyebrowParts = [assetType, location].filter((part) => {
+    if (part == null) return false;
+    const text = String(part).trim();
+    return Boolean(text);
+  });
   const eyebrow = eyebrowParts.join(' • ');
 
   return (
