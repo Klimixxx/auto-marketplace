@@ -1,10 +1,15 @@
-// frontend/components/InspectionModal.jsx
-import { useState } from 'react';
-import { apiFetch } from '../lib/api';
+import { useState, useEffect } from 'react';
+
 const API = process.env.NEXT_PUBLIC_API_BASE || '';
 
 function normalizeListingId(value) {
   if (value == null) return null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    const truncated = Math.trunc(value);
+    return truncated > 0 ? truncated : null;
+  }
+
   const str = String(value).trim();
   if (!str) return null;
 
@@ -13,52 +18,73 @@ function normalizeListingId(value) {
     return Math.trunc(asNumber);
   }
 
-  const parsed = Number.parseInt(str, 10);
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return parsed;
+  const match = str.match(/\d+/);
+  if (match) {
+    const parsed = Number.parseInt(match[0], 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
   }
 
   return null;
 }
 
-
-const res = await apiFetch('/api/inspections', {
-  method: 'POST',
-  body: { listingId: Number(listingId) }  // гарантируем число
-});
-
 export default function InspectionModal({ listingId, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflow; };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   async function order() {
-    setLoading(true); setErr('');
+    setLoading(true);
+    setErr('');
     try {
-      const token = localStorage.getItem('token');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
-        const next = `/trades/${listingId}`;
+        const next = `/trades/${Number(listingId) || ''}`;
+        const nextId = listingId != null ? String(listingId).trim() : '';
+        const next = `/trades/${nextId || ''}`;
         window.location.href = `/login?next=${encodeURIComponent(next)}`;
+        return;
+      }
+      const normalizedId = normalizeListingId(listingId);
+      if (!normalizedId) {
+        setErr('Не удалось определить объявление. Обновите страницу и попробуйте ещё раз.');
         return;
       }
       const res = await fetch(`${API}/api/inspections`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ listingId })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ listingId: Number(listingId) })
+        body: JSON.stringify({ listingId: normalizedId })
       });
-      const data = await res.json();
       if (!res.ok) {
-        if (res.status === 402) setErr(data?.message || 'Недостаточно средств, пополните счет');
-        else setErr(data?.error || 'Ошибка. Повторите позже.');
+        if (res.status === 402) {
+          const data = await res.json().catch(() => ({}));
+          setErr(data?.message || 'Недостаточно средств, пополните счет');
+          return;
+        }
+        if (res.status === 400) { setErr('Неверные данные запроса'); return; }
+        if (res.status === 404) { setErr('Объявление не найдено'); return; }
+        if (res.status === 401) {
+          const next = `/trades/${Number(listingId) || ''}`;
+          const nextId = listingId != null ? String(listingId).trim() : '';
+          const next = `/trades/${nextId || ''}`;
+          window.location.href = `/login?next=${encodeURIComponent(next)}`;
+          return;
+        }
+        setErr('Ошибка. Попробуйте позже.');
         return;
       }
-      // успех: ведём в «Мои осмотры»
       window.location.href = '/inspections';
-    } catch (e) {
+    } catch {
       setErr('Сеть недоступна. Попробуйте позже.');
     } finally {
       setLoading(false);
@@ -67,10 +93,10 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
 
   return (
     <div style={S.backdrop}>
-      <div style={S.modal}>
+      <div style={S.modal} role="dialog" aria-modal="true" aria-labelledby="inspection-title">
         <div style={S.header}>
-          <h3 style={{margin:0, color:'#FFFFFF'}}>Заказать отчет по осмотру данной машины</h3>
-          <button onClick={onClose} style={S.close}>×</button>
+          <h3 id="inspection-title" style={S.title}>Заказать отчет по осмотру данной машины</h3>
+          <button onClick={onClose} style={S.close} aria-label="Закрыть">×</button>
         </div>
 
         <div style={{marginTop:12}}>
