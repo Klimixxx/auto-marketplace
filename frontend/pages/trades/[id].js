@@ -187,7 +187,7 @@ function KeyValueList({ entries }) {
 
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
-  const listingIdNum = Number(item?.id || 0);
+  const listingIdRaw = item?.id != null ? String(item.id).trim() : '';
 
   const [openInspection, setOpenInspection] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -195,7 +195,7 @@ export default function ListingPage({ item }) {
   function handleOrderClick() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
-      const next = `/trades/${listingIdNum || ''}`;
+      const next = `/trades/${listingIdRaw || ''}`;
       window.location.href = `/login?next=${encodeURIComponent(next)}`;
       return;
     }
@@ -302,7 +302,7 @@ export default function ListingPage({ item }) {
       </div>
 
       <InspectionModal
-        listingId={listingIdNum}
+        listingId={listingIdRaw}
         isOpen={openInspection}
         onClose={() => setOpenInspection(false)}
       />

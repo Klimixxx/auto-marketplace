@@ -2,6 +2,24 @@ import { useState, useEffect } from 'react';
 
 const API = process.env.NEXT_PUBLIC_API_BASE || '';
 
+function normalizeListingId(value) {
+  if (value == null) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+
+  const asNumber = Number(str);
+  if (Number.isFinite(asNumber) && asNumber > 0) {
+    return Math.trunc(asNumber);
+  }
+
+  const parsed = Number.parseInt(str, 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return null;
+}
+
 export default function InspectionModal({ listingId, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -21,14 +39,20 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
-        const next = `/trades/${Number(listingId) || ''}`;
+        const nextId = listingId != null ? String(listingId).trim() : '';
+        const next = `/trades/${nextId || ''}`;
         window.location.href = `/login?next=${encodeURIComponent(next)}`;
+        return;
+      }
+      const normalizedId = normalizeListingId(listingId);
+      if (!normalizedId) {
+        setErr('Не удалось определить объявление. Обновите страницу и попробуйте ещё раз.');
         return;
       }
       const res = await fetch(`${API}/api/inspections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ listingId: Number(listingId) })
+        body: JSON.stringify({ listingId: normalizedId })
       });
       if (!res.ok) {
         if (res.status === 402) {
@@ -39,7 +63,8 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
         if (res.status === 400) { setErr('Неверные данные запроса'); return; }
         if (res.status === 404) { setErr('Объявление не найдено'); return; }
         if (res.status === 401) {
-          const next = `/trades/${Number(listingId) || ''}`;
+          const nextId = listingId != null ? String(listingId).trim() : '';
+          const next = `/trades/${nextId || ''}`;
           window.location.href = `/login?next=${encodeURIComponent(next)}`;
           return;
         }
