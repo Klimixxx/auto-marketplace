@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 import InspectionModal from '../../components/InspectionModal';
-
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -284,13 +284,18 @@ function KeyValueList({ entries }) {
 }
 
 export default function ListingPage({ item }) {
+  const router = useRouter();
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
-    const [openInspection, setOpenInspection] = useState(false);
+
+  // Безопасный числовой ID лота: используем item.id (с SSR), а на клиенте — подстрахуемся query.id
+  const listingIdNum = Number(item?.id ?? (typeof window !== 'undefined' ? router.query?.id : undefined));
+
+  const [openInspection, setOpenInspection] = useState(false);
 
   function handleOrderClick() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
-      const next = `/trades/${item?.id}`;
+      const next = `/trades/${listingIdNum || ''}`;
       window.location.href = `/login?next=${encodeURIComponent(next)}`;
       return;
     }
@@ -329,17 +334,16 @@ export default function ListingPage({ item }) {
           <div className="big">{fmtPrice(item?.current_price, currency)}</div>
         </div>
       </div>
-<div style={{ marginTop: 12 }}>
-  <button onClick={handleOrderClick} className="btn">Заказать осмотр</button>
-</div>
 
-<InspectionModal
-  listingId={Number(item?.id)}   // обязательно Number(...)
-  isOpen={openInspection}
-  onClose={() => setOpenInspection(false)}
-/>
+      <div style={{ marginTop: 12 }}>
+        <button onClick={handleOrderClick} className="btn">Заказать осмотр</button>
+      </div>
 
-
+      <InspectionModal
+        listingId={listingIdNum}
+        isOpen={openInspection}
+        onClose={() => setOpenInspection(false)}
+      />
 
       {(item?.status || item?.end_date) && (
         <div style={{ marginTop: 8, color: '#9aa6b2' }}>
