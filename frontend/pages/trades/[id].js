@@ -25,11 +25,61 @@ function fmtPrice(value, currency = 'RUB') {
   }
 }
 
+function formatValue(v) {
+  if (v == null || v === '') return '—';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  if (v instanceof Date) return v.toLocaleString('ru-RU');
+  if (Array.isArray(v)) return v.map(formatValue).join(', ');
+  try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+}
+
 function normalizePhoto(photo) {
   if (!photo) return null;
   if (typeof photo === 'string') {
+    return { url: photo, title: '' };
+  }
+  if (typeof photo === 'object') {
+    const url = photo.url || photo.href || photo.src || null;
+    if (!url) return null;
+    return { url, title: photo.title || photo.name || photo.alt || '' };
+  }
+  return null;
+}
+
+function collectPhotos(details) {
+  const pools = [
+    details?.photos,
+    details?.images,
+    details?.lot_details?.photos,
+    details?.lot_details?.images,
+    details?.gallery,
+  ].filter(Boolean);
+
+  const out = [];
+  const seen = new Set();
+
+  for (const pool of pools) {
+    const arr = Array.isArray(pool) ? pool : [pool];
+    for (const raw of arr) {
+      const ph = normalizePhoto(raw);
+      if (ph && ph.url && !seen.has(ph.url)) {
+        seen.add(ph.url);
+        out.push(ph);
+      }
+    }
+  }
+  return out;
+}
+
 function makeKeyValueEntries(source) {
-  return entries.map(({ key, value }, index) => ({ key: key || `#${index + 1}`, value: formatValue(value) }));
+  if (!source || typeof source !== 'object') return [];
+  const entries = Object.entries(source)
+    .filter(([_, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0));
+  return entries.map(([key, value], index) => ({
+    key: String(key || `#${index + 1}`),
+    value: formatValue(value),
+  }));
 }
 
 function formatDate(value) {
@@ -82,26 +132,17 @@ function resolveApiBase(req) {
 export async function getServerSideProps(context) {
   const { params, req } = context;
   const base = resolveApiBase(req);
-  if (!base) {
-    console.error('API base URL is not configured.');
-    return { notFound: true };
-  }
+  if (!base) return { notFound: true };
 
   const url = `${base}/api/listings/${params.id}`;
 
   try {
     const response = await fetch(url, { cache: 'no-store' });
-    if (response.status === 404) {
-      return { notFound: true };
-    }
-    if (!response.ok) {
-      console.error('Failed to fetch listing details', response.status);
-      return { notFound: true };
-    }
+    if (response.status === 404) return { notFound: true };
+    if (!response.ok) return { notFound: true };
     const item = await response.json();
     return { props: { item } };
-  } catch (error) {
-    console.error('Failed to fetch listing details', error);
+  } catch {
     return { notFound: true };
   }
 }
@@ -146,8 +187,6 @@ function KeyValueList({ entries }) {
 
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
-
-  // ЕДИНСТВЕННЫЙ ID, которым мы пользуемся в файле:
   const listingIdNum = Number(item?.id || 0);
 
   const [openInspection, setOpenInspection] = useState(false);
@@ -168,6 +207,7 @@ export default function ListingPage({ item }) {
     setActivePhotoIndex(0);
   }, [item?.id, photos.length]);
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
+
   const lotEntries = makeKeyValueEntries(details?.lot_details);
   const contactEntries = makeKeyValueEntries(details?.contact_details);
   const debtorEntries = makeKeyValueEntries(details?.debtor_details);
@@ -313,7 +353,7 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {prices.length > 0 && (
+          {Array.isArray(prices) && prices.length > 0 && (
             <section className="detail-section">
               <h2>История цен</h2>
               <div className="panel table-scroll" style={{ padding: 0 }}>
@@ -355,7 +395,7 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {documents.length > 0 && (
+          {Array.isArray(documents) && documents.length > 0 && (
             <section className="detail-section">
               <h2>Документы</h2>
               <div className="panel" style={{ display: 'grid', gap: 12 }}>
