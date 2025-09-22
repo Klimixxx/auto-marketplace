@@ -1,30 +1,38 @@
 // frontend/pages/index.js
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
+
 import Hero from '../components/Hero';
 import About from '../components/About';
 
-// UI цвета в синхроне со стилем
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
+
 const UI = {
   title: '#ffffff',
   text: 'rgba(255,255,255,0.75)',
   cardBg: 'rgba(255,255,255,0.03)',
   border: 'rgba(255,255,255,0.10)',
   red: '#EF4444',
-  // градиент как в Hero ("прозрачно и удобно")
   gradFrom: '#67e8f9',
   gradTo: '#c4b5fd',
   button: '#67e8f9',
   buttonHover: '#a5f3fc',
 };
 
-const fmt = new Intl.NumberFormat('ru-RU');
+const fmtNumber = new Intl.NumberFormat('ru-RU');
+const fmtCurrency = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
 
-// Заглушка модалки (если у тебя есть свой компонент — подключи его вместо этого)
-function FirstLoginModal(){ return null; }
+function api(path) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
+function FirstLoginModal() { return null; }
+
+function StatCard({ title, value, Icon, isCurrency, loading }) {
+  const display = loading
+    ? '—'
+    : (isCurrency ? fmtCurrency.format(value || 0) : fmtNumber.format(value || 0));
 
 // Карточка метрики
-function StatCard({ title, value, Icon }) {
   return (
     <div
       style={{
@@ -36,6 +44,7 @@ function StatCard({ title, value, Icon }) {
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
+        minHeight: 88,
       }}
     >
       <div
@@ -53,9 +62,446 @@ function StatCard({ title, value, Icon }) {
       </div>
       <div>
         <div style={{ color: UI.text, fontSize: 13 }}>{title}</div>
-        <div style={{ color: UI.title, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{value}</div>
+        <div style={{ color: UI.title, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
       </div>
     </div>
+  );
+}
+
+function RegionBubbleMap({ regions, activeRegion, onHover }) {
+  if (!regions.length) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          aspectRatio: '1527 / 768',
+          borderRadius: 16,
+          border: `1px solid ${UI.border}`,
+          background: 'rgba(255,255,255,0.03)',
+          display: 'grid',
+          placeItems: 'center',
+          color: UI.text,
+        }}
+      >
+        Данные по регионам появятся позже
+      </div>
+    );
+  }
+
+  const width = 620;
+  const height = 340;
+  const columns = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(regions.length))));
+  const rows = Math.ceil(regions.length / columns);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: width,
+        borderRadius: 16,
+        border: `1px solid ${UI.border}`,
+        overflow: 'hidden',
+        backgroundImage: 'url(/maps/russia-fo.svg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        aspectRatio: '1527 / 768',
+        margin: '0 auto',
+      }}
+    >
+      {regions.map((region, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        const x = ((col + 0.5) / columns) * 100;
+        const y = ((row + 0.5) / rows) * 100;
+        const isActive = activeRegion?.region === region.region;
+        return (
+          <button
+            key={region.region}
+            type="button"
+            onMouseEnter={() => onHover(region)}
+            onFocus={() => onHover(region)}
+            style={{
+              position: 'absolute',
+              left: `${x}%`,
+              top: `${y}%`,
+              transform: 'translate(-50%, -50%)',
+              width: isActive ? 28 : 22,
+              height: isActive ? 28 : 22,
+              borderRadius: '50%',
+              border: `2px solid ${isActive ? '#0f172a' : 'transparent'}`,
+              background: isActive ? UI.button : 'rgba(255,255,255,0.35)',
+              boxShadow: isActive ? '0 0 18px rgba(103,232,249,0.45)' : '0 2px 6px rgba(0,0,0,0.25)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, background 0.2s ease',
+            }}
+            aria-label={region.region}
+          />
+        );
+      })}
+
+      {activeRegion ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 16,
+            bottom: 16,
+            right: 16,
+            background: 'rgba(10,14,25,0.78)',
+            borderRadius: 12,
+            padding: '12px 14px',
+            border: `1px solid ${UI.border}`,
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>{activeRegion.region}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 13, color: UI.text }}>
+            <span>Лотов: <strong style={{ color: '#fff' }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
+            <span>Сумма: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
+            <span>Средняя цена: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RegionList({ regions, activeRegion, onHover }) {
+  if (!regions.length) return null;
+  return (
+    <div
+      style={{
+        borderRadius: 16,
+        border: `1px solid ${UI.border}`,
+        background: UI.cardBg,
+        padding: 16,
+        maxHeight: 340,
+        overflowY: 'auto',
+        display: 'grid',
+        gap: 10,
+      }}
+    >
+      {regions.map((region) => {
+        const isActive = activeRegion?.region === region.region;
+        return (
+          <button
+            key={region.region}
+            type="button"
+            onMouseEnter={() => onHover(region)}
+            onFocus={() => onHover(region)}
+            style={{
+              textAlign: 'left',
+              border: `1px solid ${isActive ? UI.button : UI.border}`,
+              background: isActive ? 'rgba(103,232,249,0.12)' : 'rgba(255,255,255,0.03)',
+              color: '#fff',
+              padding: '10px 12px',
+              borderRadius: 12,
+              cursor: 'pointer',
+              display: 'grid',
+              gap: 4,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{region.region}</div>
+            <div style={{ fontSize: 12, color: UI.text, display: 'flex', gap: 12 }}>
+              <span>Лотов: {fmtNumber.format(region.listings || 0)}</span>
+              <span>Сумма: {fmtCurrency.format(region.totalValue || 0)}</span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BestOffersCarousel({ items }) {
+  const cardWidth = 280;
+  const gap = 16;
+  const [index, setIndex] = useState(0);
+
+  const visible = Math.min(items.length, 3);
+  const maxIndex = Math.max(0, items.length - visible);
+
+  useEffect(() => {
+    if (index > maxIndex) setIndex(maxIndex);
+  }, [index, maxIndex]);
+
+  if (!items.length) {
+    return null;
+  }
+
+  const trackWidth = items.length * (cardWidth + gap);
+  const offset = index * (cardWidth + gap);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ margin: 0, color: UI.title }}>Лучшие предложения</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => Math.max(0, i - 1))}
+            disabled={index === 0}
+            style={navButtonStyle(index === 0)}
+            aria-label="Предыдущие предложения"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => Math.min(maxIndex, i + 1))}
+            disabled={index >= maxIndex}
+            style={navButtonStyle(index >= maxIndex)}
+            aria-label="Следующие предложения"
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          overflow: 'hidden',
+          borderRadius: 16,
+          border: `1px solid ${UI.border}`,
+          padding: '12px 8px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            gap: `${gap}px`,
+            width: trackWidth,
+            transform: `translateX(-${offset}px)`,
+            transition: 'transform 0.35s ease',
+          }}
+        >
+          {items.map((item) => (
+            <BestOfferCard key={item.id} item={item} width={cardWidth} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function navButtonStyle(disabled) {
+  return {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    border: `1px solid ${UI.border}`,
+    background: disabled ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)',
+    color: '#fff',
+    cursor: disabled ? 'default' : 'pointer',
+    display: 'grid',
+    placeItems: 'center',
+    fontWeight: 700,
+  };
+}
+
+function resolveCover(listing) {
+  const photos = Array.isArray(listing?.photos) ? listing.photos : listing?.details?.photos;
+  if (Array.isArray(photos)) {
+    for (const photo of photos) {
+      if (photo && typeof photo === 'object' && photo.url) return photo.url;
+      if (typeof photo === 'string' && photo.trim()) return photo.trim();
+    }
+  }
+  return null;
+}
+
+function formatPrice(value, currency = 'RUB') {
+  if (value == null) return 'Цена уточняется';
+  try {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `${value} ${currency}`;
+  }
+}
+
+function BestOfferCard({ item, width }) {
+  const cover = resolveCover(item);
+  const price = formatPrice(item.current_price ?? item.start_price, item.currency || 'RUB');
+  const location = [item.city, item.region].filter(Boolean).join(', ');
+  const tradeType = item.trade_type ? item.trade_type === 'auction' ? 'Аукцион' : 'Торговое предложение' : 'Лот';
+
+  return (
+    <article
+      style={{
+        width: width,
+        minWidth: width,
+        borderRadius: 14,
+        border: `1px solid ${UI.border}`,
+        background: 'rgba(13,18,33,0.72)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div style={{ position: 'relative', paddingBottom: '56%', background: '#0b1220' }}>
+        {cover ? (
+          <img
+            src={cover}
+            alt={item.title || 'Лот'}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: UI.text }}>
+            Нет фото
+          </div>
+        )}
+        <span
+          style={{
+            position: 'absolute',
+            left: 12,
+            top: 12,
+            background: 'rgba(15,23,42,0.85)',
+            borderRadius: 999,
+            padding: '4px 10px',
+            fontSize: 12,
+            border: `1px solid ${UI.border}`,
+          }}
+        >
+          {tradeType}
+        </span>
+      </div>
+      <div style={{ padding: '14px 16px', display: 'grid', gap: 8, flex: '1 1 auto' }}>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{item.title || 'Лот'}</div>
+        {location ? <div style={{ fontSize: 13, color: UI.text }}>{location}</div> : null}
+        <div style={{ fontWeight: 700, fontSize: 16 }}>{price}</div>
+        <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
+          <a
+            href={`/trades/${item.id}`}
+            style={{
+              flex: 1,
+              background: UI.button,
+              color: '#0f172a',
+              borderRadius: 10,
+              textAlign: 'center',
+              padding: '8px 10px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            Подробнее
+          </a>
+          {item.source_url ? (
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                flex: 1,
+                border: `1px solid ${UI.border}`,
+                borderRadius: 10,
+                textAlign: 'center',
+                padding: '8px 10px',
+                color: '#fff',
+                textDecoration: 'none',
+              }}
+            >
+              Источник
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function EducationFeature({ title, Icon }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr',
+        gap: 12,
+        alignItems: 'center',
+        background: 'rgba(255,255,255,0.05)',
+        border: `1px solid ${UI.border}`,
+        borderRadius: 12,
+        padding: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 46, height: 46, borderRadius: 12,
+          display: 'grid', placeItems: 'center',
+          background: 'rgba(255,255,255,0.06)',
+          border: `1px solid ${UI.border}`,
+        }}
+      >
+        <Icon />
+      </div>
+      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
+        {title}
+      </div>
+    </div>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="gradHeroUsers" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={UI.gradFrom} />
+          <stop offset="100%" stopColor={UI.gradTo} />
+        </linearGradient>
+      </defs>
+      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="url(#gradHeroUsers)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="url(#gradHeroUsers)" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="gradHeroDoc" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={UI.gradFrom} />
+          <stop offset="100%" stopColor={UI.gradTo} />
+        </linearGradient>
+      </defs>
+      <path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
+      <path d="M14 3v6h6" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
+      <path d="M9 13h8M9 17h8" stroke="url(#gradHeroDoc)" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AuctionsIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="gradHeroAuc" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={UI.gradFrom} />
+          <stop offset="100%" stopColor={UI.gradTo} />
+        </linearGradient>
+      </defs>
+      <path d="M7 10l6-6 4 4-6 6-4-4zM3 21h10" stroke="url(#gradHeroAuc)" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BanknoteIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="gradHeroNote" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={UI.gradFrom} />
+          <stop offset="100%" stopColor={UI.gradTo} />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="7" width="18" height="10" rx="2" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
+      <circle cx="12" cy="12" r="2.5" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
+      <path d="M5 9h2M17 9h2M5 15h2M17 15h2" stroke="url(#gradHeroNote)" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
   );
 }
 
@@ -120,38 +566,7 @@ function BanknoteIcon() {
   );
 }
 
-/* ===== Новая секция "Обучение" ===== */
-function EducationFeature({ title, Icon }) {
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto 1fr',
-        gap: 12,
-        alignItems: 'center',
-        background: 'rgba(255,255,255,0.05)',
-        border: `1px solid ${UI.border}`,
-        borderRadius: 12,
-        padding: 12,
-      }}
-    >
-      <div
-        style={{
-          width: 46, height: 46, borderRadius: 12,
-          display: 'grid', placeItems: 'center',
-          background: 'rgba(255,255,255,0.06)',
-          border: `1px solid ${UI.border}`,
-        }}
-      >
-        <Icon />
-      </div>
-      {/* текст НЕ жирный */}
-      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
-        {title}
-      </div>
-    </div>
-  );
-}
+
 /* Естественные цвета иконок: молния — жёлтая, рассрочка — зелёная, авто — синяя */
 function LightningIcon(){
   return (
@@ -163,7 +578,7 @@ function LightningIcon(){
 function InstallmentIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      {/* карта + календарь как символ рассрочки */}
+    
       <rect x="3" y="6" width="12" height="8" rx="2" stroke="#22C55E" strokeWidth="1.8"/>
       <path d="M5 9h8M5 12h3" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
       <rect x="16" y="9" width="5" height="7" rx="1.5" stroke="#22C55E" strokeWidth="1.8"/>
@@ -182,26 +597,78 @@ function CarIcon(){
 }
 
 export default function Home() {
-  // если где-то используешь, оставлю стейт
-  const [stats, setStats] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [featured, setFeatured] = useState([]);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [loadingFeatured, setLoadingFeatured] = useState(true);
+  const [activeRegion, setActiveRegion] = useState(null);
+
   useEffect(() => {
-    // можно оставить пустым — значения ниже статичны по задаче
+    let ignore = false;
+    async function loadSummary() {
+      try {
+        setLoadingSummary(true);
+        const data = await fetch(api('/api/stats/summary')).then((r) => {
+          if (!r.ok) throw new Error('summary');
+          return r.json();
+        });
+        if (!ignore) {
+          setSummary(data);
+          setActiveRegion(data?.regions?.[0] || null);
+        }
+      } catch (e) {
+        console.error('Failed to load summary stats', e);
+        if (!ignore) setSummary(null);
+      } finally {
+        if (!ignore) setLoadingSummary(false);
+      }
+    }
+    loadSummary();
+    return () => { ignore = true; };
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadFeatured() {
+      try {
+        setLoadingFeatured(true);
+        const data = await fetch(api('/api/listings/featured?limit=12')).then((r) => {
+          if (!r.ok) throw new Error('featured');
+          return r.json();
+        });
+        if (!ignore) setFeatured(Array.isArray(data?.items) ? data.items : []);
+      } catch (e) {
+        console.error('Failed to load featured listings', e);
+        if (!ignore) setFeatured([]);
+      } finally {
+        if (!ignore) setLoadingFeatured(false);
+      }
+    }
+    loadFeatured();
+    return () => { ignore = true; };
+  }, []);
+
+  const statsCards = useMemo(() => ([
+    { title: 'Пользователей', value: summary?.totalUsers ?? 0, Icon: UsersIcon, isCurrency: false },
+    { title: 'Публичные предложения', value: summary?.offersCount ?? 0, Icon: DocumentIcon, isCurrency: false },
+    { title: 'Открытых аукционов', value: summary?.auctionsCount ?? 0, Icon: AuctionsIcon, isCurrency: false },
+    { title: 'Стоимость имущества в торгах', value: summary?.totalValue ?? 0, Icon: BanknoteIcon, isCurrency: true },
+  ]), [summary]);
+
+  const regions = useMemo(() => summary?.regions || [], [summary]);
 
   return (
     <>
-      <Hero />
+      <Hero listingCount={summary?.totalListings ?? 0} />
       <About />
 
       <div className="container">
         <FirstLoginModal />
 
-        {/* Статистика + карта */}
-        <section style={{ margin: '22px 0' }}>
-          {/* Заголовок по центру и с градиентом */}
+        <section style={{ margin: '32px 0' }}>
           <h2
             style={{
-              margin: '0 0 12px',
+              margin: '0 0 18px',
               textAlign: 'center',
               fontWeight: 900,
               fontSize: 22,
@@ -217,47 +684,58 @@ export default function Home() {
             style={{
               background: UI.cardBg,
               border: `1px solid ${UI.border}`,
-              borderRadius: 12,
-              padding: 16,
+              borderRadius: 16,
+              padding: 18,
+              display: 'grid',
+              gap: 18,
             }}
           >
-            {/* сетка статов */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
                 gap: 12,
-                marginBottom: 20,
               }}
             >
-              <StatCard title="Пользователей" value="18790" Icon={UsersIcon} />
-              <StatCard title="Публичные предложения" value="2163" Icon={DocumentIcon} />
-              <StatCard title="Открытых аукционов" value="5187" Icon={AuctionsIcon} />
-              <StatCard title="Стоимость имущества в торгах" value="119.860.294" Icon={BanknoteIcon} />
+              {statsCards.map((card) => (
+                <StatCard key={card.title} {...card} loading={loadingSummary} />
+              ))}
             </div>
 
-            {/* карта */}
             <div
               style={{
-                position: 'relative',
-                width: '100%',
-                aspectRatio: '1527 / 768',
-                borderRadius: 8,
-                overflow: 'hidden',
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
+                gap: 18,
               }}
             >
-              <img
-                src="/maps/russia-fo.svg"
-                alt="Карта России по федеральным округам"
-                style={{ width: '100%', height: 'auto', display: 'block', background: 'transparent' }}
-                loading="eager"
-              />
+              <RegionBubbleMap regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
+              <RegionList regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
             </div>
           </div>
         </section>
 
-        {/* НОВАЯ секция: Обучение */}
-        <section style={{ margin: '28px 0' }}>
+        {(featured.length || loadingFeatured) && (
+          <section style={{ margin: '32px 0' }}>
+            {loadingFeatured && !featured.length ? (
+              <div
+                style={{
+                  borderRadius: 16,
+                  border: `1px solid ${UI.border}`,
+                  padding: '40px 16px',
+                  textAlign: 'center',
+                  color: UI.text,
+                }}
+              >
+                Загружаем интересные объявления…
+              </div>
+            ) : (
+              <BestOffersCarousel items={featured} />
+            )}
+          </section>
+        )}
+
+        <section style={{ margin: '32px 0' }}>
           <div
             style={{
               background: UI.cardBg,
@@ -270,7 +748,6 @@ export default function Home() {
               alignItems: 'center',
             }}
           >
-            {/* Большая иконка из /public/education/group.png — СДЕЛАЛ БОЛЬШЕ */}
             <div
               style={{
                 width: 180,
@@ -290,7 +767,6 @@ export default function Home() {
               />
             </div>
 
-            {/* ЦЕНТРИРОВАЛ заголовок/описание и кнопку */}
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ margin: '0 0 6px', color: UI.title }}>
                 Обучение для покупателей авто с торгов
@@ -300,11 +776,10 @@ export default function Home() {
                 Практика на реальных кейсах и инструкции, с которыми вы уверенно проходите путь от идеи до покупки.
               </p>
 
-              {/* фичи обучения */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))',
                   gap: 12,
                   marginBottom: 14,
                   textAlign: 'left',
@@ -343,8 +818,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Инфо-блок */}
-        <section style={{ margin: '24px 0' }}>
+        <section style={{ margin: '24px 0 48px' }}>
           <div
             className="card"
             style={{
