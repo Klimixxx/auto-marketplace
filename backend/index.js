@@ -339,23 +339,73 @@ app.post('/api/auth/verify-code', async (req, res) => {
 // ===== Listings (каталог) =====
 app.get('/api/listings', async (req, res) => {
   const {
-    q, region, asset_type, status, minPrice, maxPrice, endDateFrom, endDateTo,
-    page = 1, limit = 20
+    q,
+    region,
+    city,
+    brand,
+    asset_type,
+    trade_type,
+    status,
+    minPrice,
+    maxPrice,
+    endDateFrom,
+    endDateTo,
+    published,
+    page = 1,
+    limit = 20,
   } = req.query;
 
   const where = [];
   const params = [];
 
   if (q) { params.push(q); where.push(
-    `to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'')) @@ plainto_tsquery('russian', $${params.length})`
+    `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
+      OR vin ILIKE '%' || $${params.length} || '%')`
   );}
   if (region)     { params.push(region);     where.push(`region = $${params.length}`); }
+  if (city)       { params.push(city);       where.push(`city = $${params.length}`); }
   if (asset_type) { params.push(asset_type); where.push(`asset_type = $${params.length}`); }
+  if (brand) {
+    const brandTerm = String(brand).trim();
+    if (brandTerm) {
+      params.push(`%${brandTerm}%`);
+      where.push(`brand ILIKE $${params.length}`);
+    }
+  }
+  if (trade_type) {
+    const normalized = String(trade_type).trim().toLowerCase();
+    if (normalized) {
+      params.push(normalized);
+      where.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+    }
+  }
   if (status)     { params.push(status);     where.push(`status = $${params.length}`); }
-  if (minPrice)   { params.push(minPrice);   where.push(`coalesce(current_price, start_price) >= $${params.length}`); }
-  if (maxPrice)   { params.push(maxPrice);   where.push(`coalesce(current_price, start_price) <= $${params.length}`); }
+  if (minPrice)   {
+    const num = Number(String(minPrice).replace(/\s/g, '').replace(',', '.'));
+    if (Number.isFinite(num)) {
+      params.push(num);
+      where.push(`coalesce(current_price, start_price, min_price, max_price) >= $${params.length}`);
+    }
+  }
+  if (maxPrice)   {
+    const num = Number(String(maxPrice).replace(/\s/g, '').replace(',', '.'));
+    if (Number.isFinite(num)) {
+      params.push(num);
+      where.push(`coalesce(current_price, start_price, min_price, max_price) <= $${params.length}`);
+    }
+  }
   if (endDateFrom){ params.push(endDateFrom);where.push(`end_date >= $${params.length}`); }
   if (endDateTo)  { params.push(endDateTo);  where.push(`end_date <= $${params.length}`); }
+
+  const publishedParam = typeof published === 'string' ? published.trim().toLowerCase() : published;
+  if (publishedParam === undefined || publishedParam === '' || publishedParam === null) {
+    where.push('published = TRUE');
+  } else if (['1', 'true', 'yes', 'on'].includes(publishedParam)) {
+    where.push('published = TRUE');
+  } else if (['0', 'false', 'no', 'off'].includes(publishedParam)) {
+    where.push('published = FALSE');
+  }
+
 
   const pageNum = Math.max(1, parseInt(page));
   const size = Math.min(50, Math.max(1, parseInt(limit)));
@@ -364,7 +414,11 @@ app.get('/api/listings', async (req, res) => {
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const totalSql = `SELECT count(*)::int AS count FROM listings ${whereSql}`;
   const listSql = `
-    SELECT id, title, region, asset_type, currency, start_price, current_price, status, end_date, source_url, details
+    SELECT id, title, region, city, brand, model, production_year, vin,
+           asset_type, trade_type, currency,
+           start_price, current_price, min_price, max_price,
+           status, end_date, source_url, photos, is_featured, published,
+           details
     FROM listings
     ${whereSql}
     ORDER BY end_date NULLS LAST, created_at DESC
@@ -402,6 +456,121 @@ app.post('/api/favorites/:id', auth, async (req, res) => {
   } catch (e) {
     console.error('Fav add error:', e);
     res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/listings/meta', async (_req, res) => {
+  try {
+    const [regions, cities, brands, tradeTypes] = await Promise.all([
+      query(`
+        SELECT DISTINCT region
+          FROM listings
+         WHERE published = TRUE AND region IS NOT NULL AND btrim(region) <> ''
+         ORDER BY region
+      `),
+      query(`
+        SELECT DISTINCT city
+          FROM listings
+         WHERE published = TRUE AND city IS NOT NULL AND btrim(city) <> ''
+         ORDER BY city
+      `),
+      query(`
+        SELECT DISTINCT brand
+          FROM listings
+         WHERE published = TRUE AND brand IS NOT NULL AND btrim(brand) <> ''
+         ORDER BY brand
+      `),
+      query(`
+        SELECT DISTINCT lower(coalesce(trade_type,'')) AS trade_type
+          FROM listings
+         WHERE published = TRUE AND trade_type IS NOT NULL AND btrim(trade_type) <> ''
+         ORDER BY trade_type
+      `),
+    ]);
+
+    res.json({
+      regions: regions.rows.map((r) => r.region),
+      cities: cities.rows.map((r) => r.city),
+      brands: brands.rows.map((r) => r.brand),
+      tradeTypes: tradeTypes.rows.map((r) => r.trade_type),
+    });
+  } catch (e) {
+    console.error('listings meta error:', e);
+    res.status(500).json({ error: 'Failed to load filters' });
+  }
+});
+
+app.get('/api/listings/featured', async (req, res) => {
+  const limitRaw = Number.parseInt(req.query?.limit, 10);
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(24, limitRaw)) : 12;
+  try {
+    const { rows } = await query(
+      `SELECT id, title, region, city, brand, model, production_year, vin,
+              asset_type, trade_type, currency,
+              start_price, current_price, min_price, max_price,
+              status, end_date, source_url, photos, is_featured, published,
+              details
+         FROM listings
+        WHERE published = TRUE AND is_featured = TRUE
+        ORDER BY published_at DESC NULLS LAST, updated_at DESC
+        LIMIT $1`,
+      [limit]
+    );
+    res.json({ items: rows });
+  } catch (e) {
+    console.error('listings featured error:', e);
+    res.status(500).json({ error: 'Failed to load featured listings' });
+  }
+});
+
+app.get('/api/stats/summary', async (_req, res) => {
+  try {
+    const [usersResult, listingsResult, regionResult] = await Promise.all([
+      query('SELECT count(*)::int AS count FROM users'),
+      query(`
+        SELECT
+          count(*) FILTER (WHERE published = TRUE) AS total_published,
+          count(*) FILTER (WHERE published = TRUE AND lower(coalesce(trade_type,'')) = 'offer') AS offers,
+          count(*) FILTER (WHERE published = TRUE AND lower(coalesce(trade_type,'')) = 'auction') AS auctions,
+          COALESCE(sum(COALESCE(current_price, start_price, min_price, max_price)) FILTER (WHERE published = TRUE), 0) AS total_value
+        FROM listings
+      `),
+      query(`
+        SELECT region,
+               count(*)::int AS listings,
+               COALESCE(sum(COALESCE(current_price, start_price, min_price, max_price)),0) AS total_value
+          FROM listings
+         WHERE published = TRUE AND region IS NOT NULL AND btrim(region) <> ''
+         GROUP BY region
+         ORDER BY listings DESC
+      `),
+    ]);
+
+    const listingsRow = listingsResult.rows[0] || {};
+    const totalValue = Number(listingsRow.total_value || 0);
+    const regions = regionResult.rows.map((row) => {
+      const value = Number(row.total_value || 0);
+      const listings = Number(row.listings || 0);
+      const average = listings ? Math.round((value / listings) * 100) / 100 : 0;
+      return {
+        region: row.region,
+        listings,
+        totalValue: value,
+        averagePrice: average,
+      };
+    });
+
+    res.json({
+      totalUsers: usersResult.rows[0]?.count ?? 0,
+      totalListings: listingsRow.total_published ?? 0,
+      offersCount: listingsRow.offers ?? 0,
+      auctionsCount: listingsRow.auctions ?? 0,
+      totalValue,
+      regions,
+    });
+  } catch (e) {
+    console.error('stats summary error:', e);
+    res.status(500).json({ error: 'Failed to load summary stats' });
   }
 });
 
@@ -524,7 +693,30 @@ app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
 // статистика дешборда
 app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
   try {
-    const [{ rows: [{ c: users }] }, { rows: visits }] = await Promise.all([
+    async function resolveParticipationStats() {
+      const candidates = ['participation_orders', 'trade_participation_orders', 'auction_participation_orders'];
+      for (const table of candidates) {
+        const exists = await query('SELECT to_regclass($1) AS oid', [table]);
+        if (exists.rows[0]?.oid) {
+          const [{ rows: [{ total = 0 }] }, { rows: [{ month = 0 }] }] = await Promise.all([
+            query(`SELECT count(*)::int AS total FROM ${table}`),
+            query(`SELECT count(*)::int AS month FROM ${table} WHERE created_at >= date_trunc('month', CURRENT_DATE)`),
+          ]);
+          return { total, month, table };
+        }
+      }
+      return { total: 0, month: 0, table: null };
+    }
+
+    const [
+      { rows: [{ c: users }] },
+      { rows: visits },
+      { rows: [listingStats] },
+      { rows: [{ registrations_month: registrationsMonth }] },
+      { rows: [inspectionsStats] },
+      { rows: [{ pro_count: proUsers }] },
+      participationStats,
+    ] = await Promise.all([
       query(`SELECT count(*)::int c FROM users`),
       query(
         `SELECT day, cnt
@@ -532,7 +724,17 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
           WHERE day >= CURRENT_DATE - INTERVAL '29 days'
           ORDER BY day ASC`
       ),
+      query(`SELECT count(*)::int AS total, count(*) FILTER (WHERE published = TRUE)::int AS published FROM listings`),
+      query(`SELECT count(*)::int AS registrations_month FROM users WHERE created_at >= date_trunc('month', CURRENT_DATE)`),
+      query(`
+        SELECT count(*)::int AS total,
+               count(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE))::int AS month
+          FROM inspections
+      `),
+      query(`SELECT count(*)::int AS pro_count FROM users WHERE lower(coalesce(subscription_status,'')) = 'pro'`),
+      resolveParticipationStats(),
     ]);
+
     const map = new Map(visits.map(v => [String(v.day), v.cnt]));
     const out = [];
     for (let i = 29; i >= 0; i--) {
@@ -540,7 +742,22 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
       const iso = d.toISOString().slice(0,10);
       out.push({ day: iso, cnt: map.get(iso) || 0 });
     }
-    res.json({ users, visits: out });
+
+    res.json({
+      users,
+      visits: out,
+      listings: {
+        total: listingStats?.total ?? 0,
+        published: listingStats?.published ?? 0,
+      },
+      registrationsMonth: registrationsMonth ?? 0,
+      inspections: {
+        total: inspectionsStats?.total ?? 0,
+        month: inspectionsStats?.month ?? 0,
+      },
+      proUsers: proUsers ?? 0,
+      participation: participationStats,
+    });
   } catch (e) {
     console.error('admin stats error:', e);
     res.status(500).json({ error: 'failed' });
@@ -587,10 +804,20 @@ app.get('/api/admin/listings-stats', auth, admin, async (req, res) => {
 });
 
 app.patch('/api/listings/:id', auth, admin, async (req, res) => {
-  const { id } = req.params; const { published } = req.body || {};
+  const { id } = req.params;
+  const { published } = req.body || {};
   try {
     const { rows } = await query(
-      'UPDATE listings SET published = COALESCE($1, published), updated_at = now() WHERE id=$2 RETURNING *',
+      `UPDATE listings
+          SET published = COALESCE($1, published),
+              published_at = CASE
+                WHEN $1 IS TRUE THEN COALESCE(published_at, now())
+                WHEN $1 IS FALSE THEN NULL
+                ELSE published_at
+              END,
+              updated_at = now()
+        WHERE id = $2
+        RETURNING *`,
       [published, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
@@ -598,6 +825,40 @@ app.patch('/api/listings/:id', auth, admin, async (req, res) => {
   } catch (e) {
     console.error('Update listing error:', e);
     res.status(500).json({ error: 'Failed to update' });
+  }
+});
+
+app.post('/api/listings/:id/feature', auth, admin, async (req, res) => {
+  const { id } = req.params;
+  const flagRaw = req.body?.is_featured ?? req.body?.featured ?? true;
+  const isFeatured = ['1', 'true', 'yes', true].includes(String(flagRaw).toLowerCase());
+  try {
+    const { rows } = await query(
+      `UPDATE listings
+          SET is_featured = $1,
+              published_at = CASE WHEN $1 = TRUE AND published = TRUE THEN COALESCE(published_at, now()) ELSE published_at END,
+              updated_at = now()
+        WHERE id = $2
+        RETURNING *`,
+      [isFeatured, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('feature listing error:', e);
+    res.status(500).json({ error: 'Failed to update' });
+  }
+});
+
+app.delete('/api/listings/:id', auth, admin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rowCount } = await query('DELETE FROM listings WHERE id = $1', [id]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('delete listing error:', e);
+    res.status(500).json({ error: 'Failed to delete' });
   }
 });
 
@@ -625,7 +886,6 @@ app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
        ORDER BY created_at DESC
        LIMIT $1 OFFSET $2
     `, [limit, offset]);
-
     const pages = Math.max(1, Math.ceil(total / limit));
     res.json({ items, page, pages, total, limit });
   } catch (e) {
@@ -826,29 +1086,97 @@ function pickNumber(n) {
 }
 
 // Преобразование одного объекта парсера -> запись для таблицы listings
+function normalizeTradeType(value) {
+  if (!value && value !== 0) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (lower.includes('аук') || lower.includes('auction') || lower.includes('торг') || lower.includes('bidding')) {
+    return 'auction';
+  }
+  if (lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) {
+    return 'offer';
+  }
+  return text;
+}
+
+function normalizePhotoEntry(photo) {
+  if (!photo) return null;
+  if (typeof photo === 'string') {
+    const trimmed = photo.trim();
+    return trimmed ? { url: trimmed } : null;
+  }
+  if (typeof photo === 'object') {
+    const url = photo.url || photo.href || photo.link || photo.download_url || photo.src || null;
+    if (!url) return null;
+    const title = photo.title || photo.name || photo.caption || photo.alt || null;
+    return title ? { url, title } : { url };
+  }
+  return null;
+}
+
+function collectPhotos(pr, lot) {
+  const pools = [
+    pr?.photos,
+    pr?.images,
+    lot?.photos,
+    lot?.images,
+    lot?.gallery,
+    lot?.photo_urls,
+  ].filter(Boolean);
+
+  const out = [];
+  const seen = new Set();
+
+  for (const pool of pools) {
+    const list = Array.isArray(pool) ? pool : [pool];
+    for (const entry of list) {
+      const photo = normalizePhotoEntry(entry);
+      if (photo && photo.url && !seen.has(photo.url)) {
+        seen.add(photo.url);
+        out.push(photo);
+        if (out.length >= 12) return out;
+      }
+    }
+  }
+
+  return out;
+}
+
 function mapParsedToListing(item) {
   // поддерживаем 2 формы: { parsed_data, fedresurs_data } или плоский объект
   const fed = item?.fedresurs_data || {};
   const pr  = item?.parsed_data    || item || {};
 
   const lot = pr.lot_details || {};
+  const photos = collectPhotos(pr, lot);
+
   const details = {
     lot_details: pr.lot_details || null,
     debtor_details: pr.debtor_details || null,
     contact_details: pr.contact_details || null,
     prices: pr.prices || null,
     documents: pr.documents || null,
+    photos: photos.length ? photos : null,
     fedresurs_meta: fed || null,
   };
 
   const title = pr.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот';
-  const description = (pr?.lot_details?.description) || '';
-  const asset_type = lot.category || 'vehicle'; // по умолчанию считаем ТС — ты можешь скорректировать
-  const region = lot.region || null;
+  const description = pr?.description || lot?.description || '';
+  const asset_type = lot.category || pr.category || 'vehicle';
+  const region = lot.region || pr.region || null;
+  const city = lot.city || lot.location || pr.city || pr.location || null;
+  const brand = lot.brand || pr.brand || null;
+  const model = lot.model || pr.model || null;
+  const production_year = lot.year || lot.production_year || lot.manufacture_year || pr.year || null;
+  const vin = lot.vin || pr.vin || null;
 
-  const start_price = pickNumber(lot.start_price);
+  const start_price = pickNumber(lot.start_price ?? lot.startPrice ?? pr.start_price ?? pr.startPrice);
+  const min_price = pickNumber(lot.min_price ?? lot.minPrice ?? lot.minimal_price ?? lot.minimum_price ?? pr.min_price);
+  const max_price = pickNumber(lot.max_price ?? lot.maxPrice ?? lot.maximum_price ?? pr.max_price);
+
   // current_price можно попытаться брать из последнего периода public offer, если он есть
-  let current_price = start_price;
+  let current_price = pickNumber(pr.current_price ?? pr.currentPrice ?? lot.current_price ?? lot.currentPrice) || start_price;
   const prices = Array.isArray(pr.prices) ? pr.prices : [];
   if (prices.length) {
     const last = prices[prices.length - 1];
@@ -856,11 +1184,13 @@ function mapParsedToListing(item) {
     if (p) current_price = p;
   }
 
-  // статус и дата окончания: берём из fedresurs_data, если есть
-  const status = fed?.status || null;
-  const end_date = fed?.dateFinish ? new Date(fed.dateFinish) : null;
+  const trade_type = normalizeTradeType(pr.trade_type || lot.trade_type || lot.procedure_type || pr.procedure_type);
 
-  const source_url = fed?.possible_url || pr?.trade_platform_url || null;
+  // статус и дата окончания: берём из fedresurs_data, если есть
+  const status = fed?.status || pr?.status || null;
+  const end_date = fed?.dateFinish ? new Date(fed.dateFinish) : pr?.date_finish ? new Date(pr.date_finish) : null;
+
+  const source_url = fed?.possible_url || pr?.trade_platform_url || pr?.source_url || null;
 
   // Уникальный source_id: пробуем fedresurs_id, иначе номер торгов, иначе fallback
   const source_id = pr.fedresurs_id || pr.bidding_number || fed.guid || fed.number || `unknown:${(pr.title||'').slice(0,50)}`;
@@ -871,12 +1201,21 @@ function mapParsedToListing(item) {
     description,
     asset_type,
     region,
+    city,
+    brand,
+    model,
+    production_year,
+    vin,
+    trade_type,
     currency: 'RUB',
     start_price,
     current_price,
+    min_price,
+    max_price,
     status,
     end_date,
     source_url,
+    photos,
     details
   };
 }
@@ -884,31 +1223,82 @@ function mapParsedToListing(item) {
 // UPSERT одной записи в listings
 async function upsertListing(listing) {
   const {
-    source_id, title, description, asset_type, region,
-    currency = 'RUB', start_price = null, current_price = null, status = null,
-    end_date = null, source_url = null, details = {}
+    source_id,
+    title,
+    description,
+    asset_type,
+    region,
+    city = null,
+    brand = null,
+    model = null,
+    production_year = null,
+    vin = null,
+    trade_type = null,
+    currency = 'RUB',
+    start_price = null,
+    current_price = null,
+    min_price = null,
+    max_price = null,
+    status = null,
+    end_date = null,
+    source_url = null,
+    photos = [],
+    details = {},
   } = listing;
+
+  const normalizedPhotos = Array.isArray(photos) ? photos : [];
 
   await query(
     `INSERT INTO listings
-     (source_id, title, description, asset_type, region, currency, start_price,
-      current_price, status, end_date, source_url, details)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     (source_id, title, description, asset_type, region, city, brand, model, production_year, vin,
+      trade_type, currency, start_price, current_price, min_price, max_price, status, end_date,
+      source_url, photos, details)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
      ON CONFLICT (source_id) DO UPDATE SET
        title=EXCLUDED.title,
        description=EXCLUDED.description,
        asset_type=EXCLUDED.asset_type,
        region=EXCLUDED.region,
+       city=EXCLUDED.city,
+       brand=EXCLUDED.brand,
+       model=EXCLUDED.model,
+       production_year=EXCLUDED.production_year,
+       vin=EXCLUDED.vin,
+       trade_type=EXCLUDED.trade_type,
        currency=EXCLUDED.currency,
        start_price=EXCLUDED.start_price,
        current_price=EXCLUDED.current_price,
+       min_price=EXCLUDED.min_price,
+       max_price=EXCLUDED.max_price,
        status=EXCLUDED.status,
        end_date=EXCLUDED.end_date,
        source_url=EXCLUDED.source_url,
+       photos=EXCLUDED.photos,
        details=EXCLUDED.details,
        updated_at=now()`,
-    [source_id, title, description, asset_type, region, currency,
-     start_price, current_price, status, end_date, source_url, details]
+    [
+      source_id,
+      title,
+      description,
+      asset_type,
+      region,
+      city,
+      brand,
+      model,
+      production_year,
+      vin,
+      trade_type,
+      currency,
+      start_price,
+      current_price,
+      min_price,
+      max_price,
+      status,
+      end_date,
+      source_url,
+      JSON.stringify(normalizedPhotos),
+      details,
+    ]
   );
 }
 
