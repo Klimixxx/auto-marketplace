@@ -32,7 +32,6 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
     ? '—'
     : (isCurrency ? fmtCurrency.format(value || 0) : fmtNumber.format(value || 0));
 
-// Карточка метрики
   return (
     <div
       style={{
@@ -444,6 +443,7 @@ function EducationFeature({ title, Icon }) {
   );
 }
 
+/* Иконки (градиент как в Hero) — единичные определения */
 function UsersIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -489,66 +489,6 @@ function AuctionsIcon() {
   );
 }
 
-function BanknoteIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroNote" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <rect x="3" y="7" width="18" height="10" rx="2" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
-      <circle cx="12" cy="12" r="2.5" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
-      <path d="M5 9h2M17 9h2M5 15h2M17 15h2" stroke="url(#gradHeroNote)" strokeWidth="1.8" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-/* Иконки (градиент как в Hero) */
-function UsersIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroUsers" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="url(#gradHeroUsers)" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="url(#gradHeroUsers)" strokeWidth="1.8" />
-    </svg>
-  );
-}
-// Листок (документ) — для "Публичные предложения"
-function DocumentIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroDoc" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
-      <path d="M14 3v6h6" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
-      <path d="M9 13h8M9 17h8" stroke="url(#gradHeroDoc)" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-function AuctionsIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroAuc" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M7 10l6-6 4 4-6 6-4-4zM3 21h10" stroke="url(#gradHeroAuc)" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
 // Купюра — для "Стоимость имущества в торгах"
 function BanknoteIcon() {
   return (
@@ -566,8 +506,7 @@ function BanknoteIcon() {
   );
 }
 
-
-/* Естественные цвета иконок: молния — жёлтая, рассрочка — зелёная, авто — синяя */
+/* Естественные цвета иконок */
 function LightningIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -578,7 +517,6 @@ function LightningIcon(){
 function InstallmentIcon(){
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-    
       <rect x="3" y="6" width="12" height="8" rx="2" stroke="#22C55E" strokeWidth="1.8"/>
       <path d="M5 9h8M5 12h3" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
       <rect x="16" y="9" width="5" height="7" rx="1.5" stroke="#22C55E" strokeWidth="1.8"/>
