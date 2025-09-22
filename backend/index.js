@@ -437,28 +437,6 @@ app.get('/api/listings', async (req, res) => {
   }
 });
 
-app.get('/api/listings/:id', async (req, res) => {
-  const { id } = req.params;
-  const { rows } = await query('SELECT * FROM listings WHERE id = $1', [id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
-});
-
-// ===== Favorites =====
-app.post('/api/favorites/:id', auth, async (req, res) => {
-  const userId = req.user.sub; const { id } = req.params;
-  try {
-    await query(
-      'INSERT INTO favorites(user_id, listing_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
-      [userId, id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('Fav add error:', e);
-    res.status(500).json({ error: 'Failed' });
-  }
-});
-
 app.get('/api/listings/meta', async (_req, res) => {
   try {
     const [regions, cities, brands, tradeTypes] = await Promise.all([
@@ -522,6 +500,29 @@ app.get('/api/listings/featured', async (req, res) => {
     res.status(500).json({ error: 'Failed to load featured listings' });
   }
 });
+
+app.get('/api/listings/:id', async (req, res) => {
+  const { id } = req.params;
+  const { rows } = await query('SELECT * FROM listings WHERE id = $1', [id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+// ===== Favorites =====
+app.post('/api/favorites/:id', auth, async (req, res) => {
+  const userId = req.user.sub; const { id } = req.params;
+  try {
+    await query(
+      'INSERT INTO favorites(user_id, listing_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+      [userId, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Fav add error:', e);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 
 app.get('/api/stats/summary', async (_req, res) => {
   try {
