@@ -11,7 +11,9 @@ const UI = {
   buttonHover: '#a5f3fc',
 };
 
-export default function Hero() {
+const fmt = new Intl.NumberFormat('ru-RU');
+
+export default function Hero({ listingCount = 0 }) {
   const [q, setQ] = useState('');
 
   function onSubmit(e){
@@ -27,7 +29,7 @@ export default function Hero() {
         {/* Бейдж с количеством объявлений */}
         <div style={styles.badge}>
           <span style={styles.pulse} />
-          <span style={styles.badgeNum}>7 839</span>
+          <span style={styles.badgeNum}>{fmt.format(Math.max(0, listingCount))}</span>
           <span style={styles.badgeLabel}>Объявлений</span>
         </div>
 
