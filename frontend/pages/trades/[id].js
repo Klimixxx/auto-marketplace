@@ -72,15 +72,116 @@ function collectPhotos(details) {
   return out;
 }
 
-function makeKeyValueEntries(source) {
+function buildKeyValueEntries(source) {
   if (!source || typeof source !== 'object') return [];
-  const entries = Object.entries(source)
-    .filter(([_, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0));
-  return entries.map(([key, value], index) => ({
-    key: String(key || `#${index + 1}`),
-    value: formatValue(value),
-  }));
+  const result = [];
+  const seen = new Set();
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) return;
+    const displayValue = formatValueForDisplay(key, value);
+    if (!displayValue || displayValue === '—') return;
+    const label = translateFieldKey(key);
+    const dedupeKey = `${label}:${displayValue}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    result.push({
+      key: label,
+      value: displayValue,
+      rawKey: key,
+      rawValue: value,
+    });
+  });
+
+  return result;
 }
+
+function formatTradeType(value) {
+  if (!value) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'auction' || normalized === 'аукцион') return 'Аукцион';
+  if (normalized === 'offer' || normalized.includes('публич')) return 'Торговое предложение';
+  if (normalized === 'tender' || normalized === 'torgi') return 'Торги';
+  return translateFieldKey(value);
+}
+
+const DOCUMENT_TYPE_LABELS = {
+  protocol: 'Протокол',
+  report: 'Отчёт',
+  contract: 'Договор',
+  notice: 'Уведомление',
+  statement: 'Заявление',
+  application: 'Заявка',
+  decision: 'Решение',
+  order: 'Приказ',
+  passport: 'Паспорт',
+  conclusion: 'Заключение',
+  regulation: 'Положение',
+  instruction: 'Инструкция',
+  agreement: 'Соглашение',
+  act: 'Акт',
+};
+
+function translateDocumentType(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/[а-яё]/i.test(raw)) return raw;
+  const normalized = raw.toLowerCase();
+  if (DOCUMENT_TYPE_LABELS[normalized]) return DOCUMENT_TYPE_LABELS[normalized];
+  return translateFieldKey(raw);
+}
+
+function normalizeDocuments(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((doc, index) => {
+      if (!doc || typeof doc !== 'object') return null;
+      const url = doc.url || doc.href || doc.link || doc.download_url || doc.file || null;
+      const title = doc.title || doc.name || doc.filename || doc.label || `Документ ${index + 1}`;
+      const typeRaw = doc.document_type || doc.type || doc.kind || null;
+      const type = translateDocumentType(typeRaw);
+      const description = doc.description || doc.comment || doc.note || '';
+      const date = doc.date || doc.created_at || doc.updated_at || doc.uploaded_at || null;
+      return {
+        id: url || `${title}-${index}`,
+        title,
+        type,
+        rawType: typeRaw,
+        description,
+        date,
+        url,
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderContactValue(entry) {
+  const raw = entry?.rawValue;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return entry.value;
+    if (/^https?:\/\//i.test(trimmed)) {
+      return (
+        <a href={trimmed} target="_blank" rel="noreferrer">
+          {trimmed}
+        </a>
+      );
+    }
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return <a href={`mailto:${trimmed}`}>{trimmed}</a>;
+    }
+    const digits = trimmed.replace(/[^\d+]/g, '');
+    const digitCount = digits.replace(/\D/g, '').length;
+    if (digitCount >= 10) {
+      const normalized = digits.startsWith('+') ? digits : `+${digits.replace(/^8/, '7')}`;
+      return <a href={`tel:${normalized}`}>{entry.value}</a>;
+    }
+  }
+  return entry.value;
+}
+  
 
 function formatDate(value) {
   if (!value) return '—';
@@ -151,7 +252,8 @@ function KeyValueGrid({ entries }) {
   if (!entries || !entries.length) return null;
   return (
     <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-      {entries.map(({ key, value }, index) => {
+      {entries.map((entry, index) => {
+        const { key, value } = entry;
         const isMultiline = typeof value === 'string' && value.includes('\n');
         return (
           <div key={`${key}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -166,18 +268,31 @@ function KeyValueGrid({ entries }) {
   );
 }
 
-function KeyValueList({ entries }) {
+function KeyValueList({ entries, renderValue, valueClassName, valueStyle }) {
   if (!entries || !entries.length) return null;
+  const baseStyle = { fontWeight: 600, textAlign: 'right', wordBreak: 'break-word', ...(valueStyle || {}) };
   return (
     <div className="panel" style={{ display: 'grid', gap: 8 }}>
-      {entries.map(({ key, value }, index) => {
-        const isMultiline = typeof value === 'string' && value.includes('\n');
+      {entries.map((entry, index) => {
+        const { key, value } = entry;
+        const content = renderValue ? renderValue(entry) : value;
+        const resolvedClassName = typeof valueClassName === 'function' ? valueClassName(entry) : valueClassName;
+        const isMultiline = typeof content === 'string' && content.includes('\n');
         return (
           <div key={`${key}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
             <div className="muted" style={{ fontSize: 12 }}>{key}</div>
-            {isMultiline
-              ? <pre style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'right' }}>{value}</pre>
-              : <div style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{value}</div>}
+            {isMultiline ? (
+              <pre
+                className={resolvedClassName}
+                style={{ ...baseStyle, margin: 0, whiteSpace: 'pre-wrap' }}
+              >
+                {content}
+              </pre>
+            ) : (
+              <div className={resolvedClassName} style={baseStyle}>
+                {content}
+              </div>
+            )}
           </div>
         );
       })}
@@ -208,11 +323,11 @@ export default function ListingPage({ item }) {
   }, [item?.id, photos.length]);
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
 
-  const lotEntries = makeKeyValueEntries(details?.lot_details);
-  const contactEntries = makeKeyValueEntries(details?.contact_details);
-  const debtorEntries = makeKeyValueEntries(details?.debtor_details);
+  const lotEntries = buildKeyValueEntries(details?.lot_details);
+  const contactEntries = buildKeyValueEntries(details?.contact_details);
+  const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const prices = Array.isArray(details?.prices) ? details.prices : [];
-  const documents = Array.isArray(details?.documents) ? details.documents : [];
+  const documents = normalizeDocuments(Array.isArray(details?.documents) ? details.documents : []);
   const fedresursMeta = details?.fedresurs_meta;
   const currency = item?.currency || 'RUB';
 
@@ -226,8 +341,10 @@ export default function ListingPage({ item }) {
     heroChipSet.add(text);
     heroChips.push(text);
   };
-  addChip(item?.region);
-  addChip(item?.asset_type);
+  const assetTypeLabel = item?.asset_type
+    ? translateValueByKey('asset_type', item.asset_type) || translateFieldKey(item.asset_type)
+    : null;
+  if (assetTypeLabel) addChip(assetTypeLabel);
   if (item?.lot_number) addChip(`Лот № ${item.lot_number}`);
   const yearValue = lotDetails?.year || lotDetails?.production_year || lotDetails?.manufacture_year || item?.year;
   if (yearValue) addChip(`Год выпуска ${yearValue}`);
@@ -236,11 +353,16 @@ export default function ListingPage({ item }) {
     const numericMileage = parseNumberValue(mileageValue);
     const formattedMileage = numericMileage != null
       ? `${new Intl.NumberFormat('ru-RU').format(Math.round(numericMileage))} км`
-      : formatValue(mileageValue);
+      : formatValueForDisplay('mileage', mileageValue);
     addChip(`Пробег ${formattedMileage}`);
   }
   const vinValue = lotDetails?.vin || lotDetails?.VIN || item?.vin;
   if (vinValue) addChip(`VIN ${vinValue}`);
+
+  const locationLabel = [item?.city, item?.region].filter(Boolean).join(', ');
+  const tradeTypeLabel = formatTradeType(item?.trade_type);
+  const statusLabel = item?.status ? translateValueByKey('status', item.status) || translateFieldKey(item.status) : null;
+  const endDateLabel = item?.end_date ? formatDate(item.end_date) : null;
 
   return (
     <div className="container detail-page">
@@ -249,56 +371,78 @@ export default function ListingPage({ item }) {
       </div>
 
       <div className="detail-hero">
-        <div className="detail-hero__info">
-          <div className="eyebrow">{item?.asset_type || 'Объявление'}</div>
-          <h1 className="detail-hero__title">{item?.title || 'Лот'}</h1>
-          {heroChips.length ? (
-            <div className="detail-hero__meta">
-              {heroChips.slice(0, 5).map((chip, index) => (
-                <span key={`${chip}-${index}`} className="chip">{chip}</span>
+        <div className="detail-hero__gallery">
+          <div className="detail-hero__main-photo">
+            {activePhoto ? (
+              <img src={activePhoto.url} alt={activePhoto.title || item?.title || 'Фотография лота'} />
+            ) : (
+              <div className="detail-hero__placeholder">Фотографии появятся позже</div>
+            )}
+          </div>
+          {photos.length > 1 && (
+            <div className="detail-hero__thumbs">
+              {photos.slice(0, 8).map((photo, index) => (
+                <button
+                  key={photo.url || `${index}-${photo.title || ''}`}
+                  type="button"
+                  className={index === activePhotoIndex ? 'is-active' : undefined}
+                  onClick={() => setActivePhotoIndex(index)}
+                  onMouseEnter={() => setActivePhotoIndex(index)}
+                  aria-label={`Фотография ${index + 1}`}
+                >
+                  <img src={photo.url} alt={photo.title || `Фото ${index + 1}`} />
+                </button>
               ))}
-            </div>
-          ) : null}
-          {(item?.description || details?.lot_details?.description) && (
-            <div className="muted" style={{ whiteSpace: 'pre-line' }}>
-              {(item?.description || details?.lot_details?.description || '').slice(0, 260)}
-              {(item?.description || details?.lot_details?.description || '').length > 260 ? '…' : ''}
             </div>
           )}
         </div>
 
-        <aside className="detail-summary-card">
-          <div className="detail-summary__prices">
-            <div className="detail-summary__price">
-              <div className="detail-summary__price-label">Стартовая цена</div>
-              <div className="detail-summary__price-value">{fmtPrice(item?.start_price, currency)}</div>
+        <div className="detail-hero__info">
+          {tradeTypeLabel ? <div className="detail-hero__badge">{tradeTypeLabel}</div> : null}
+          <h1 className="detail-hero__title">{item?.title || 'Лот'}</h1>
+          {locationLabel ? <div className="detail-hero__location">{locationLabel}</div> : null}
+          {heroChips.length ? (
+            <div className="detail-hero__meta">
+              {heroChips.slice(0, 6).map((chip, index) => (
+                <span key={`${chip}-${index}`} className="chip">{chip}</span>
+              ))}
             </div>
-            <div className="detail-summary__price">
-              <div className="detail-summary__price-label">Текущая цена</div>
-              <div className="detail-summary__price-value">{fmtPrice(item?.current_price, currency)}</div>
-            </div>
-          </div>
+          ) : null}
+        
 
-          {(item?.status || item?.end_date) && (
-            <div className="detail-summary__status">
-              <div><strong>Статус:</strong> {item?.status ?? '—'}</div>
-              {item?.end_date ? <div><strong>Дата окончания:</strong> {formatDate(item.end_date)}</div> : null}
+        <div className="detail-summary-card detail-summary-card--inline">
+            <div className="detail-summary__prices">
+              <div className="detail-summary__price">
+                <div className="detail-summary__price-label">Стартовая цена</div>
+                <div className="detail-summary__price-value">{fmtPrice(item?.start_price, currency)}</div>
+              </div>
+              <div className="detail-summary__price">
+                <div className="detail-summary__price-label">Текущая цена</div>
+                <div className="detail-summary__price-value">{fmtPrice(item?.current_price, currency)}</div>
+              </div>
             </div>
-          )}
+
+          {(statusLabel || endDateLabel) && (
+              <div className="detail-summary__status">
+                {statusLabel ? <div><strong>Статус:</strong> {statusLabel}</div> : null}
+                {endDateLabel ? <div><strong>Дата окончания:</strong> {endDateLabel}</div> : null}
+              </div>
+            )}
 
           <div className="detail-summary__actions">
-            <button onClick={handleOrderClick} className="button">Заказать осмотр</button>
-            {item?.source_url ? (
-              <a href={item.source_url} target="_blank" rel="noreferrer" className="button button-outline">
-                Перейти к источнику
-              </a>
-            ) : null}
-          </div>
+              <button onClick={handleOrderClick} className="button">Заказать осмотр</button>
+              {item?.source_url ? (
+                <a href={item.source_url} target="_blank" rel="noreferrer" className="button button-outline">
+                  Перейти к источнику
+                </a>
+              ) : null}
+            </div>
 
           <div className="muted" style={{ fontSize: 13 }}>
-            ID объявления: {item?.id}
+              ID объявления: {item?.id}
+            </div>
           </div>
-        </aside>
+        </div>
       </div>
 
       <InspectionModal
@@ -309,34 +453,6 @@ export default function ListingPage({ item }) {
 
       <div className="detail-layout">
         <div className="detail-main">
-          <section className="detail-section detail-gallery">
-            <h2>Фотографии</h2>
-            {activePhoto ? (
-              <div className="detail-gallery__main">
-                <img src={activePhoto.url} alt={activePhoto.title || item?.title || 'Фотография лота'} />
-              </div>
-            ) : (
-              <div className="panel" style={{ textAlign: 'center' }}>
-                <div className="big">Фотографии отсутствуют</div>
-                <div className="muted">Организатор не загрузил изображения для этого лота.</div>
-              </div>
-            )}
-            {photos.length > 1 && (
-              <div className="detail-gallery__thumbs">
-                {photos.map((photo, index) => (
-                  <button
-                    key={photo.url || index}
-                    type="button"
-                    className={`detail-gallery__thumb${index === activePhotoIndex ? ' is-active' : ''}`}
-                    onClick={() => setActivePhotoIndex(index)}
-                  >
-                    <img src={photo.url} alt={photo.title || `Фото ${index + 1}`} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
           {(item?.description || details?.lot_details?.description) && (
             <section className="detail-section">
               <h2>Описание</h2>
@@ -368,24 +484,26 @@ export default function ListingPage({ item }) {
                   </thead>
                   <tbody>
                     {prices.map((entry, index) => {
-                      const label = entry.stage || entry.stage_name || entry.stageName || entry.round || entry.type || entry.name || entry.title || `Запись ${index + 1}`;
+                      const labelRaw = entry.stage || entry.stage_name || entry.stageName || entry.round || entry.type || entry.name || entry.title;
+                      const label = labelRaw ? translateFieldKey(labelRaw) : `Запись ${index + 1}`
                       const numericPrice = parseNumberValue(
                         entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount
                       );
+                      const fallbackPrice = entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount ?? '—';
                       const priceText = numericPrice != null
                         ? fmtPrice(numericPrice, currency)
-                        : formatValue(
-                          entry.price ?? entry.currentPrice ?? entry.current_price ?? entry.startPrice ?? entry.start_price ?? entry.value ?? entry.amount ?? '—'
-                        );
+                        : formatValueForDisplay('price', fallbackPrice);
                       const dateValue = entry.date || entry.date_start || entry.dateStart || entry.date_finish || entry.dateFinish || entry.updated_at || entry.updatedAt;
-                      const comment = entry.comment || entry.description || entry.info || entry.status || entry.note || entry.result || null;
+                      const dateText = dateValue ? formatDateTime(dateValue) : '—';
+                      const commentRaw = entry.comment || entry.description || entry.info || entry.status || entry.note || entry.result || null;
+                      const commentText = commentRaw ? formatValueForDisplay('comment', commentRaw) : null;
 
                       return (
                         <tr key={entry.id || `${label}-${index}`}>
                           <td style={PRICE_CELL_STYLE}>{label}</td>
                           <td style={PRICE_CELL_STYLE}>{priceText}</td>
-                          <td style={PRICE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
-                          <td style={PRICE_CELL_STYLE}>{comment ? <span style={{ whiteSpace: 'pre-wrap' }}>{formatValue(comment)}</span> : '—'}</td>
+                          <td style={PRICE_CELL_STYLE}>{dateText}</td>
+                          <td style={PRICE_CELL_STYLE}>{commentText ? <span style={{ whiteSpace: 'pre-wrap' }}>{commentText}</span> : '—'}</td>
                         </tr>
                       );
                     })}
@@ -395,22 +513,35 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {Array.isArray(documents) && documents.length > 0 && (
+          {documents.length > 0 && (
             <section className="detail-section">
               <h2>Документы</h2>
               <div className="panel" style={{ display: 'grid', gap: 12 }}>
-                {documents.map((doc, index) => {
-                  const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
-                  const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
-                  const description = doc?.description || doc?.comment || doc?.note || null;
-                  const date = doc?.date || doc?.created_at || doc?.updated_at || null;
+                {documents.map((doc) => {
+                  const hasMeta = doc.type || doc.date;
 
                   return (
-                    <div key={url || `${title}-${index}`}>
-                      {url ? <a href={url} target="_blank" rel="noreferrer" className="link">{title}</a> : <div>{title}</div>}
-                      {date ? <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Дата: {formatDate(date)}</div> : null}
-                      {description ? <div className="muted" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{description}</div> : null}
-                    </div>
+                    <article key={doc.id} className="document-card">
+                      <div className="document-card__title">{doc.title}</div>
+                      {hasMeta ? (
+                        <div className="document-card__meta">
+                          {doc.type ? <span>{doc.type}</span> : null}
+                          {doc.date ? <span>Дата: {formatDate(doc.date)}</span> : null}
+                        </div>
+                      ) : null}
+                      {doc.description ? (
+                        <div style={{ color: 'rgba(226,232,240,0.75)', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+                          {doc.description}
+                        </div>
+                      ) : null}
+                      {doc.url ? (
+                        <div className="document-card__actions">
+                          <a href={doc.url} target="_blank" rel="noreferrer">
+                            Открыть документ →
+                          </a>
+                        </div>
+                      ) : null}
+                    </article>
                   );
                 })}
               </div>
@@ -433,7 +564,12 @@ export default function ListingPage({ item }) {
           {contactEntries.length > 0 && (
             <section className="detail-section">
               <h2>Контакты</h2>
-              <KeyValueList entries={contactEntries} />
+              <KeyValueList
+                entries={contactEntries}
+                renderValue={renderContactValue}
+                valueClassName="contact-list__value"
+                valueStyle={{ textAlign: 'left' }}
+              />
             </section>
           )}
 
