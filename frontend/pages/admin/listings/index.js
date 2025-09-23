@@ -445,6 +445,49 @@ export default function AdminParserTradesPage() {
     },
     [page, loadPage, view],
   );
+  const toggleFeatured = useCallback(
+    async (id, nextState) => {
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      setFeaturingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/listings/${id}/feature`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ is_featured: nextState }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        setItems((prev) => prev.map((item) => (
+          item.id === id ? { ...item, is_featured: nextState } : item
+        )));
+      } catch (error) {
+        console.error('feature toggle error:', error);
+        alert('Не удалось обновить статус «Лучшее предложение».');
+      } finally {
+        setFeaturingId(null);
+      }
+    },
+    [setItems],
+  );
+
+  
 
   const isPublishedView = view === 'published';
   const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
@@ -565,13 +608,14 @@ export default function AdminParserTradesPage() {
               <th style={TABLE_HEADER_STYLE}>ТС</th>
               <th style={TABLE_HEADER_STYLE}>Стартовая</th>
               <th style={TABLE_HEADER_STYLE}>Окончание</th>
+              <th style={TABLE_HEADER_STYLE}>Лучшее</th>
               <th style={TABLE_HEADER_STYLE}>Действия</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ ...TABLE_CELL_STYLE, textAlign: 'center', color: '#9aa6b2' }}>
+                <td colSpan={7} style={{ ...TABLE_CELL_STYLE, textAlign: 'center', color: '#9aa6b2' }}>
                   {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
                 </td>
               </tr>
@@ -580,10 +624,20 @@ export default function AdminParserTradesPage() {
                 const createdAt = formatCreatedAt(item.created_at);
                 const publishedAt = formatCreatedAt(item.published_at);
                 const isPublishing = publishingId === item.id;
+                const isFeatured = Boolean(item.is_featured);
+                const isFeaturing = featuringId === item.id;
                 const publishButtonStyle =
                   isPublishing || listLoading
                     ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
                     : PRIMARY_BUTTON_STYLE;
+                const featureButtonStyle = (isFeaturing || listLoading)
+                  ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
+                  : {
+                      ...ACTION_BUTTON_STYLE,
+                      background: isFeatured ? '#0f766e' : '#1e293b',
+                      borderColor: isFeatured ? '#0f766e' : '#253041',
+                      color: '#fff',
+                    };
                 const detailHref = {
                   pathname: '/admin/listings/[id]',
                   query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
@@ -623,6 +677,16 @@ export default function AdminParserTradesPage() {
                       {item.trade_place ? (
                         <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{item.trade_place}</div>
                       ) : null}
+                    </td>
+                    <td style={TABLE_CELL_STYLE}>
+                      <button
+                        type="button"
+                        style={featureButtonStyle}
+                        onClick={() => toggleFeatured(item.id, !isFeatured)}
+                        disabled={isFeaturing || listLoading}
+                      >
+                        {isFeatured ? 'В лучших' : 'Добавить'}
+                      </button>
                     </td>
                     <td style={TABLE_CELL_STYLE}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
