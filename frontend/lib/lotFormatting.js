@@ -445,6 +445,11 @@ export function translateFieldKey(key) {
   return translateTokens(tokens);
 }
 
+export function translateLabelKey(key) {
+  return translateFieldKey(key);
+}
+
+
 export function translateValueByKey(key, value) {
   if (value == null) return value;
   if (typeof value === 'string') {
