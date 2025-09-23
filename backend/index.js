@@ -523,7 +523,6 @@ app.post('/api/favorites/:id', auth, async (req, res) => {
   }
 });
 
-
 app.get('/api/stats/summary', async (_req, res) => {
   try {
     const [usersResult, listingsResult, regionResult] = await Promise.all([
