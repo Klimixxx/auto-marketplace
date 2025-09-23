@@ -129,6 +129,7 @@ export default function AdminParserTradesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [featuringId, setFeaturingId] = useState(null);
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
   const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
@@ -484,7 +485,7 @@ export default function AdminParserTradesPage() {
         setFeaturingId(null);
       }
     },
-    [setItems],
+    [setFeaturingId, setItems],
   );
 
   
