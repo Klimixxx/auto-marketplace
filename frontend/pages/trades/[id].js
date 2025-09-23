@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import InspectionModal from '../../components/InspectionModal';
+import {
+  formatValueForDisplay,
+  translateFieldKey,
+  translateValueByKey,
+} from '../../lib/lotFormatting';
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '';
 
