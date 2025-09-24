@@ -1,52 +1,57 @@
 :root {
-  /* Светлая базовая палитра (как на Avito по ощущению) */
-  --bg: #ffffff;               /* фон страницы */
-  --bg-alt: #f7f7f7;           /* альтернативный фон секций */
-  --card: #ffffff;             /* фон карточек/панелей */
-  --card-soft: #fafafa;        /* мягкий фон для вторичных блоков */
+  /* ===== Base Surfaces ===== */
+  --bg: #ffffff;            /* page */
+  --bg-alt: #fafafa;        /* section alt */
+  --surface-1: #ffffff;     /* cards */
+  --surface-2: #f9fafb;     /* subtle blocks */
+  --surface-3: #f3f4f6;     /* chips / muted panels */
 
-  --text: #111827;             /* основной текст (почти чёрный) */
-  --muted: #6b7280;            /* вторичный текст (серый) */
+  /* ===== Text ===== */
+  --text-strong: #0f172a;   /* very dark (slate-900) */
+  --text: #111827;          /* default */
+  --text-muted: #6b7280;    /* secondary */
+  --text-subtle: #9ca3af;   /* tertiary */
+  --text-on-accent: #ffffff;
 
-  /* Акцентный синий (в духе Avito UI) */
-  --accent: #2a65f7;           /* основной акцент/кнопки/ссылки */
-  --accent-strong: #1e53d6;    /* hover/активный акцент */
+  /* ===== Accent (Avito-like blue) ===== */
+  --accent: #2a65f7;
+  --accent-hover: #1f4fe3;
+  --accent-active: #163fbd;
+  --accent-50: #eff4ff;     /* tints for chips / hover */
+  --accent-100: #deebff;
 
-  /* Рамки/делители — светлые, но заметные */
-  --border: rgba(17, 24, 39, 0.12);
-  --border-strong: rgba(17, 24, 39, 0.22);
+  /* ===== Borders & Dividers ===== */
+  --border: #e5e7eb;            /* default/light */
+  --border-strong: #d1d5db;     /* stronger separators */
+  --outline: rgba(42,101,247,0.45); /* focus ring */
 
-  /* Тени мягкие и «воздушные» под светлую тему */
-  --shadow-sm: 0 8px 24px rgba(17, 24, 39, 0.06);
-  --shadow-lg: 0 20px 48px rgba(17, 24, 39, 0.08);
+  /* ===== Shadows ===== */
+  --shadow-sm: 0 4px 16px rgba(17,24,39,0.06);
+  --shadow-md: 0 10px 32px rgba(17,24,39,0.08);
+  --shadow-lg: 0 20px 48px rgba(17,24,39,0.10);
 
-  /* Скругления оставляем как есть (современно) */
+  /* ===== Radius ===== */
   --radius-lg: 18px;
   --radius-md: 14px;
   --radius-sm: 10px;
 
-  /* Поля ввода — светлые, с тонкой рамкой */
+  /* ===== Inputs ===== */
   --input-bg: #ffffff;
-  --input-border: rgba(17, 24, 39, 0.14);
-  --input-border-focus: rgba(42, 101, 247, 0.45);
+  --input-border: #d1d5db;
+  --input-placeholder: rgba(17,24,39,0.45);
+  --input-focus: rgba(42,101,247,0.45);
 
-  /* Фоны «чипсов»/бейджей и подчёркнутых областей */
-  --chip-bg: rgba(42, 101, 247, 0.06);
-  --chip-border: rgba(42, 101, 247, 0.18);
+  /* ===== State Colors ===== */
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --info: #2a65f7;
 
-  /* Таблицы/ряды */
-  --row-hover: rgba(17, 24, 39, 0.04);
-  --row-active: rgba(42, 101, 247, 0.08);
-
-  /* Предупреждения/статусы (оставляем нейтральные) */
-  --ok: #16a34a;
-  --warn: #f59e0b;
-  --err: #ef4444;
-
-  /* Градиенты (если где-то используются) — деликатно, без «неона» */
-  --grad-start: #2a65f7;
-  --grad-end: #7aa2ff;
+  /* ===== Tables / Rows ===== */
+  --row-hover: #f5f8ff;   /* subtle blue hover on white */
+  --row-active: #eef2ff;  /* selected row */
 }
+
 
 
 * {
@@ -698,6 +703,102 @@ listing-card__more-button {
 .nav-link:hover {
   text-shadow: 0 0 12px rgba(103,232,249,0.35);
 }
+/* ===== Base UI Layer for Better Contrast on White ===== */
+body {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.section, .container, .content, .panel {
+  background: var(--surface-1);
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--soft { background: var(--surface-2); }
+
+hr, .divider { border-color: var(--border); }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+
+/* Buttons */
+button, .btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.btn-primary, button.primary, .button-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid transparent;
+}
+.btn-primary:hover, button.primary:hover, .button-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-secondary, button.secondary, .button-secondary {
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.btn-secondary:hover, button.secondary:hover, .button-secondary:hover {
+  background: var(--surface-2);
+}
+
+/* Inputs */
+input[type="text"], input[type="search"], input[type="tel"],
+input[type="number"], input[type="email"], select, textarea {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+}
+input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--input-focus);
+  outline-offset: 1px;
+}
+
+/* Chips / Badges */
+.badge, .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-50);
+  border: 1px solid var(--accent-100);
+  color: var(--accent-active);
+}
+
+/* Tables */
+table { border-collapse: separate; border-spacing: 0; width: 100%; }
+thead th {
+  background: var(--surface-2);
+  color: var(--text-strong);
+  text-align: left;
+  border-bottom: 1px solid var(--border-strong);
+}
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--row-hover); }
+tbody tr[aria-selected="true"], tbody tr.selected { background: var(--row-active); }
+
+/* Alerts */
+.alert {
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+}
+.alert--info    { background: var(--accent-50); color: var(--accent-active); }
+.alert--success { background: #ecfdf5; color: #166534; border-color: #bbf7d0; }
+.alert--warn    { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.alert--danger  { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+
 
 @media (max-width: 960px) {
   .detail-summary-card {
