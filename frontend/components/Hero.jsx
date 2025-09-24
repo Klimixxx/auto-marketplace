@@ -3,13 +3,14 @@ import { useState } from 'react';
 import Router from 'next/router';
 
 const UI = {
-  title: '#ffffff',
-  text: 'rgba(255,255,255,0.80)',
-  border: 'rgba(255,255,255,0.12)',
-  glass: 'rgba(255,255,255,0.05)',
-  button: '#67e8f9',
-  buttonHover: '#a5f3fc',
+  title: '#111827',
+  text: 'rgba(17,24,39,0.80)',
+  border: 'rgba(17,24,39,0.12)',
+  glass: 'rgba(17,24,39,0.04)',    // лёгкое «стекло» под светлый фон
+  button: '#2a65f7',
+  buttonHover: '#1e53d6',
 };
+
 
 const fmt = new Intl.NumberFormat('ru-RU');
 
