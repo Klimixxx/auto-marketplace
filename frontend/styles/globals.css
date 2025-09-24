@@ -7,10 +7,10 @@
   --surface-3: #f3f4f6;     /* chips / muted panels */
 
   /* ===== Text ===== */
-  --text-strong: #0f172a;   /* very dark */
-  --text: #111827;          /* default */
-  --text-muted: #6b7280;    /* secondary */
-  --text-subtle: #9ca3af;   /* tertiary */
+  --text-strong: #000000;   /* very dark */
+  --text: #000000;          /* default */
+  --text-muted: #000000;    /* secondary */
+  --text-subtle: #000000;   /* tertiary */
   --text-on-accent: #ffffff;
 
   /* ===== Accent (Avito-like blue) ===== */
@@ -38,7 +38,7 @@
 
   /* ===== Inputs ===== */
   --input-bg: #ffffff;
-  --input-placeholder: rgba(17,24,39,0.45);
+  --input-placeholder: #000000;
   --input-focus: rgba(42,101,247,0.45);
 
   /* ===== State ===== */
@@ -184,7 +184,7 @@ textarea:focus {
 
 
 .input::placeholder {
-  color: rgba(154, 166, 178, 0.7);
+  color: #000000;
 }
 
 .button,
@@ -710,10 +710,7 @@ listing-card__more-button {
 }
 
 .gradtext {
-  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
-  -webkit-background-clip:text;
-  background-clip:text;
-  color:transparent;
+  color: #000000;
 }
 
 .nav-link:hover {

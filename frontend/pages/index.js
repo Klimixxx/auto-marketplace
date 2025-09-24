@@ -8,7 +8,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
   title: '#000000',
-  text: 'rgba(0,0,0,0.7)',
+  text: '#000000',
   cardBg: '#ffffff',
   border: 'rgba(15,23,42,0.12)',
   subtleBg: '#f3f4f6',

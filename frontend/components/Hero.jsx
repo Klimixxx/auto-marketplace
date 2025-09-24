@@ -4,7 +4,7 @@ import Router from 'next/router';
 
 const UI = {
   title: '#000000',
-  text: 'rgba(0,0,0,0.75)',
+  text: '#000000',
   border: 'rgba(15,23,42,0.12)',
   glass: 'rgba(15,23,42,0.06)',
   button: '#2a65f7',
@@ -126,7 +126,7 @@ const styles = {
     letterSpacing: 0.3,
     fontVariantNumeric: 'tabular-nums',
   },
-  badgeLabel: { color: 'rgba(0,0,0,0.65)' },
+  badgeLabel: { color: '#000000' },
   title: {
     margin: '14px 0 8px',
     fontSize: '38px',
@@ -180,5 +180,5 @@ const styles = {
     fontSize: 20,
   },
   featureTitle: { color:'#000', fontWeight:600, fontSize:14, lineHeight:1.2 },
-  featureText: { color:'rgba(0,0,0,0.7)', fontSize:13, lineHeight:1.3 },
+  featureText: { color:'#000000', fontSize:13, lineHeight:1.3 },
 };
