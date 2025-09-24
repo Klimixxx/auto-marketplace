@@ -6,26 +6,45 @@ import Router from 'next/router';
 const MAXW = 1100;
 const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — относительные пути
 
-/* ===== UI tokens ===== */
 const UI = {
-  topBg: '#0d0d0d', // мягкий чёрный для верхней шапки
-  topText: '#E6EDF3',
-  topMuted: 'rgba(230,237,243,0.75)',
-  border: 'rgba(255,255,255,0.10)',
+  /* Верхняя часть шапки */
+  topBg: '#ffffff',
+  topText: '#111827',
+  topMuted: 'rgba(17,24,39,0.70)',
+  border: 'rgba(17,24,39,0.10)',
   baseBg: 'transparent',
-  inputBg: '#0B1220',
-  inputText: '#E6EDF3',
-  inputBorder: 'rgba(255,255,255,0.14)',
-  pillBg: 'rgba(255,255,255,0.06)',
-  // цвета кнопки "Найти" как в Hero
-  heroBtn: '#67e8f9',
-  heroBtnHover: '#a5f3fc',
-  red: '#FF4D4F',
-  yellow: '#FACC15',
-  chipBg: 'rgba(255,255,255,0.06)',
-  chipBorder: 'rgba(255,255,255,0.12)',
-  menuBg: '#0F172A',
-  menuBorder: 'rgba(255,255,255,0.10)',
+
+  /* Поля в шапке */
+  inputBg: '#ffffff',
+  inputBorder: 'rgba(17,24,39,0.14)',
+  inputBorderFocus: 'rgba(42,101,247,0.45)',
+  inputText: '#111827',
+  inputPlaceholder: 'rgba(17,24,39,0.45)',
+
+  /* Кнопки */
+  btnBg: '#2a65f7',
+  btnHover: '#1e53d6',
+  btnText: '#ffffff',
+  btnSoftBg: 'rgba(42,101,247,0.08)',
+  btnSoftText: '#1e53d6',
+  btnSoftHoverBg: 'rgba(42,101,247,0.14)',
+
+  /* Ссылки/иконки/меню */
+  link: '#2a65f7',
+  linkHover: '#1e53d6',
+  icon: '#111827',
+  iconMuted: 'rgba(17,24,39,0.65)',
+
+  /* Фон меню и бордеры */
+  menuBg: '#ffffff',
+  menuBorder: 'rgba(17,24,39,0.10)',
+
+  /* Прочее */
+  heroBtnHover: '#1e53d6',
+  red: '#ef4444',
+  yellow: '#facc15',
+  chipBg: 'rgba(42,101,247,0.06)',
+  chipBorder: 'rgba(42,101,247,0.18)',
 };
 
 function IconUser({ size = 20, color = 'currentColor' }) {
