@@ -1,15 +1,15 @@
 // frontend/components/About.jsx
 export default function About() {
   const UI = {
-    title: '#ffffff',
-    text: 'rgba(255,255,255,0.75)',
-    cardBg: 'rgba(255,255,255,0.04)',
-    border: 'rgba(255,255,255,0.10)',
+    title: '#000000',
+    text: 'rgba(0,0,0,0.7)',
+    cardBg: '#ffffff',
+    border: 'rgba(15,23,42,0.12)',
     gradFrom: '#67e8f9',
     gradTo: '#c4b5fd',
     red: '#EF4444',
     button: '#67e8f9',
-    buttonHover: '#a5f3fc',
+    buttonHover: '#38bdf8',
   };
 
   return (
@@ -54,7 +54,7 @@ export default function About() {
             <div>
               <div
                 style={{
-                  background: 'rgba(255,255,255,0.05)',
+                  background: '#f3f4f6',
                   border: `1px solid ${UI.border}`,
                   borderRadius: 14,
                   overflow: 'hidden',
