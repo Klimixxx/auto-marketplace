@@ -165,21 +165,23 @@ select,
 textarea {
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--input-border);
   padding: 12px 14px;
-  background: var(--bg-alt);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 15px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+
 .input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+  border-color: var(--accent-hover);
+  box-shadow: 0 0 0 3px var(--accent-50);
 }
+
 
 .input::placeholder {
   color: rgba(154, 166, 178, 0.7);
@@ -194,21 +196,23 @@ textarea:focus {
   border-radius: var(--radius-sm);
   padding: 12px 18px;
   border: 1px solid transparent;
-  background: linear-gradient(135deg, rgba(103, 232, 249, 0.8), rgba(56, 189, 248, 0.75));
-  color: #04131d;
+  background: var(--accent);
+  color: var(--text-on-accent);
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 16px 34px rgba(56, 189, 248, 0.22);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 
 .button:hover,
 .btn:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
-  box-shadow: 0 20px 42px rgba(56, 189, 248, 0.3);
 }
+
 
 .button:disabled,
 .btn:disabled {
@@ -220,13 +224,16 @@ textarea:focus {
 .button-outline {
   background: transparent;
   color: var(--accent);
-  border: 1px solid rgba(103, 232, 249, 0.4);
+  border: 1px solid var(--border-strong);
   box-shadow: none;
 }
 
+
 .button-outline:hover {
-  background: rgba(103, 232, 249, 0.12);
+  background: var(--accent-50);
+  color: var(--accent-active);
 }
+
 
 .button-small {
   padding: 10px 14px;
@@ -313,9 +320,9 @@ textarea:focus {
   left: 12px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(4, 19, 29, 0.9);
-  border: 1px solid rgba(103, 232, 249, 0.45);
-  color: var(--accent);
+  background: var(--accent-50);
+  border: 1px solid var(--accent-100);
+  color: var(--accent-active);
   font-size: 12px;
   font-weight: 600;
 }
@@ -360,17 +367,20 @@ textarea:focus {
 }
 
 .listing-card__description {
-  color: rgba(232, 237, 242, 0.85);
+  color: var(--text-muted);
   font-size: 14px;
   line-height: 1.5;
 }
+
+
 
 .listing-card__footer {
   display: flex;
   gap: 10px;
   padding: 16px 18px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
 }
+
 
 .listing-card__footer .button,
 .listing-card__footer .button-outline {
@@ -389,15 +399,18 @@ listing-card__more-button {
 }
 
 .listing-card__footer .button-outline {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.04);
+  flex: 1 1 0;
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: transparent;
 }
 
+
 .listing-card__footer .button-outline:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--accent-50);
+  color: var(--accent-active);
 }
+
 
 .detail-page {
   padding-top: 16px;
@@ -456,14 +469,15 @@ listing-card__more-button {
 .detail-hero__thumbs button {
   border-radius: var(--radius-sm);
   border: 2px solid transparent;
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--surface-2);
   overflow: hidden;
   padding: 0;
   width: 96px;
   height: 70px;
   cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
 }
+
 
 .detail-hero__thumbs button img {
   width: 100%;
@@ -477,8 +491,10 @@ listing-card__more-button {
 }
 
 .detail-hero__thumbs button.is-active {
-  border-color: rgba(103, 232, 249, 0.6);
+  border-color: var(--accent-100);
+  background: var(--accent-50);
 }
+
 
 .detail-hero__info {
   flex: 1 1 320px;
@@ -498,13 +514,14 @@ listing-card__more-button {
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(103, 232, 249, 0.35);
+  background: var(--accent-50);
+  border: 1px solid var(--accent-100);
   border-radius: 999px;
   font-size: 13px;
-  color: rgba(226, 232, 240, 0.9);
+  color: var(--accent-active);
   width: fit-content;
 }
+
 
 .detail-hero__location {
   color: rgba(226, 232, 240, 0.7);
@@ -601,11 +618,13 @@ listing-card__more-button {
 .document-card {
   padding: 14px 16px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
   display: grid;
   gap: 8px;
+  color: var(--text);
 }
+
 
 .document-card__title {
   font-weight: 600;
@@ -626,22 +645,15 @@ listing-card__more-button {
   gap: 8px;
 }
 
-.document-card__actions a {
-  color: #67e8f9;
-  text-decoration: none;
-}
+.document-card__actions a { color: var(--accent); text-decoration: none; }
 
-.document-card__actions a:hover {
-  color: #a5f3fc;
-}
 
-.contact-list__value a {
-  color: #67e8f9;
-}
+.document-card__actions a:hover { color: var(--accent-hover); }
 
-.contact-list__value a:hover {
-  color: #a5f3fc;
-}
+.contact-list__value a { color: var(--accent); }
+
+
+.contact-list__value a:hover { color: var(--accent-hover); }
 
 .favorite-grid {
   display: grid;
@@ -683,9 +695,13 @@ listing-card__more-button {
 }
 
 .header-solid {
-  background: linear-gradient(180deg, var(--bg-alt) 0%, #0a0f1a 100%);
-  border-bottom:1px solid var(--border);
+  background: var(--bg) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--border-strong) !important;
+  box-shadow: none !important;
+  color: var(--text);
 }
+
 
 .header-searchbar {
   background: rgba(255,255,255,0.05);
@@ -846,4 +862,9 @@ header, .header, .site-header, .navbar, .topbar {
   .detail-summary-card {
     padding: 18px;
   }
+}
+:root {
+  --card: var(--surface-1);
+  --card-soft: var(--surface-2);
+  --accent-strong: var(--accent-hover);
 }
