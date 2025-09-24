@@ -1,14 +1,14 @@
 // frontend/components/Footer.jsx
 export default function Footer() {
   const UI = {
-    text: 'rgba(255,255,255,0.75)',
-    title: '#fff',
-    border: 'rgba(255,255,255,0.10)',
-    chip: 'rgba(255,255,255,0.06)',
-    gradFrom: '#67e8f9',
-    gradTo: '#c4b5fd',
-    red: '#EF4444',
-  };
+  text: 'rgba(17,24,39,0.75)',
+  title: '#111827',
+  border: 'rgba(17,24,39,0.10)',
+  chip: 'rgba(42,101,247,0.06)',
+  gradFrom: '#2a65f7',
+  gradTo: '#7aa2ff',
+  red: '#ef4444',
+};
 
   const link = (href, label) => (
     <a
