@@ -9,42 +9,44 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 const UI = {
   /* Верхняя часть шапки */
   topBg: '#ffffff',
-  topText: '#111827',
-  topMuted: 'rgba(17,24,39,0.70)',
-  border: 'rgba(17,24,39,0.10)',
+  topText: '#0f172a',
+  topMuted: 'rgba(15,23,42,0.65)',
+  border: 'rgba(15,23,42,0.08)',
   baseBg: 'transparent',
+  pillBg: '#f1f5f9',
 
   /* Поля в шапке */
   inputBg: '#ffffff',
-  inputBorder: 'rgba(17,24,39,0.14)',
-  inputBorderFocus: 'rgba(42,101,247,0.45)',
-  inputText: '#111827',
-  inputPlaceholder: 'rgba(17,24,39,0.45)',
+  inputBorder: 'rgba(15,23,42,0.12)',
+  inputBorderFocus: 'rgba(37,99,235,0.35)',
+  inputText: '#0f172a',
+  inputPlaceholder: 'rgba(15,23,42,0.45)',
 
   /* Кнопки */
-  btnBg: '#2a65f7',
-  btnHover: '#1e53d6',
+  btnBg: '#2563eb',
+  btnHover: '#1d4ed8',
   btnText: '#ffffff',
-  btnSoftBg: 'rgba(42,101,247,0.08)',
-  btnSoftText: '#1e53d6',
-  btnSoftHoverBg: 'rgba(42,101,247,0.14)',
+  btnSoftBg: 'rgba(37,99,235,0.10)',
+  btnSoftText: '#1d4ed8',
+  btnSoftHoverBg: 'rgba(37,99,235,0.16)',
 
   /* Ссылки/иконки/меню */
-  link: '#2a65f7',
-  linkHover: '#1e53d6',
-  icon: '#111827',
-  iconMuted: 'rgba(17,24,39,0.65)',
+  link: '#2563eb',
+  linkHover: '#1d4ed8',
+  icon: '#0f172a',
+  iconMuted: 'rgba(15,23,42,0.55)',
 
   /* Фон меню и бордеры */
   menuBg: '#ffffff',
-  menuBorder: 'rgba(17,24,39,0.10)',
+  menuBorder: 'rgba(15,23,42,0.08)',
 
   /* Прочее */
-  heroBtnHover: '#1e53d6',
+  heroBtn: '#2563eb',
+  heroBtnHover: '#1d4ed8',
   red: '#ef4444',
   yellow: '#facc15',
-  chipBg: 'rgba(42,101,247,0.06)',
-  chipBorder: 'rgba(42,101,247,0.18)',
+  chipBg: 'rgba(37,99,235,0.08)',
+  chipBorder: 'rgba(37,99,235,0.18)',
 };
 
 function IconUser({ size = 20, color = 'currentColor' }) {
@@ -294,7 +296,7 @@ export default function Header() {
               >
                 <span style={{
                   display:'inline-flex', width:24, height:24, borderRadius:'50%',
-                  background:'rgba(255,255,255,0.06)', alignItems:'center', justifyContent:'center',
+                  background:UI.btnSoftBg, alignItems:'center', justifyContent:'center',
                   border:`1px solid ${UI.border}`
                 }}>
                   <IconUser size={16} color={UI.topText} />
@@ -373,7 +375,7 @@ export default function Header() {
                   type="submit"
                   style={{
                     height:44, padding:'0 16px',
-                    background:UI.heroBtn, color:'#000',
+                    background:UI.heroBtn, color:UI.btnText,
                     cursor:'pointer', border:'1px solid ' + UI.inputBorder,
                     borderLeft:'none',
                     borderTopRightRadius:10, borderBottomRightRadius:10,
@@ -404,9 +406,10 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       // компактный контейнер под иконку
       style={{
         position:'relative', width:36, height:36, borderRadius:10,
-        background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
+        background:'#ffffff', border:`1px solid ${UI.border}`,
         display:'flex', alignItems:'center', justifyContent:'center',
-        cursor:'pointer'
+        cursor:'pointer',
+        boxShadow:'0 8px 20px rgba(15,23,42,0.08)'
       }}
     >
       {children}
@@ -416,7 +419,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
           minWidth:18, height:18, padding:'0 5px',
           background:'#FF4D4F', color:'#fff', borderRadius:999,
           fontSize:11, fontWeight:800, display:'grid', placeItems:'center',
-          border:'2px solid #1A1C20', lineHeight:'18px'
+          border:'2px solid #ffffff', lineHeight:'18px'
         }}>{badgeText}</span>
       )}
     </button>
@@ -424,7 +427,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
 }
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
+    <a href={href} style={{ display:'block', padding:'12px 14px', color:UI.topText, textDecoration:'none' }}>
       {text}
     </a>
   );
@@ -432,8 +435,8 @@ function MenuItem({ href, text }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
-        AuctionA<span style={{ color:'#EF4444' }}>f</span>to
+      <div style={{ color:UI.topText, fontWeight:900, letterSpacing:.3, fontSize:18 }}>
+        AuctionA<span style={{ color:UI.red }}>f</span>to
       </div>
     </div>
   );
@@ -441,8 +444,8 @@ function Logo({ onClick }) {
 function BellIcon(){
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke={UI.icon} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke={UI.icon} strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }

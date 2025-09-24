@@ -7,15 +7,18 @@ import About from '../components/About';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  title: '#ffffff',
-  text: 'rgba(255,255,255,0.75)',
-  cardBg: 'rgba(255,255,255,0.03)',
-  border: 'rgba(255,255,255,0.10)',
+  title: '#0f172a',
+  text: '#475569',
+  muted: '#64748b',
+  cardBg: '#ffffff',
+  cardSubtle: '#f1f5f9',
+  border: 'rgba(15,23,42,0.08)',
   red: '#EF4444',
-  gradFrom: '#67e8f9',
-  gradTo: '#c4b5fd',
-  button: '#67e8f9',
-  buttonHover: '#a5f3fc',
+  gradFrom: '#2563eb',
+  gradTo: '#7c3aed',
+  button: '#2563eb',
+  buttonHover: '#1d4ed8',
+  buttonText: '#ffffff',
 };
 
 const fmtNumber = new Intl.NumberFormat('ru-RU');
@@ -35,15 +38,16 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.04)',
+        background: UI.cardBg,
         border: `1px solid ${UI.border}`,
         borderRadius: 12,
-        padding: 14,
+        padding: 16,
         display: 'grid',
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
         minHeight: 88,
+        boxShadow: '0 12px 30px rgba(15,23,42,0.06)',
       }}
     >
       <div
@@ -51,7 +55,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
           width: 44,
           height: 44,
           borderRadius: 10,
-          background: 'rgba(255,255,255,0.06)',
+          background: UI.cardSubtle,
           border: `1px solid ${UI.border}`,
           display: 'grid',
           placeItems: 'center',
@@ -76,7 +80,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
           aspectRatio: '1527 / 768',
           borderRadius: 16,
           border: `1px solid ${UI.border}`,
-          background: 'rgba(255,255,255,0.03)',
+          background: UI.cardBg,
           display: 'grid',
           placeItems: 'center',
           color: UI.text,
@@ -101,6 +105,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: 'hidden',
+        backgroundColor: UI.cardBg,
         backgroundImage: 'url(/maps/russia-fo.svg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -128,9 +133,9 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
               width: isActive ? 28 : 22,
               height: isActive ? 28 : 22,
               borderRadius: '50%',
-              border: `2px solid ${isActive ? '#0f172a' : 'transparent'}`,
-              background: isActive ? UI.button : 'rgba(255,255,255,0.35)',
-              boxShadow: isActive ? '0 0 18px rgba(103,232,249,0.45)' : '0 2px 6px rgba(0,0,0,0.25)',
+              border: `2px solid ${isActive ? UI.title : 'transparent'}`,
+              background: isActive ? UI.button : 'rgba(37,99,235,0.16)',
+              boxShadow: isActive ? '0 12px 24px rgba(37,99,235,0.35)' : '0 6px 16px rgba(15,23,42,0.12)',
               cursor: 'pointer',
               transition: 'transform 0.2s ease, background 0.2s ease',
             }}
@@ -146,18 +151,18 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
             left: 16,
             bottom: 16,
             right: 16,
-            background: 'rgba(10,14,25,0.78)',
+            background: UI.cardBg,
             borderRadius: 12,
             padding: '12px 14px',
             border: `1px solid ${UI.border}`,
-            backdropFilter: 'blur(6px)',
+            boxShadow: '0 16px 30px rgba(15,23,42,0.12)',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>{activeRegion.region}</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: UI.title }}>{activeRegion.region}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 13, color: UI.text }}>
-            <span>Лотов: <strong style={{ color: '#fff' }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
-            <span>Сумма: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
-            <span>Средняя цена: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
+            <span>Лотов: <strong style={{ color: UI.title }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
+            <span>Сумма: <strong style={{ color: UI.title }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
+            <span>Средняя цена: <strong style={{ color: UI.title }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
           </div>
         </div>
       ) : null}
@@ -178,6 +183,7 @@ function RegionList({ regions, activeRegion, onHover }) {
         overflowY: 'auto',
         display: 'grid',
         gap: 10,
+        boxShadow: '0 12px 30px rgba(15,23,42,0.05)',
       }}
     >
       {regions.map((region) => {
@@ -191,13 +197,14 @@ function RegionList({ regions, activeRegion, onHover }) {
             style={{
               textAlign: 'left',
               border: `1px solid ${isActive ? UI.button : UI.border}`,
-              background: isActive ? 'rgba(103,232,249,0.12)' : 'rgba(255,255,255,0.03)',
-              color: '#fff',
+              background: isActive ? 'rgba(37,99,235,0.12)' : UI.cardBg,
+              color: UI.title,
               padding: '10px 12px',
               borderRadius: 12,
               cursor: 'pointer',
               display: 'grid',
               gap: 4,
+              boxShadow: isActive ? '0 6px 16px rgba(37,99,235,0.16)' : 'none',
             }}
           >
             <div style={{ fontWeight: 600 }}>{region.region}</div>
@@ -289,12 +296,13 @@ function navButtonStyle(disabled) {
     height: 36,
     borderRadius: 10,
     border: `1px solid ${UI.border}`,
-    background: disabled ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)',
-    color: '#fff',
+    background: disabled ? UI.cardSubtle : UI.button,
+    color: disabled ? UI.muted : UI.buttonText,
     cursor: disabled ? 'default' : 'pointer',
     display: 'grid',
     placeItems: 'center',
     fontWeight: 700,
+    boxShadow: disabled ? 'none' : '0 8px 20px rgba(37,99,235,0.25)',
   };
 }
 
@@ -335,13 +343,14 @@ function BestOfferCard({ item, width }) {
         minWidth: width,
         borderRadius: 14,
         border: `1px solid ${UI.border}`,
-        background: 'rgba(13,18,33,0.72)',
+        background: UI.cardBg,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
+        boxShadow: '0 18px 36px rgba(15,23,42,0.08)',
       }}
     >
-      <div style={{ position: 'relative', paddingBottom: '56%', background: '#0b1220' }}>
+      <div style={{ position: 'relative', paddingBottom: '56%', background: UI.cardSubtle }}>
         {cover ? (
           <img
             src={cover}
@@ -358,32 +367,35 @@ function BestOfferCard({ item, width }) {
             position: 'absolute',
             left: 12,
             top: 12,
-            background: 'rgba(15,23,42,0.85)',
+            background: 'rgba(37,99,235,0.12)',
             borderRadius: 999,
             padding: '4px 10px',
             fontSize: 12,
-            border: `1px solid ${UI.border}`,
+            border: `1px solid rgba(37,99,235,0.25)`,
+            color: UI.button,
+            fontWeight: 600,
           }}
         >
           {tradeType}
         </span>
       </div>
       <div style={{ padding: '14px 16px', display: 'grid', gap: 8, flex: '1 1 auto' }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{item.title || 'Лот'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: UI.title }}>{item.title || 'Лот'}</div>
         {location ? <div style={{ fontSize: 13, color: UI.text }}>{location}</div> : null}
-        <div style={{ fontWeight: 700, fontSize: 16 }}>{price}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: UI.title }}>{price}</div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
           <a
             href={`/trades/${item.id}`}
             style={{
               flex: 1,
               background: UI.button,
-              color: '#0f172a',
+              color: UI.buttonText,
               borderRadius: 10,
               textAlign: 'center',
               padding: '8px 10px',
               fontWeight: 600,
               textDecoration: 'none',
+              boxShadow: '0 10px 24px rgba(37,99,235,0.25)',
             }}
           >
             Подробнее
@@ -399,7 +411,8 @@ function BestOfferCard({ item, width }) {
                 borderRadius: 10,
                 textAlign: 'center',
                 padding: '8px 10px',
-                color: '#fff',
+                color: UI.title,
+                background: UI.cardSubtle,
                 textDecoration: 'none',
               }}
             >
@@ -420,23 +433,24 @@ function EducationFeature({ title, Icon }) {
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
-        background: 'rgba(255,255,255,0.05)',
+        background: UI.cardSubtle,
         border: `1px solid ${UI.border}`,
         borderRadius: 12,
         padding: 12,
+        boxShadow: '0 8px 22px rgba(15,23,42,0.06)',
       }}
     >
       <div
         style={{
           width: 46, height: 46, borderRadius: 12,
           display: 'grid', placeItems: 'center',
-          background: 'rgba(255,255,255,0.06)',
+          background: UI.cardBg,
           border: `1px solid ${UI.border}`,
         }}
       >
         <Icon />
       </div>
-      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
+      <div style={{ color: UI.title, fontSize: 15.5, lineHeight: 1.25 }}>
         {title}
       </div>
     </div>
@@ -684,6 +698,7 @@ export default function Home() {
               gridTemplateColumns: 'auto 1fr',
               gap: 18,
               alignItems: 'center',
+              boxShadow: '0 18px 40px rgba(15,23,42,0.08)',
             }}
           >
             <div
@@ -691,7 +706,7 @@ export default function Home() {
                 width: 180,
                 height: 180,
                 borderRadius: 16,
-                background: 'rgba(255,255,255,0.04)',
+                background: UI.cardSubtle,
                 border: `1px solid ${UI.border}`,
                 display: 'grid',
                 placeItems: 'center',
@@ -738,7 +753,7 @@ export default function Home() {
                   padding: '12px 16px',
                   borderRadius: 12,
                   background: UI.button,
-                  color: '#000',
+                  color: UI.buttonText,
                   fontWeight: 700,
                   textDecoration: 'none',
                   border: 'none',
@@ -749,7 +764,7 @@ export default function Home() {
               >
                 Узнать больше
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M5 12h14M13 5l7 7-7 7" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 12h14M13 5l7 7-7 7" stroke={UI.buttonText} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </a>
             </div>
@@ -764,6 +779,7 @@ export default function Home() {
               border: `1px solid ${UI.border}`,
               borderRadius: 12,
               padding: 16,
+              boxShadow: '0 16px 32px rgba(15,23,42,0.06)',
             }}
           >
             <h2 style={{ marginTop: 0, color: UI.title }}>Все торги — в одном месте</h2>
@@ -771,7 +787,20 @@ export default function Home() {
               Мы агрегируем объявления с разных источников и показываем удобную выдачу по фильтрам.
             </p>
             <p>
-              <a className="button" href="/trades" style={{ color: '#fff', background: '#1E90FF', padding: '8px 12px', borderRadius: 8 }}>
+              <a
+                className="button"
+                href="/trades"
+                style={{
+                  color: UI.buttonText,
+                  background: UI.button,
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  fontWeight: 600,
+                  boxShadow: '0 10px 24px rgba(37,99,235,0.25)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = UI.buttonHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = UI.button)}
+              >
                 Перейти в каталог →
               </a>
             </p>
