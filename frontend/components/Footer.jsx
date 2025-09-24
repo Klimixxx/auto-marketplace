@@ -1,25 +1,30 @@
 // frontend/components/Footer.jsx
 export default function Footer() {
   const UI = {
-  text: 'rgba(17,24,39,0.75)',
-  title: '#111827',
-  border: 'rgba(17,24,39,0.10)',
-  chip: 'rgba(42,101,247,0.06)',
-  gradFrom: '#2a65f7',
-  gradTo: '#7aa2ff',
-  red: '#ef4444',
-};
+    text: '#475569',
+    title: '#0f172a',
+    border: 'rgba(15,23,42,0.08)',
+    chip: 'rgba(37,99,235,0.10)',
+    gradFrom: '#2563eb',
+    gradTo: '#7c3aed',
+    red: '#ef4444',
+    link: '#2563eb',
+    linkHover: '#1d4ed8',
+    background: '#f8fafc',
+    cardBg: '#ffffff',
+  };
 
   const link = (href, label) => (
     <a
       href={href}
       style={{
-        color: '#fff',
+        color: UI.link,
         textDecoration: 'none',
         opacity: 0.9,
+        fontWeight: 600,
       }}
-      onMouseEnter={(e)=> e.currentTarget.style.opacity = 1}
-      onMouseLeave={(e)=> e.currentTarget.style.opacity = 0.9}
+      onMouseEnter={(e)=> { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = UI.linkHover; }}
+      onMouseLeave={(e)=> { e.currentTarget.style.opacity = 0.9; e.currentTarget.style.color = UI.link; }}
     >
       {label}
     </a>
@@ -30,7 +35,7 @@ export default function Footer() {
       style={{
         marginTop: 28,
         borderTop: `1px solid ${UI.border}`,
-        background: 'transparent',
+        background: UI.background,
       }}
     >
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 12px' }}>
@@ -53,8 +58,9 @@ export default function Footer() {
                 alignItems: 'center',
                 padding: '8px 12px',
                 borderRadius: 12,
-                background: 'rgba(255,255,255,0.05)',
+                background: UI.cardBg,
                 border: `1px solid ${UI.border}`,
+                boxShadow: '0 12px 26px rgba(15,23,42,0.08)',
               }}
             >
               {/* квадрат удален */}
@@ -93,8 +99,8 @@ export default function Footer() {
               </a>
             </div>
             <div style={{ color: UI.text, fontSize: 13.5, lineHeight: 1.6 }}>
-              Тел.: <a href="tel:+79990000000" style={contactLinkStyle}>+7 (999) 000-00-00</a><br/>
-              Почта: <a href="mailto:support@auctionafto.ru" style={contactLinkStyle}>support@auctionafto.ru</a>
+              Тел.: <a href="tel:+79990000000" style={contactLinkStyle(UI)}>+7 (999) 000-00-00</a><br/>
+              Почта: <a href="mailto:support@auctionafto.ru" style={contactLinkStyle(UI)}>support@auctionafto.ru</a>
             </div>
           </div>
 
@@ -119,7 +125,7 @@ export default function Footer() {
             fontSize: 13.5,
           }}
         >
-          Данную платформу разработала студия — <strong style={{ color: '#fff' }}>Timof</strong>
+          Данную платформу разработала студия — <strong style={{ color: UI.title }}>Timof</strong>
         </div>
       </div>
 
@@ -145,11 +151,11 @@ function headingStyle(UI){
   };
 }
 
-const contactLinkStyle = {
-  color: '#fff',
+const contactLinkStyle = (UI) => ({
+  color: UI.link,
   textDecoration: 'none',
-  opacity: 0.95,
-};
+  fontWeight: 600,
+});
 
 function iconWrap(UI, bg, stroke) {
   return {
