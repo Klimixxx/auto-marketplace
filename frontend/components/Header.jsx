@@ -9,8 +9,8 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 const UI = {
   /* Верхняя часть шапки */
   topBg: '#ffffff',
-  topText: '#111827',
-  topMuted: 'rgba(17,24,39,0.70)',
+  topText: '#000000',
+  topMuted: '#000000',
   border: 'rgba(17,24,39,0.10)',
   baseBg: 'transparent',
 
@@ -18,8 +18,8 @@ const UI = {
   inputBg: '#ffffff',
   inputBorder: 'rgba(17,24,39,0.14)',
   inputBorderFocus: 'rgba(42,101,247,0.45)',
-  inputText: '#111827',
-  inputPlaceholder: 'rgba(17,24,39,0.45)',
+  inputText: '#000000',
+  inputPlaceholder: '#000000',
 
   /* Кнопки */
   btnBg: '#2a65f7',
@@ -32,14 +32,15 @@ const UI = {
   /* Ссылки/иконки/меню */
   link: '#2a65f7',
   linkHover: '#1e53d6',
-  icon: '#111827',
-  iconMuted: 'rgba(17,24,39,0.65)',
+  icon: '#000000',
+  iconMuted: '#000000',
 
   /* Фон меню и бордеры */
   menuBg: '#ffffff',
   menuBorder: 'rgba(17,24,39,0.10)',
 
   /* Прочее */
+  heroBtn: '#2a65f7',
   heroBtnHover: '#1e53d6',
   red: '#ef4444',
   yellow: '#facc15',
@@ -414,7 +415,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
         <span style={{
           position:'absolute', top:-6, right:-6,
           minWidth:18, height:18, padding:'0 5px',
-          background:'#FF4D4F', color:'#fff', borderRadius:999,
+          background:'#FF4D4F', color:'#000', borderRadius:999,
           fontSize:11, fontWeight:800, display:'grid', placeItems:'center',
           border:'2px solid #1A1C20', lineHeight:'18px'
         }}>{badgeText}</span>
@@ -424,7 +425,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
 }
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
+    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#000', textDecoration:'none' }}>
       {text}
     </a>
   );
@@ -432,7 +433,7 @@ function MenuItem({ href, text }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
+      <div style={{ color:'#000', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
         AuctionA<span style={{ color:'#EF4444' }}>f</span>to
       </div>
     </div>
@@ -441,8 +442,8 @@ function Logo({ onClick }) {
 function BellIcon(){
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#000" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }

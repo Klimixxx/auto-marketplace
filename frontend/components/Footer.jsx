@@ -1,20 +1,17 @@
 // frontend/components/Footer.jsx
 export default function Footer() {
   const UI = {
-  text: 'rgba(17,24,39,0.75)',
-  title: '#111827',
-  border: 'rgba(17,24,39,0.10)',
-  chip: 'rgba(42,101,247,0.06)',
-  gradFrom: '#2a65f7',
-  gradTo: '#7aa2ff',
-  red: '#ef4444',
-};
+    text: '#000000',
+    title: '#000000',
+    border: 'rgba(17,24,39,0.10)',
+    red: '#ef4444',
+  };
 
   const link = (href, label) => (
     <a
       href={href}
       style={{
-        color: '#fff',
+        color: '#000',
         textDecoration: 'none',
         opacity: 0.9,
       }}
@@ -119,7 +116,7 @@ export default function Footer() {
             fontSize: 13.5,
           }}
         >
-          Данную платформу разработала студия — <strong style={{ color: '#fff' }}>Timof</strong>
+          Данную платформу разработала студия — <strong style={{ color: '#000' }}>Timof</strong>
         </div>
       </div>
 
@@ -138,15 +135,13 @@ function headingStyle(UI){
     fontSize: 14,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    backgroundImage: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+    color: UI.title,
     fontWeight: 900,
   };
 }
 
 const contactLinkStyle = {
-  color: '#fff',
+  color: '#000',
   textDecoration: 'none',
   opacity: 0.95,
 };

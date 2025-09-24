@@ -3,10 +3,10 @@ import { useState } from 'react';
 import Router from 'next/router';
 
 const UI = {
-  title: '#111827',
-  text: 'rgba(17,24,39,0.80)',
-  border: 'rgba(17,24,39,0.12)',
-  glass: 'rgba(17,24,39,0.04)',    // лёгкое «стекло» под светлый фон
+  title: '#000000',
+  text: '#000000',
+  border: 'rgba(15,23,42,0.12)',
+  glass: 'rgba(15,23,42,0.06)',
   button: '#2a65f7',
   buttonHover: '#1e53d6',
 };
@@ -122,34 +122,30 @@ const styles = {
   badgeNum: {
     fontWeight: 900,
     fontSize: 15.5,
-    backgroundImage: 'linear-gradient(90deg,#67e8f9,#c4b5fd)',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+    color: '#000',
     letterSpacing: 0.3,
     fontVariantNumeric: 'tabular-nums',
   },
-  badgeLabel: { color: 'rgba(255,255,255,0.9)' },
+  badgeLabel: { color: '#000000' },
   title: {
     margin: '14px 0 8px',
     fontSize: '38px',
     lineHeight: 1.15,
-    color: '#fff',
+    color: '#000',
     fontWeight: 700,
   },
   titleGradient: {
-    backgroundImage: 'linear-gradient(90deg, #67e8f9, #c4b5fd)',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+    color: '#000',
   },
   form: { marginTop: 18, display: 'flex', gap: 10, alignItems: 'center' },
   input: {
     flex: 1,
     padding: '14px 14px',
     borderRadius: 14,
-    background: 'rgba(255,255,255,0.06)',
+    background: '#fff',
     border: `1px solid ${UI.border}`,
     outline: 'none',
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
   },
   button: {
@@ -173,16 +169,16 @@ const styles = {
     alignItems: 'flex-start',
     padding: 12,
     borderRadius: 14,
-    background: 'rgba(255,255,255,0.04)',
+    background: '#fff',
     border: `1px solid ${UI.border}`,
   },
   featureIcon: {
     width: 40, height: 40, borderRadius: 10,
     display: 'grid', placeItems: 'center',
-    background: 'rgba(255,255,255,0.06)',
+    background: '#f3f4f6',
     border: `1px solid ${UI.border}`,
     fontSize: 20,
   },
-  featureTitle: { color:'#fff', fontWeight:600, fontSize:14, lineHeight:1.2 },
-  featureText: { color:'rgba(255,255,255,0.75)', fontSize:13, lineHeight:1.3 },
+  featureTitle: { color:'#000', fontWeight:600, fontSize:14, lineHeight:1.2 },
+  featureText: { color:'#000000', fontSize:13, lineHeight:1.3 },
 };

@@ -7,15 +7,16 @@ import About from '../components/About';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  title: '#ffffff',
-  text: 'rgba(255,255,255,0.75)',
-  cardBg: 'rgba(255,255,255,0.03)',
-  border: 'rgba(255,255,255,0.10)',
+  title: '#000000',
+  text: '#000000',
+  cardBg: '#ffffff',
+  border: 'rgba(15,23,42,0.12)',
+  subtleBg: '#f3f4f6',
   red: '#EF4444',
   gradFrom: '#67e8f9',
   gradTo: '#c4b5fd',
   button: '#67e8f9',
-  buttonHover: '#a5f3fc',
+  buttonHover: '#38bdf8',
 };
 
 const fmtNumber = new Intl.NumberFormat('ru-RU');
@@ -35,7 +36,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.04)',
+        background: UI.cardBg,
         border: `1px solid ${UI.border}`,
         borderRadius: 12,
         padding: 14,
@@ -44,6 +45,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
         gap: 12,
         alignItems: 'center',
         minHeight: 88,
+        boxShadow: '0 6px 16px rgba(15,23,42,0.08)',
       }}
     >
       <div
@@ -51,7 +53,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
           width: 44,
           height: 44,
           borderRadius: 10,
-          background: 'rgba(255,255,255,0.06)',
+          background: UI.subtleBg,
           border: `1px solid ${UI.border}`,
           display: 'grid',
           placeItems: 'center',
@@ -76,10 +78,11 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
           aspectRatio: '1527 / 768',
           borderRadius: 16,
           border: `1px solid ${UI.border}`,
-          background: 'rgba(255,255,255,0.03)',
+          background: UI.cardBg,
           display: 'grid',
           placeItems: 'center',
           color: UI.text,
+          boxShadow: '0 10px 32px rgba(15,23,42,0.08)',
         }}
       >
         Данные по регионам появятся позже
@@ -101,11 +104,13 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: 'hidden',
+        backgroundColor: UI.cardBg,
         backgroundImage: 'url(/maps/russia-fo.svg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         aspectRatio: '1527 / 768',
         margin: '0 auto',
+        boxShadow: '0 10px 32px rgba(15,23,42,0.08)',
       }}
     >
       {regions.map((region, index) => {
@@ -128,9 +133,9 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
               width: isActive ? 28 : 22,
               height: isActive ? 28 : 22,
               borderRadius: '50%',
-              border: `2px solid ${isActive ? '#0f172a' : 'transparent'}`,
-              background: isActive ? UI.button : 'rgba(255,255,255,0.35)',
-              boxShadow: isActive ? '0 0 18px rgba(103,232,249,0.45)' : '0 2px 6px rgba(0,0,0,0.25)',
+              border: `2px solid ${isActive ? '#000000' : 'transparent'}`,
+              background: isActive ? UI.button : 'rgba(0,0,0,0.12)',
+              boxShadow: isActive ? '0 0 18px rgba(103,232,249,0.35)' : '0 2px 6px rgba(15,23,42,0.15)',
               cursor: 'pointer',
               transition: 'transform 0.2s ease, background 0.2s ease',
             }}
@@ -146,18 +151,18 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
             left: 16,
             bottom: 16,
             right: 16,
-            background: 'rgba(10,14,25,0.78)',
+            background: UI.cardBg,
             borderRadius: 12,
             padding: '12px 14px',
             border: `1px solid ${UI.border}`,
-            backdropFilter: 'blur(6px)',
+            boxShadow: '0 10px 24px rgba(15,23,42,0.12)',
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 4 }}>{activeRegion.region}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 13, color: UI.text }}>
-            <span>Лотов: <strong style={{ color: '#fff' }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
-            <span>Сумма: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
-            <span>Средняя цена: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
+            <span>Лотов: <strong style={{ color: '#000' }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
+            <span>Сумма: <strong style={{ color: '#000' }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
+            <span>Средняя цена: <strong style={{ color: '#000' }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
           </div>
         </div>
       ) : null}
@@ -191,13 +196,14 @@ function RegionList({ regions, activeRegion, onHover }) {
             style={{
               textAlign: 'left',
               border: `1px solid ${isActive ? UI.button : UI.border}`,
-              background: isActive ? 'rgba(103,232,249,0.12)' : 'rgba(255,255,255,0.03)',
-              color: '#fff',
+              background: isActive ? 'rgba(103,232,249,0.18)' : UI.cardBg,
+              color: '#000',
               padding: '10px 12px',
               borderRadius: 12,
               cursor: 'pointer',
               display: 'grid',
               gap: 4,
+              boxShadow: isActive ? '0 6px 18px rgba(103,232,249,0.25)' : '0 4px 12px rgba(15,23,42,0.04)',
             }}
           >
             <div style={{ fontWeight: 600 }}>{region.region}</div>
@@ -289,12 +295,13 @@ function navButtonStyle(disabled) {
     height: 36,
     borderRadius: 10,
     border: `1px solid ${UI.border}`,
-    background: disabled ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)',
-    color: '#fff',
+    background: disabled ? UI.subtleBg : 'rgba(0,0,0,0.08)',
+    color: '#000',
     cursor: disabled ? 'default' : 'pointer',
     display: 'grid',
     placeItems: 'center',
     fontWeight: 700,
+    boxShadow: disabled ? 'none' : '0 4px 12px rgba(15,23,42,0.1)',
   };
 }
 
@@ -335,13 +342,14 @@ function BestOfferCard({ item, width }) {
         minWidth: width,
         borderRadius: 14,
         border: `1px solid ${UI.border}`,
-        background: 'rgba(13,18,33,0.72)',
+        background: UI.cardBg,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
+        boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
       }}
     >
-      <div style={{ position: 'relative', paddingBottom: '56%', background: '#0b1220' }}>
+      <div style={{ position: 'relative', paddingBottom: '56%', background: UI.subtleBg }}>
         {cover ? (
           <img
             src={cover}
@@ -358,11 +366,12 @@ function BestOfferCard({ item, width }) {
             position: 'absolute',
             left: 12,
             top: 12,
-            background: 'rgba(15,23,42,0.85)',
+            background: 'rgba(0,0,0,0.05)',
             borderRadius: 999,
             padding: '4px 10px',
             fontSize: 12,
             border: `1px solid ${UI.border}`,
+            color: '#000',
           }}
         >
           {tradeType}
@@ -378,7 +387,7 @@ function BestOfferCard({ item, width }) {
             style={{
               flex: 1,
               background: UI.button,
-              color: '#0f172a',
+              color: '#000',
               borderRadius: 10,
               textAlign: 'center',
               padding: '8px 10px',
@@ -399,8 +408,9 @@ function BestOfferCard({ item, width }) {
                 borderRadius: 10,
                 textAlign: 'center',
                 padding: '8px 10px',
-                color: '#fff',
+                color: '#000',
                 textDecoration: 'none',
+                background: UI.subtleBg,
               }}
             >
               Источник
@@ -420,23 +430,24 @@ function EducationFeature({ title, Icon }) {
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
-        background: 'rgba(255,255,255,0.05)',
+        background: UI.cardBg,
         border: `1px solid ${UI.border}`,
         borderRadius: 12,
         padding: 12,
+        boxShadow: '0 8px 18px rgba(15,23,42,0.08)',
       }}
     >
       <div
         style={{
           width: 46, height: 46, borderRadius: 12,
           display: 'grid', placeItems: 'center',
-          background: 'rgba(255,255,255,0.06)',
+          background: UI.subtleBg,
           border: `1px solid ${UI.border}`,
         }}
       >
         <Icon />
       </div>
-      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
+      <div style={{ color:'#000', fontSize: 15.5, lineHeight: 1.25 }}>
         {title}
       </div>
     </div>
@@ -610,9 +621,7 @@ export default function Home() {
               textAlign: 'center',
               fontWeight: 900,
               fontSize: 22,
-              backgroundImage: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
-              WebkitBackgroundClip: 'text',
-              color: 'transparent',
+              color: UI.title,
             }}
           >
             Статистика платформы
@@ -691,7 +700,7 @@ export default function Home() {
                 width: 180,
                 height: 180,
                 borderRadius: 16,
-                background: 'rgba(255,255,255,0.04)',
+                background: UI.subtleBg,
                 border: `1px solid ${UI.border}`,
                 display: 'grid',
                 placeItems: 'center',
@@ -771,7 +780,7 @@ export default function Home() {
               Мы агрегируем объявления с разных источников и показываем удобную выдачу по фильтрам.
             </p>
             <p>
-              <a className="button" href="/trades" style={{ color: '#fff', background: '#1E90FF', padding: '8px 12px', borderRadius: 8 }}>
+              <a className="button" href="/trades" style={{ color: '#000', background: UI.button, padding: '8px 12px', borderRadius: 8 }}>
                 Перейти в каталог →
               </a>
             </p>
