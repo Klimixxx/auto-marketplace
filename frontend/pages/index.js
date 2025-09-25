@@ -60,7 +60,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
         <Icon />
       </div>
       <div>
-        <div style={{ color: UI.text, fontSize: 13 }}>{title}</div>
+        <div style={{ color: 'var(--text-900)', fontSize: 13 }}>{title}</div>
         <div style={{ color: UI.title, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
       </div>
     </div>
@@ -420,8 +420,8 @@ function EducationFeature({ title, Icon }) {
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
-        background: 'rgba(255,255,255,0.05)',
-        border: `1px solid ${UI.border}`,
+        background: '#FFFFFF',
+        border: '1px solid var(--stats-border)',
         borderRadius: 12,
         padding: 12,
       }}
@@ -604,30 +604,30 @@ export default function Home() {
         <FirstLoginModal />
 
         <section style={{ margin: '32px 0' }}>
-          <h2
-            style={{
-              margin: '0 0 18px',
-              textAlign: 'center',
-              fontWeight: 900,
-              fontSize: 22,
-              backgroundImage: `linear-gradient(90deg, ${UI.gradFrom}, ${UI.gradTo})`,
-              WebkitBackgroundClip: 'text',
-              color: 'transparent',
-            }}
-          >
-            Статистика платформы
-          </h2>
+         <h2
+  style={{
+    margin: '0 0 18px',
+    textAlign: 'center',
+    fontWeight: 900,
+    fontSize: 22,
+    color: 'var(--blue)',
+  }}
+>
+  Статистика платформы
+</h2>
+
 
           <div
-            style={{
-              background: UI.cardBg,
-              border: `1px solid ${UI.border}`,
-              borderRadius: 16,
-              padding: 18,
-              display: 'grid',
-              gap: 18,
-            }}
-          >
+  style={{
+    background: '#FFFFFF',                        // фон белый
+    border: '1px solid var(--stats-border)',      // как в Hero
+    borderRadius: 16,
+    padding: 18,
+    display: 'grid',
+    gap: 18,
+  }}
+>
+
             <div
               style={{
                 display: 'grid',
@@ -706,10 +706,11 @@ export default function Home() {
             </div>
 
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ margin: '0 0 6px', color: UI.title }}>
-                Обучение для покупателей авто с торгов
-              </h2>
-              <p style={{ margin: '0 auto 14px', color: UI.text, lineHeight: 1.65, maxWidth: 760 }}>
+              <h2 style={{ margin: '0 0 6px', color: 'var(--blue)', fontWeight: 800 }}>
+  Обучение для покупателей авто с торгов
+</h2>
+
+              <p style={{ margin: '0 auto 14px', color: 'var(--text-600)', lineHeight: 1.65, maxWidth: 760 }}>
                 Разбираем стратегию поиска и анализа лотов, оценку рисков и юридические нюансы сделки.
                 Практика на реальных кейсах и инструкции, с которыми вы уверенно проходите путь от идеи до покупки.
               </p>
@@ -729,29 +730,25 @@ export default function Home() {
               </div>
 
               <a
-                href="/education"
-                role="button"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  background: UI.button,
-                  color: '#000',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e)=> (e.currentTarget.style.background = UI.buttonHover)}
-                onMouseLeave={(e)=> (e.currentTarget.style.background = UI.button)}
-              >
-                Узнать больше
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M5 12h14M13 5l7 7-7 7" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </a>
+  href="/education"
+  role="button"
+  style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 16px',
+    borderRadius: 12,
+    background: 'var(--blue)',
+    color: '#fff',
+    fontWeight: 700,
+    textDecoration: 'none',
+    border: '1px solid var(--blue)',
+    cursor: 'pointer',
+  }}
+>
+  Узнать больше
+</a>
+
             </div>
           </div>
         </section>
