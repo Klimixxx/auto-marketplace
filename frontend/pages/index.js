@@ -446,14 +446,10 @@ function EducationFeature({ title, Icon }) {
 function UsersIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroUsers" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
-      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="url(#gradHeroUsers)" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="url(#gradHeroUsers)" strokeWidth="1.8" />
+      <path d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"
+            stroke="var(--blue)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 11a4 4 0 100-8 4 4 0 000 8z"
+            stroke="var(--blue)" strokeWidth="1.8" />
     </svg>
   );
 }
@@ -679,52 +675,33 @@ export default function Home() {
 
 {/* === СТАТИСТИКА ПЛАТФОРМЫ — НИЖЕ === */}
 <section style={{ margin: '32px 0' }}>
-  <h2
-    style={{
-      margin: '0 0 18px',
-      textAlign: 'center',
-      fontWeight: 900,
-      fontSize: 22,
-      color: 'var(--blue)',
-    }}
-  >
-    Статистика платформы
-  </h2>
-
-  <div
-    style={{
-      background: '#FFFFFF',
-      border: '1px solid var(--stats-border)',
-      borderRadius: 16,
-      padding: 18,
-      display: 'grid',
-      gap: 18,
-    }}
-  >
-    <div
+  <div style={{ background:'#FFFFFF', border:'1px solid var(--stats-border)', borderRadius:16, padding:18, display:'grid', gap:18 }}>
+    <h2
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 12,
+        margin: '0 0 12px',
+        textAlign: 'center',
+        fontWeight: 900,
+        fontSize: 22,
+        color: 'var(--blue)',
       }}
     >
+      Статистика платформы
+    </h2>
+
+    {/* дальше — как у тебя: сетка StatCard и блок карты/списка */}
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:12 }}>
       {statsCards.map((card) => (
         <StatCard key={card.title} {...card} loading={loadingSummary} />
       ))}
     </div>
 
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
-        gap: 18,
-      }}
-    >
+    <div style={{ display:'grid', gridTemplateColumns:'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap:18 }}>
       <RegionBubbleMap regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
       <RegionList regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
     </div>
   </div>
 </section>
+
 
 {/* === ЛУЧШИЕ ПРЕДЛОЖЕНИЯ — ОСТАВЛЯЕМ ПОСЛЕ СТАТИСТИКИ === */}
 {(featured.length || loadingFeatured) && (
