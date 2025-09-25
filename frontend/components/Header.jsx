@@ -308,7 +308,7 @@ export default function Header() {
 }}>
   Баланс: {fmtRub.format(balance)}
 </div>
-
+)}
 
 
             {/* уведомления — компактнее контейнер */}
