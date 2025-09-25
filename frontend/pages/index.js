@@ -603,155 +603,157 @@ export default function Home() {
       <div className="container">
         <FirstLoginModal />
 
-        <section style={{ margin: '32px 0' }}>
-         <h2
-  style={{
-    margin: '0 0 18px',
-    textAlign: 'center',
-    fontWeight: 900,
-    fontSize: 22,
-    color: 'var(--blue)',
-  }}
->
-  Статистика платформы
-</h2>
+      {/* === ОБУЧЕНИЕ — СТАВИМ ВЫШЕ === */}
+<section style={{ margin: '32px 0' }}>
+  <div
+    style={{
+      background: '#FFFFFF',
+      border: '1px solid var(--stats-border)',
+      borderRadius: 12,
+      padding: 18,
+      display: 'grid',
+      gridTemplateColumns: 'auto 1fr',
+      gap: 18,
+      alignItems: 'center',
+    }}
+  >
+    {/* Левая картинка — рамка как в Hero */}
+    <div
+      style={{
+        width: 180,
+        height: 180,
+        borderRadius: 16,
+        background: '#FFFFFF',
+        border: '1px solid var(--stats-border)',
+        display: 'grid',
+        placeItems: 'center',
+        overflow: 'hidden',
+      }}
+    >
+      <img
+        src="/education/group.png"
+        alt="Иконка обучения"
+        style={{ width: '86%', height: '86%', objectFit: 'contain', display: 'block' }}
+      />
+    </div>
 
+    <div style={{ textAlign: 'center' }}>
+      <h2 style={{ margin: '0 0 6px', color: 'var(--blue)', fontWeight: 800 }}>
+        Обучение для покупателей авто с торгов
+      </h2>
 
-          <div
-  style={{
-    background: '#FFFFFF',                        // фон белый
-    border: '1px solid var(--stats-border)',      // как в Hero
-    borderRadius: 16,
-    padding: 18,
-    display: 'grid',
-    gap: 18,
-  }}
->
+      <p style={{ margin: '0 auto 14px', color: 'var(--text-600)', lineHeight: 1.65, maxWidth: 760 }}>
+        Разбираем стратегию поиска и анализа лотов, оценку рисков и юридические нюансы сделки.
+        Практика на реальных кейсах и инструкции, с которыми вы уверенно проходите путь от идеи до покупки.
+      </p>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: 12,
-              }}
-            >
-              {statsCards.map((card) => (
-                <StatCard key={card.title} {...card} loading={loadingSummary} />
-              ))}
-            </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))',
+          gap: 12,
+          marginBottom: 14,
+          textAlign: 'left',
+        }}
+      >
+        <EducationFeature title="Быстрое и эффективное обучение" Icon={LightningIcon} />
+        <EducationFeature title="Оплата обучения частями" Icon={InstallmentIcon} />
+        <EducationFeature title="Доступ в закрытые чаты продавцов авто" Icon={CarIcon} />
+      </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
-                gap: 18,
-              }}
-            >
-              <RegionBubbleMap regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
-              <RegionList regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
-            </div>
-          </div>
-        </section>
+      <a
+        href="/education"
+        role="button"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '12px 16px',
+          borderRadius: 12,
+          background: 'var(--blue)',
+          color: '#fff',
+          fontWeight: 700,
+          textDecoration: 'none',
+          border: '1px solid var(--blue)',
+          cursor: 'pointer',
+        }}
+      >
+        Узнать больше
+      </a>
+    </div>
+  </div>
+</section>
 
-        {(featured.length || loadingFeatured) && (
-          <section style={{ margin: '32px 0' }}>
-            {loadingFeatured && !featured.length ? (
-              <div
-                style={{
-                  borderRadius: 16,
-                  border: `1px solid ${UI.border}`,
-                  padding: '40px 16px',
-                  textAlign: 'center',
-                  color: UI.text,
-                }}
-              >
-                Загружаем интересные объявления…
-              </div>
-            ) : (
-              <BestOffersCarousel items={featured} />
-            )}
-          </section>
-        )}
+{/* === СТАТИСТИКА ПЛАТФОРМЫ — НИЖЕ === */}
+<section style={{ margin: '32px 0' }}>
+  <h2
+    style={{
+      margin: '0 0 18px',
+      textAlign: 'center',
+      fontWeight: 900,
+      fontSize: 22,
+      color: 'var(--blue)',
+    }}
+  >
+    Статистика платформы
+  </h2>
 
-        <section style={{ margin: '32px 0' }}>
-          <div
-            style={{
-              background: UI.cardBg,
-              border: `1px solid ${UI.border}`,
-              borderRadius: 12,
-              padding: 18,
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: 18,
-              alignItems: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: 180,
-                height: 180,
-                borderRadius: 16,
-                background: 'rgba(255,255,255,0.04)',
-                border: `1px solid ${UI.border}`,
-                display: 'grid',
-                placeItems: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <img
-                src="/education/group.png"
-                alt="Иконка обучения"
-                style={{ width: '86%', height: '86%', objectFit: 'contain', display: 'block' }}
-              />
-            </div>
+  <div
+    style={{
+      background: '#FFFFFF',
+      border: '1px solid var(--stats-border)',
+      borderRadius: 16,
+      padding: 18,
+      display: 'grid',
+      gap: 18,
+    }}
+  >
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 12,
+      }}
+    >
+      {statsCards.map((card) => (
+        <StatCard key={card.title} {...card} loading={loadingSummary} />
+      ))}
+    </div>
 
-            <div style={{ textAlign: 'center' }}>
-              <h2 style={{ margin: '0 0 6px', color: 'var(--blue)', fontWeight: 800 }}>
-  Обучение для покупателей авто с торгов
-</h2>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
+        gap: 18,
+      }}
+    >
+      <RegionBubbleMap regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
+      <RegionList regions={regions} activeRegion={activeRegion} onHover={setActiveRegion} />
+    </div>
+  </div>
+</section>
 
-              <p style={{ margin: '0 auto 14px', color: 'var(--text-600)', lineHeight: 1.65, maxWidth: 760 }}>
-                Разбираем стратегию поиска и анализа лотов, оценку рисков и юридические нюансы сделки.
-                Практика на реальных кейсах и инструкции, с которыми вы уверенно проходите путь от идеи до покупки.
-              </p>
+{/* === ЛУЧШИЕ ПРЕДЛОЖЕНИЯ — ОСТАВЛЯЕМ ПОСЛЕ СТАТИСТИКИ === */}
+{(featured.length || loadingFeatured) && (
+  <section style={{ margin: '32px 0' }}>
+    {loadingFeatured && !featured.length ? (
+      <div
+        style={{
+          borderRadius: 16,
+          border: `1px solid ${UI.border}`,
+          padding: '40px 16px',
+          textAlign: 'center',
+          color: UI.text,
+        }}
+      >
+        Загружаем интересные объявления…
+      </div>
+    ) : (
+      <BestOffersCarousel items={featured} />
+    )}
+  </section>
+)}
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))',
-                  gap: 12,
-                  marginBottom: 14,
-                  textAlign: 'left',
-                }}
-              >
-                <EducationFeature title="Быстрое и эффективное обучение" Icon={LightningIcon} />
-                <EducationFeature title="Оплата обучения частями" Icon={InstallmentIcon} />
-                <EducationFeature title="Доступ в закрытые чаты продавцов авто" Icon={CarIcon} />
-              </div>
-
-              <a
-  href="/education"
-  role="button"
-  style={{
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '12px 16px',
-    borderRadius: 12,
-    background: 'var(--blue)',
-    color: '#fff',
-    fontWeight: 700,
-    textDecoration: 'none',
-    border: '1px solid var(--blue)',
-    cursor: 'pointer',
-  }}
->
-  Узнать больше
-</a>
-
-            </div>
-          </div>
-        </section>
 
         <section style={{ margin: '24px 0 48px' }}>
           <div
