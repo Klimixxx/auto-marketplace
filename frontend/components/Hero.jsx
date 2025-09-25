@@ -109,7 +109,7 @@ const styles = {
     padding: '8px 12px',
     borderRadius: 999,
     background: UI.glass,
-    border: `1.5px solid ${UI.border}`,
+    border: '1.5px solid var(--stats-border)',
     color: UI.text,
     fontSize: 13.5,
     backdropFilter: 'blur(6px)',
@@ -180,7 +180,7 @@ input: {
   width: 40, height: 40, borderRadius: 10,
   display: 'grid', placeItems: 'center',
   background: 'rgba(17,24,39,0.04)',
-  border: '1px solid var(--card-border)',
+  border: '1px solid var(--stats-border)',
   fontSize: 20,
 },
 
