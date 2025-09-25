@@ -347,7 +347,9 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%', background:'var(--page-bg)', borderBottom:'none' }}>
+      {/* Нижняя шапка */}
+<div style={{ width:'100%', background:'var(--page-bg)', borderBottom:'none' }}>
+
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
