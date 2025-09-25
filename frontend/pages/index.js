@@ -469,9 +469,9 @@ function DocumentIcon() {
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
-      <path d="M14 3v6h6" stroke="url(#gradHeroDoc)" strokeWidth="1.8" />
-      <path d="M9 13h8M9 17h8" stroke="url(#gradHeroDoc)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="var(--blue)" strokeWidth="1.8" />
+      <path d="M14 3v6h6" stroke="var(--blue)" strokeWidth="1.8" />
+      <path d="M9 13h8M9 17h8" stroke="var(--blue)" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -500,9 +500,9 @@ function BanknoteIcon() {
           <stop offset="100%" stopColor={UI.gradTo} />
         </linearGradient>
       </defs>
-      <rect x="3" y="7" width="18" height="10" rx="2" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
-      <circle cx="12" cy="12" r="2.5" stroke="url(#gradHeroNote)" strokeWidth="1.8"/>
-      <path d="M5 9h2M17 9h2M5 15h2M17 15h2" stroke="url(#gradHeroNote)" strokeWidth="1.8" strokeLinecap="round"/>
+      <rect x="3" y="7" width="18" height="10" rx="2" stroke="var(--blue)" strokeWidth="1.8"/>
+      <circle cx="12" cy="12" r="2.5" stroke="var(--blue)" strokeWidth="1.8"/>
+      <path d="M5 9h2M17 9h2M5 15h2M17 15h2" stroke="var(--blue)" strokeWidth="1.8" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -681,7 +681,17 @@ export default function Home() {
 
 {/* === СТАТИСТИКА ПЛАТФОРМЫ — НИЖЕ === */}
 <section style={{ margin: '32px 0' }}>
-  <div style={{ background:'#FFFFFF', border:'1px solid var(--stats-border)', borderRadius:16, padding:18, display:'grid', gap:18 }}>
+  <div
+  style={{
+    background: 'rgba(0,0,0,0.04)',    // тот же фон, что в "О нас"
+    border: '1px solid rgba(0,0,0,0.15)', // серо-тёмная рамка
+    borderRadius: 16,
+    padding: 18,
+    display: 'grid',
+    gap: 18,
+  }}
+>
+
     <h2
       style={{
         margin: '0 0 12px',
