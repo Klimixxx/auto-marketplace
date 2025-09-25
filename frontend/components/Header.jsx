@@ -264,15 +264,14 @@ export default function Header() {
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
           <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
-  <a 
-    <a href="/trades"      className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Торги</a>
-<a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Мои Осмотры</a>
-<a href="/support"     className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Поддержка</a>
-{me?.role === 'admin' && (
-  <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Админ Панель</a>
-)}
-
+  <a href="/trades"      className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Торги</a>
+  <a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Мои Осмотры</a>
+  <a href="/support"     className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Поддержка</a>
+  {me?.role === 'admin' && (
+    <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Админ Панель</a>
+  )}
 </nav>
+
 
 
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
