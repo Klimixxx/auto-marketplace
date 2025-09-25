@@ -420,10 +420,10 @@ function EducationFeature({ title, Icon }) {
        gridTemplateColumns:'auto 1fr',
        gap:12,
        alignItems:'center',
-       background:'transparent',
-       border:'none',
-       borderRadius:0,
-       padding:12,
+       background:'#FFFFFF',
+       border:'1px solid var(--stats-border)',
+       borderRadius:12,
+       padding:14,
       }}
     >
       <div
