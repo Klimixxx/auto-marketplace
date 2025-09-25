@@ -173,7 +173,7 @@ input: {
   padding: 12,
   borderRadius: 14,
   background: 'var(--card-bg)',               // МЯГКИЙ ФОН карточки
-  border: '1px solid var(--card-border)',     // ТОНКАЯ РАМКА карточки
+  border: '1px solid var(--stats-border)',     // ТОНКАЯ РАМКА карточки
 },
 
   featureIcon: {
