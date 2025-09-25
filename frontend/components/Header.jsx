@@ -300,15 +300,15 @@ export default function Header() {
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
            {me && (
   <div style={{
-    padding:'6px 10px', borderRadius:10,
-    background:'transparent',
-    border:`1px solid ${UI.iconMuted}`,
-    color: UI.iconMuted,
-    fontWeight:700
-  }}>
-    Баланс: {fmtRub.format(balance)}
-  </div>
-)}
+  padding:'6px 10px', borderRadius:10,
+  background:'transparent',
+  border:'1px solid rgba(255,255,255,0.35)',
+  color:'#FFFFFF',
+  fontWeight:700
+}}>
+  Баланс: {fmtRub.format(balance)}
+</div>
+
 
 
             {/* уведомления — компактнее контейнер */}
@@ -321,24 +321,24 @@ export default function Header() {
               <button
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
                 title={authed ? 'Открыть меню' : 'Войти'}
-                style={{
+                 style={{
     display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
     background:'transparent',
-    border:`1px solid ${UI.iconMuted}`, borderRadius:10,
-    cursor:'pointer', color:UI.iconMuted
+    border:'1px solid rgba(255,255,255,0.35)', borderRadius:10,
+    cursor:'pointer', color:'#FFFFFF'
   }}
 >
   <span style={{
     display:'inline-flex', width:24, height:24, borderRadius:'50%',
     background:'transparent', alignItems:'center', justifyContent:'center',
-    border:`1px solid ${UI.iconMuted}`
+    border:'1px solid rgba(255,255,255,0.35)'
   }}>
-    <IconUser size={16} color={UI.iconMuted} />
+    <IconUser size={16} color="#FFFFFF" />
   </span>
   <span style={{
     fontWeight:700,
     maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-    color: UI.iconMuted
+    color:'#FFFFFF'
   }}>
     {username}
   </span>
@@ -357,10 +357,11 @@ export default function Header() {
                   <MenuItem href="/favorites" text="Избранное" />
                   <hr style={{ margin:0, border:'none', borderTop:`1px solid ${UI.menuBorder}` }} />
                   <button onClick={logout}
-                    style={{ width:'100%', textAlign:'left', background:'none', border:'none',
-                      padding:'12px 14px', cursor:'pointer', color: UI.topText }}>
-                    Выйти
-                  </button>
+  style={{ width:'100%', textAlign:'left', background:'none', border:'none',
+    padding:'12px 14px', cursor:'pointer', color:'var(--text-900)', fontWeight:600 }}>
+  Выход
+</button>
+
                 </div>
               )}
             </div>
@@ -369,7 +370,7 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%', background:'var(--milky)', borderBottom:`1px solid ${UI.border}` }}>
+      <div style={{ width:'100%', background:'var(--page-bg)', borderBottom:'none' }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
@@ -466,11 +467,12 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
 }
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
+    <a href={href} style={{ display:'block', padding:'12px 14px', color:'var(--blue)', textDecoration:'none' }}>
       {text}
     </a>
   );
 }
+
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
@@ -484,8 +486,8 @@ function Logo({ onClick }) {
 function BellIcon(){
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke={UI.iconMuted} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke={UI.iconMuted} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }
