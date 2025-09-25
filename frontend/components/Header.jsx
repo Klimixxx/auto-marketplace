@@ -8,15 +8,19 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 
 const UI = {
   /* Верхняя часть шапки */
-  topBg: '#ffffff',
-  topText: '#111827',
-  topMuted: 'rgba(17,24,39,0.70)',
-  border: 'rgba(17,24,39,0.10)',
-  baseBg: 'transparent',
+  topBg: '#0b0b0f',
+  topText: '#f7f7f7',
+  topMuted: 'rgba(247,247,247,0.70)',
+  topBorder: 'rgba(255,255,255,0.14)',
+
+  /* Нижняя часть шапки */
+  baseBg: '#ffffff',
+  baseText: '#111827',
+  baseBorder: 'rgba(17,24,39,0.08)',
 
   /* Поля в шапке */
-  inputBg: '#ffffff',
-  inputBorder: 'rgba(17,24,39,0.14)',
+  inputBg: '#f3f4f6',
+  inputBorder: 'rgba(17,24,39,0.16)',
   inputBorderFocus: 'rgba(42,101,247,0.45)',
   inputText: '#111827',
   inputPlaceholder: 'rgba(17,24,39,0.45)',
@@ -34,17 +38,21 @@ const UI = {
   linkHover: '#1e53d6',
   icon: '#111827',
   iconMuted: 'rgba(17,24,39,0.65)',
+  pillBg: 'rgba(255,255,255,0.10)',
+  basePillBg: '#f3f4f6',
 
   /* Фон меню и бордеры */
   menuBg: '#ffffff',
-  menuBorder: 'rgba(17,24,39,0.10)',
+  menuBorder: 'rgba(17,24,39,0.12)',
+  menuText: '#111827',
 
   /* Прочее */
+  heroBtn: '#2a65f7',
   heroBtnHover: '#1e53d6',
   red: '#ef4444',
   yellow: '#facc15',
-  chipBg: 'rgba(42,101,247,0.06)',
-  chipBorder: 'rgba(42,101,247,0.18)',
+  chipBg: 'rgba(255,255,255,0.12)',
+  chipBorder: 'rgba(255,255,255,0.28)',
 };
 
 function IconUser({ size = 20, color = 'currentColor' }) {
@@ -243,6 +251,16 @@ export default function Header() {
   const fmtRub = new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 });
 
   const [q, setQ] = useState('');
+  const navLinkStyle = {
+    color: UI.topText,
+    textDecoration: 'none',
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    letterSpacing: 0.2,
+    transition: 'color 0.2s ease',
+  };
   const submit = (e) => {
     e.preventDefault();
     const s = q.trim();
@@ -253,17 +271,47 @@ export default function Header() {
     // нижняя линия у общей шапки скрыта
     <header className="header-solid" style={{ width:'100%', position:'sticky', top:0, zIndex:1000, borderBottom:'none' }}>
       {/* Верхняя шапка: мягкий черный */}
-      <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
+      <div style={{ width:'100%', borderBottom: `1px solid ${UI.topBorder}`, background: UI.topBg, color: UI.topText }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:44,
           display:'grid', gridTemplateColumns:'1fr auto',
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
-          <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
-            <a href="/trades" className="nav-link gradtext">Торги</a>
-            <a href="/inspections" className="nav-link gradtext">Мои Осмотры</a>
-            <a href="/support" className="nav-link gradtext">Поддержка</a>
-            {me?.role === 'admin' && <a href="/admin" className="nav-link gradtext">Админ Панель</a>}
+          <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14, color: UI.topText }}>
+            <a
+              href="/trades"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Торги
+            </a>
+            <a
+              href="/inspections"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Мои Осмотры
+            </a>
+            <a
+              href="/support"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Поддержка
+            </a>
+            {me?.role === 'admin' && (
+              <a
+                href="/admin"
+                style={navLinkStyle}
+                onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+                onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+              >
+                Админ Панель
+              </a>
+            )}
           </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -288,14 +336,14 @@ export default function Header() {
                 title={authed ? 'Открыть меню' : 'Войти'}
                 style={{
                   display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-                  background: UI.pillBg, border:`1px solid ${UI.border}`, borderRadius:10,
+                  background: UI.pillBg, border:`1px solid ${UI.topBorder}`, borderRadius:10,
                   cursor:'pointer', color:UI.topText
                 }}
               >
                 <span style={{
                   display:'inline-flex', width:24, height:24, borderRadius:'50%',
-                  background:'rgba(255,255,255,0.06)', alignItems:'center', justifyContent:'center',
-                  border:`1px solid ${UI.border}`
+                  background:'rgba(255,255,255,0.08)', alignItems:'center', justifyContent:'center',
+                  border:`1px solid ${UI.topBorder}`
                 }}>
                   <IconUser size={16} color={UI.topText} />
                 </span>
@@ -322,7 +370,7 @@ export default function Header() {
                   <hr style={{ margin:0, border:'none', borderTop:`1px solid ${UI.menuBorder}` }} />
                   <button onClick={logout}
                     style={{ width:'100%', textAlign:'left', background:'none', border:'none',
-                      padding:'12px 14px', cursor:'pointer', color: UI.topText }}>
+                      padding:'12px 14px', cursor:'pointer', color: UI.menuText }}>
                     Выйти
                   </button>
                 </div>
@@ -333,11 +381,12 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%' }}>
+      <div style={{ width:'100%', background: UI.baseBg, borderBottom: `1px solid ${UI.baseBorder}` }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
-          alignItems:'center', gap:16, padding:'0 12px'
+          alignItems:'center', gap:16, padding:'0 12px',
+          color: UI.baseText
         }}>
           {/* ЛОГО: только текст, сделали чуть крупнее */}
           <Logo onClick={() => router.push('/')} />
@@ -350,7 +399,8 @@ export default function Header() {
                 style={{
                   display:'inline-flex', alignItems:'center', gap:8,
                   height:44, padding:'0 12px', borderRadius:10,
-                  background:UI.pillBg, color:UI.topText, cursor:'pointer', whiteSpace:'nowrap', border:'none'
+                  background:UI.basePillBg, color:UI.baseText, cursor:'pointer', whiteSpace:'nowrap',
+                  border:`1px solid ${UI.baseBorder}`
                 }}
               >
                 Все категории
@@ -373,7 +423,7 @@ export default function Header() {
                   type="submit"
                   style={{
                     height:44, padding:'0 16px',
-                    background:UI.heroBtn, color:'#000',
+                    background:UI.heroBtn, color:UI.btnText,
                     cursor:'pointer', border:'1px solid ' + UI.inputBorder,
                     borderLeft:'none',
                     borderTopRightRadius:10, borderBottomRightRadius:10,
@@ -404,9 +454,9 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       // компактный контейнер под иконку
       style={{
         position:'relative', width:36, height:36, borderRadius:10,
-        background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
+        background:UI.pillBg, border:`1px solid ${UI.topBorder}`,
         display:'flex', alignItems:'center', justifyContent:'center',
-        cursor:'pointer'
+        cursor:'pointer', color: UI.topText
       }}
     >
       {children}
@@ -424,7 +474,18 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
 }
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{ display:'block', padding:'12px 14px', color:'#E6EDF3', textDecoration:'none' }}>
+    <a
+      href={href}
+      style={{
+        display:'block',
+        padding:'12px 14px',
+        color: UI.menuText,
+        textDecoration:'none',
+        transition:'background 0.2s ease',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(17,24,39,0.04)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
       {text}
     </a>
   );
@@ -432,8 +493,8 @@ function MenuItem({ href, text }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
-        AuctionA<span style={{ color:'#EF4444' }}>f</span>to
+      <div style={{ color:UI.baseText, fontWeight:900, letterSpacing:.3, fontSize:18 }}>
+        AuctionA<span style={{ color:UI.red }}>f</span>to
       </div>
     </div>
   );
@@ -441,8 +502,8 @@ function Logo({ onClick }) {
 function BellIcon(){
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke={UI.topText} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke={UI.topText} strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }

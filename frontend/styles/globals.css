@@ -695,11 +695,22 @@ listing-card__more-button {
 }
 
 .header-solid {
-  background: var(--bg) !important;
-  background-image: none !important;
-  border-bottom: 1px solid var(--border-strong) !important;
-  box-shadow: none !important;
-  color: var(--text);
+  background: transparent;
+  background-image: none;
+  border-bottom: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+.header-solid a,
+.header-solid a:visited {
+  color: inherit;
+}
+
+.header-solid a:hover,
+.header-solid a:focus {
+  color: inherit;
+  opacity: 0.85;
 }
 
 
@@ -822,11 +833,11 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 
 /* Хедер — убираем тёмный градиент */
 header, .header, .site-header, .navbar, .topbar {
-  background: var(--bg) !important;
-  color: var(--text);
-  border-bottom: 1px solid var(--border-strong);
+  background: transparent;
+  color: inherit;
+  border-bottom: none;
   box-shadow: none;
-  background-image: none !important;
+  background-image: none;
 }
 
 
