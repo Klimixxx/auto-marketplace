@@ -64,7 +64,23 @@
 
   /* Мягкие карточки/рамки */
   --card-bg: #FFFDF7;
+  
   --card-border: rgba(17,24,39,0.08);
+  /* === page background (как на референсе) === */
+--page-top: #f2f3f5;                     /* светло-серый верх */
+--page-mid: #fafafa;                     /* мягкая середина */
+--page-bottom: var(--milky);             /* наш молочный низ */
+--page-bg:
+  radial-gradient(1200px 700px at 75% 25%,
+    rgba(255,255,255,0.95) 0%,
+    rgba(255,255,255,0.88) 35%,
+    rgba(255,255,255,0.80) 55%,
+    rgba(255,255,255,0.00) 70%),
+  linear-gradient(180deg,
+    var(--page-top) 0%,
+    var(--page-mid) 50%,
+    var(--page-bottom) 100%);
+
 }
 
 
@@ -77,12 +93,12 @@
 html, body, #__next {
   min-height: 100%;
   margin: 0;
-  background: var(--bg);
+  background: var(--page-bg);
 
 }
 
 body {
-  background: var(--bg);
+  background: var(--page-bg);
   color: var(--text);
   font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
 }
