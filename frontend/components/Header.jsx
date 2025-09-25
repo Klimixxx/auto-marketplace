@@ -8,10 +8,10 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 
 const UI = {
   /* Верхняя часть шапки */
-  topBg: '#ffffff',
-  topText: '#111827',
+  topBg: '#0B0B0F',
+  topText: '#E6EDF3', 
   topMuted: 'rgba(17,24,39,0.70)',
-  border: 'rgba(17,24,39,0.10)',
+  border: 'rgba(255,255,255,0.12)',
   baseBg: 'transparent',
 
   /* Поля в шапке */
@@ -333,7 +333,7 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%' }}>
+      <div style={{ width:'100%', background:'#ffffff', borderBottom:`1px solid ${UI.border}` }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
@@ -432,9 +432,10 @@ function MenuItem({ href, text }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-      <div style={{ color:'#fff', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
-        AuctionA<span style={{ color:'#EF4444' }}>f</span>to
-      </div>
+<div style={{ color:'#111827', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
+  AuctionA<span style={{ color:'#EF4444' }}>f</span>to
+</div>
+
     </div>
   );
 }
