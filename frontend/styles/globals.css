@@ -702,6 +702,17 @@ listing-card__more-button {
   color: inherit;
 }
 
+.header-solid a,
+.header-solid a:visited {
+  color: inherit;
+}
+
+.header-solid a:hover,
+.header-solid a:focus {
+  color: inherit;
+  opacity: 0.85;
+}
+
 
 .header-searchbar {
   background: rgba(255,255,255,0.05);

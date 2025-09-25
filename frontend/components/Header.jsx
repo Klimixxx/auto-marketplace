@@ -251,6 +251,16 @@ export default function Header() {
   const fmtRub = new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 });
 
   const [q, setQ] = useState('');
+  const navLinkStyle = {
+    color: UI.topText,
+    textDecoration: 'none',
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    letterSpacing: 0.2,
+    transition: 'color 0.2s ease',
+  };
   const submit = (e) => {
     e.preventDefault();
     const s = q.trim();
@@ -268,10 +278,40 @@ export default function Header() {
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
           <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14, color: UI.topText }}>
-            <a href="/trades" className="nav-link gradtext">Торги</a>
-            <a href="/inspections" className="nav-link gradtext">Мои Осмотры</a>
-            <a href="/support" className="nav-link gradtext">Поддержка</a>
-            {me?.role === 'admin' && <a href="/admin" className="nav-link gradtext">Админ Панель</a>}
+            <a
+              href="/trades"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Торги
+            </a>
+            <a
+              href="/inspections"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Мои Осмотры
+            </a>
+            <a
+              href="/support"
+              style={navLinkStyle}
+              onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+              onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+            >
+              Поддержка
+            </a>
+            {me?.role === 'admin' && (
+              <a
+                href="/admin"
+                style={navLinkStyle}
+                onMouseEnter={(e)=>{ e.currentTarget.style.color = UI.topMuted; }}
+                onMouseLeave={(e)=>{ e.currentTarget.style.color = UI.topText; }}
+              >
+                Админ Панель
+              </a>
+            )}
           </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
