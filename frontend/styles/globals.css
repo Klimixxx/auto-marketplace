@@ -50,6 +50,21 @@
   /* ===== Rows ===== */
   --row-hover: #f5f8ff;
   --row-active: #eef2ff;
+  
+  /* Aliases для удобства в компонентах */
+  --blue: var(--accent);                    /* как "прозрачно и удобно" */
+  --milky: var(--bg);                       /* молочный фон страницы */
+
+  /* Дымный верх шапки */
+  --smoky-top: linear-gradient(180deg, #0B0B0F 0%, #15171C 100%);
+
+  /* Семейство текстовых токенов под наш гайд */
+  --text-900: var(--text);                  /* почти чёрный */
+  --text-600: #4B5563;                      /* серо-чёрный для описаний */
+
+  /* Мягкие карточки/рамки */
+  --card-bg: #FFFDF7;
+  --card-border: rgba(17,24,39,0.08);
 }
 
 
@@ -823,14 +838,24 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
   border-radius: var(--radius-md);
 }
 
-/* Хедер — убираем тёмный градиент */
-header, .header, .site-header, .navbar, .topbar {
+/* Хедер (две зоны) */
+
+/* Верхняя полоса: дымный градиент + светлый текст, тонкая белая граница */
+.header--top {
+  background: var(--smoky-top) !important;
+  color: #E6EDF3;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  box-shadow: none;
+}
+
+/* Нижняя полоса: молочный фон как у страницы */
+.header--bottom {
   background: var(--bg) !important;
   color: var(--text);
   border-bottom: 1px solid var(--border-strong);
   box-shadow: none;
-  background-image: none !important;
 }
+
 
 
 
@@ -871,3 +896,41 @@ header, .header, .site-header, .navbar, .topbar {
   --card-soft: var(--surface-2);
   --accent-strong: var(--accent-hover);
 }
+
+/* Ссылки верхнего меню синие как "прозрачно и удобно" */
+.nav-link { color: var(--blue); text-decoration: none; }
+.nav-link:hover { color: var(--accent-hover); }
+
+/* Кнопка "Все категории" — как "Найти" */
+.btn-like-find {
+  background: var(--blue);
+  color: #fff;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-weight: 600;
+}
+
+/* Баланс/Аккаунт — рамка и текст в цвет уведомления */
+.notice-outline {
+  --notice: #60A5FA; /* если у колокольчика другой цвет — подставь его hex */
+  border: 1px solid var(--notice);
+  color: var(--notice);
+  background: transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+/* Карточки преимуществ (фон + рамка) */
+.feature-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Текстовые утилиты */
+.text-900 { color: var(--text-900); }
+.text-600 { color: var(--text-600); }
+.text-blue { color: var(--blue); }
+
