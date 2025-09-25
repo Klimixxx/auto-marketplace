@@ -48,8 +48,8 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
     >
       <div
         style={{
-          width: 44,
-          height: 44,
+          width: 52,
+          height: 52,
           borderRadius: 10,
           background: 'rgba(255,255,255,0.06)',
           border: `1px solid ${UI.border}`,
@@ -61,7 +61,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
       </div>
       <div>
         <div style={{ color: 'var(--text-900)', fontSize: 13 }}>{title}</div>
-        <div style={{ color: UI.title, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
+        <div style={{ color: 'var(--text-900)', fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
       </div>
     </div>
   );
@@ -416,27 +416,26 @@ function EducationFeature({ title, Icon }) {
   return (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto 1fr',
-        gap: 12,
-        alignItems: 'center',
-        background: '#FFFFFF',
-        border: '1px solid var(--stats-border)',
-        borderRadius: 12,
-        padding: 12,
+        display:'grid',
+       gridTemplateColumns:'auto 1fr',
+       gap:12,
+       alignItems:'center',
+       background:'transparent',
+       border:'none',
+       borderRadius:0,
+       padding:12,
       }}
     >
       <div
         style={{
-          width: 46, height: 46, borderRadius: 12,
-          display: 'grid', placeItems: 'center',
-          background: 'rgba(255,255,255,0.06)',
-          border: `1px solid ${UI.border}`,
+         width:54, height:54, borderRadius:12,
+         display:'grid', placeItems:'center',
+         background:'transparent',
         }}
       >
         <Icon />
       </div>
-      <div style={{ color:'#fff', fontSize: 15.5, lineHeight: 1.25 }}>
+      <div style={{ color:'var(--text-900)', fontSize:15.5, lineHeight:1.25 }}>
         {title}
       </div>
     </div>
@@ -446,7 +445,7 @@ function EducationFeature({ title, Icon }) {
 /* Иконки (градиент как в Hero) — единичные определения */
 function UsersIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
         <linearGradient id="gradHeroUsers" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
@@ -461,7 +460,7 @@ function UsersIcon() {
 
 function DocumentIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
         <linearGradient id="gradHeroDoc" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
@@ -477,7 +476,7 @@ function DocumentIcon() {
 
 function AuctionsIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
         <linearGradient id="gradHeroAuc" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
@@ -492,7 +491,7 @@ function AuctionsIcon() {
 // Купюра — для "Стоимость имущества в торгах"
 function BanknoteIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <defs>
         <linearGradient id="gradHeroNote" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={UI.gradFrom} />
@@ -509,14 +508,14 @@ function BanknoteIcon() {
 /* Естественные цвета иконок */
 function LightningIcon(){
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="#FACC15" strokeWidth="1.8" strokeLinejoin="round"/>
     </svg>
   );
 }
 function InstallmentIcon(){
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <rect x="3" y="6" width="12" height="8" rx="2" stroke="#22C55E" strokeWidth="1.8"/>
       <path d="M5 9h8M5 12h3" stroke="#22C55E" strokeWidth="1.8" strokeLinecap="round"/>
       <rect x="16" y="9" width="5" height="7" rx="1.5" stroke="#22C55E" strokeWidth="1.8"/>
@@ -526,7 +525,7 @@ function InstallmentIcon(){
 }
 function CarIcon(){
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M3 13l2-4c.5-1 1.5-2 3-2h6c1.5 0 2.5 1 3 2l2 4v3a2 2 0 01-2 2h-1a2 2 0 01-2-2H8a2 2 0 01-2 2H5a2 2 0 01-2-2v-3z" stroke="#60A5FA" strokeWidth="1.8" strokeLinejoin="round"/>
       <circle cx="8" cy="16" r="2" stroke="#60A5FA" strokeWidth="1.8"/>
       <circle cx="16" cy="16" r="2" stroke="#60A5FA" strokeWidth="1.8"/>
@@ -605,31 +604,25 @@ export default function Home() {
 
       {/* === ОБУЧЕНИЕ — СТАВИМ ВЫШЕ === */}
 <section style={{ margin: '32px 0' }}>
-  <div
-    style={{
-      background: '#FFFFFF',
-      border: '1px solid var(--stats-border)',
-      borderRadius: 12,
-      padding: 18,
-      display: 'grid',
-      gridTemplateColumns: 'auto 1fr',
-      gap: 18,
-      alignItems: 'center',
-    }}
-  >
+<div
+  style={{
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    padding: 18,
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    gap: 18,
+    alignItems: 'center',
+  }}
+>
+
     {/* Левая картинка — рамка как в Hero */}
-    <div
-      style={{
-        width: 180,
-        height: 180,
-        borderRadius: 16,
-        background: '#FFFFFF',
-        border: '1px solid var(--stats-border)',
-        display: 'grid',
-        placeItems: 'center',
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{
+   width: 180, height: 180,
+   display:'grid', placeItems:'center',
+   overflow:'hidden', background:'transparent'
+}}>
       <img
         src="/education/group.png"
         alt="Иконка обучения"
