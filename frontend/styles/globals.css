@@ -1,6 +1,7 @@
 :root {
   /* ===== Base Surfaces ===== */
   --bg: #FFFBF2; /* milky white */
+  --page-bg-gradient: linear-gradient(to bottom, #f0f0f0, #ffffff);
            /* page */
   --bg-alt: #fafafa;        /* section alt */
   --surface-1: #ffffff;     /* cards */
@@ -96,12 +97,11 @@
 html, body, #__next {
   min-height: 100%;
   margin: 0;
-  background: var(--page-bg);
-
+  background: var(--page-bg-gradient);
 }
 
 body {
-  background: var(--page-bg);
+  background: var(--page-bg-gradient);
   color: var(--text);
   font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
 }
@@ -882,7 +882,7 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 
 /* Нижняя полоса: фон как у всей страницы */
 .header--bottom {
-  background: var(--page-bg) !important;
+  background: var(--page-bg-gradient) !important;
   color: var(--text);
   border-bottom: none !important;
   box-shadow: none;
