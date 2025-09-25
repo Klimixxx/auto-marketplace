@@ -265,35 +265,13 @@ export default function Header() {
         }}>
           <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
   <a 
-    href="/trades" 
-    className="nav-link gradtext" 
-    style={{ color: UI.link, textDecoration:'none' }}
-  >
-    Торги
-  </a>
-  <a 
-    href="/inspections" 
-    className="nav-link gradtext" 
-    style={{ color: UI.link, textDecoration:'none' }}
-  >
-    Мои Осмотры
-  </a>
-  <a 
-    href="/support" 
-    className="nav-link gradtext" 
-    style={{ color: UI.link, textDecoration:'none' }}
-  >
-    Поддержка
-  </a>
-  {me?.role === 'admin' && (
-    <a 
-      href="/admin" 
-      className="nav-link gradtext" 
-      style={{ color: UI.link, textDecoration:'none' }}
-    >
-      Админ Панель
-    </a>
-  )}
+    <a href="/trades"      className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Торги</a>
+<a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Мои Осмотры</a>
+<a href="/support"     className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Поддержка</a>
+{me?.role === 'admin' && (
+  <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Админ Панель</a>
+)}
+
 </nav>
 
 
@@ -412,22 +390,25 @@ export default function Header() {
                     borderRight:'none' // чтобы рамка была общей с кнопкой
                   }}
                 />
-                <button
-                  type="submit"
-                  style={{
-                    height:44, padding:'0 16px',
-                    background:UI.heroBtn, color:'#000',
-                    cursor:'pointer', border:'1px solid ' + UI.inputBorder,
-                    borderLeft:'none',
-                    borderTopRightRadius:10, borderBottomRightRadius:10,
-                    borderTopLeftRadius:0, borderBottomLeftRadius:0,
-                    fontWeight:600 /* вместо 800 — убрали жирный */
-                  }}
-                  onMouseEnter={(e)=>e.currentTarget.style.background = UI.heroBtnHover}
-                  onMouseLeave={(e)=>e.currentTarget.style.background = UI.heroBtn}
-                >
-                  Найти
-                </button>
+               <button
+  type="submit"
+  style={{
+    height:44, padding:'0 16px',
+    background: UI.btnBg,           // как у "Все категории"
+    color: UI.btnText,              // белый
+    cursor:'pointer',
+    border: '1px solid ' + UI.btnBg, // рамка в тон кнопки
+    borderLeft:'none',
+    borderTopRightRadius:10, borderBottomRightRadius:10,
+    borderTopLeftRadius:0, borderBottomLeftRadius:0,
+    fontWeight:600
+  }}
+  onMouseEnter={(e)=>e.currentTarget.style.background = UI.btnHover}
+  onMouseLeave={(e)=>e.currentTarget.style.background = UI.btnBg}
+>
+  Найти
+</button>
+
               </div>
             </form>
           </div>
