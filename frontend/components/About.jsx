@@ -1,28 +1,31 @@
 // frontend/components/About.jsx — светлая версия «О нас»
 export default function About() {
-  const UI = {
-    title: 'var(--text-900)',
-    text: 'var(--text-600)',
-    cardBg: '#FFFFFF',
-    border: 'var(--card-border)',
-    red: '#EF4444',
-    button: 'var(--blue)',
-    buttonHover: '#1e53d6',
-  };
+const UI = {
+  title: 'var(--text-900)',       // чёрный заголовок
+  text: 'var(--text-600)',        // черно-серый текст
+  cardBg: '#FDFCF9',              // ТЕПЛЫЙ белый, чтобы не сливаться с фоном страницы
+  border: 'rgba(17,24,39,0.08)',  // тонкая «тёплая» рамка
+  red: '#EF4444',
+  button: 'var(--blue)',          // синяя кнопка как «Найти»
+  buttonHover: '#1e53d6',         // ховер темнее
+};
+
 
   return (
     <section style={{ margin: '28px 0 8px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 12px' }}>
         <div
-          style={{
-            position: 'relative',
-            background: UI.cardBg,
-            border: `1px solid ${UI.border}`,
-            borderRadius: 16,
-            padding: 18,
-            overflow: 'hidden',
-          }}
-        >
+  style={{
+    position: 'relative',
+    background: UI.cardBg,
+    border: `1px solid ${UI.border}`,
+    borderRadius: 16,
+    padding: 18,
+    overflow: 'hidden',
+    boxShadow: '0 6px 22px rgba(17,24,39,0.06)', // ← добавить
+  }}
+>
+
           {/* сетка: слева фото, справа текст + кнопка */}
           <div
             className="about-grid"
@@ -37,12 +40,12 @@ export default function About() {
             <div>
               <div
                 style={{
-                  background: '#FFFFFF',
-                  border: `1px solid ${UI.border}`,
-                  borderRadius: 14,
-                  overflow: 'hidden',
-                }}
-              >
+    background: '#FFFFFF',
+    border: `1px solid ${UI.border}`,
+    borderRadius: 14,
+    overflow: 'hidden',
+  }}
+>
                 {/* Положи файл в /public/about/car.jpg */}
                 <img
                   src="/about/car.jpg"
