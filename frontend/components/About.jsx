@@ -39,21 +39,19 @@ const UI = {
             {/* Фото слева */}
             <div>
               <div
-                style={{
-    background: '#FFFFFF',
-    border: `1px solid var(--stats-border)`,
-    borderRadius: 14,
+  style={{
+    background: 'transparent',
     overflow: 'hidden',
   }}
 >
-                {/* Положи файл в /public/about/car.jpg */}
-                <img
-                  src="/about/car.jpg"
-                  alt="Спортивное авто"
-                  style={{ width: '100%', height: 'auto', display: 'block' }}
-                  loading="eager"
-                />
-              </div>
+  <img
+    src="/about/car.jpg"
+    alt="Спортивное авто"
+    style={{ width: '100%', height: 'auto', display: 'block' }}
+    loading="eager"
+  />
+</div>
+
             </div>
 
             {/* Текст справа — бренд + описание + CTA */}
