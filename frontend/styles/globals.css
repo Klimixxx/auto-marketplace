@@ -1,6 +1,7 @@
 :root {
   /* ===== Base Surfaces ===== */
-  --bg: #ffffff;            /* page */
+  --bg: #FFFBF2; /* milky white */
+           /* page */
   --bg-alt: #fafafa;        /* section alt */
   --surface-1: #ffffff;     /* cards */
   --surface-2: #f9fafb;     /* subtle blocks */
@@ -66,9 +67,11 @@ html, body, #__next {
 }
 
 body {
+  background: var(--bg);
   color: var(--text);
   font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
 }
+
 
 a {
   color: var(--accent);
@@ -389,13 +392,13 @@ textarea:focus {
 
 listing-card__more-button {
   background: #2563eb !important;
-  color: #ffffff !important;
+  color:  !important;
   box-shadow: none;
 }
 
 .listing-card__more-button:hover {
   background: #1d4ed8 !important;
-  color: #ffffff !important;
+  color:  !important;
 }
 
 .listing-card__footer .button-outline {
