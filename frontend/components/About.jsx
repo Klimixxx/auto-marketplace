@@ -17,7 +17,7 @@ const UI = {
         <div
   style={{
     position: 'relative',
-    background: UI.cardBg,
+    background: 'rgba(0,0,0,0.04)', // лёгкий серо-тёмный прозрачный фон
     border: `1px solid var(--stats-border)`,
     borderRadius: 16,
     padding: 18,
