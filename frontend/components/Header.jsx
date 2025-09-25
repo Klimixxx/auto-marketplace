@@ -298,12 +298,12 @@ export default function Header() {
 
 
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            {me && (
+           {me && (
   <div style={{
     padding:'6px 10px', borderRadius:10,
-    background: 'transparent',
-    border:`1px solid ${UI.notice}`,
-    color: UI.notice,
+    background:'transparent',
+    border:`1px solid ${UI.iconMuted}`,
+    color: UI.iconMuted,
     fontWeight:700
   }}>
     Баланс: {fmtRub.format(balance)}
@@ -323,22 +323,22 @@ export default function Header() {
                 title={authed ? 'Открыть меню' : 'Войти'}
                 style={{
     display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-    background: 'transparent',
-    border:`1px solid ${UI.notice}`, borderRadius:10,
-    cursor:'pointer', color:UI.notice
+    background:'transparent',
+    border:`1px solid ${UI.iconMuted}`, borderRadius:10,
+    cursor:'pointer', color:UI.iconMuted
   }}
 >
   <span style={{
     display:'inline-flex', width:24, height:24, borderRadius:'50%',
     background:'transparent', alignItems:'center', justifyContent:'center',
-    border:`1px solid ${UI.notice}`
+    border:`1px solid ${UI.iconMuted}`
   }}>
-    <IconUser size={16} color={UI.notice} />
+    <IconUser size={16} color={UI.iconMuted} />
   </span>
   <span style={{
     fontWeight:700,
     maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-    color: authed ? UI.notice : UI.yellow
+    color: UI.iconMuted
   }}>
     {username}
   </span>
@@ -484,8 +484,9 @@ function Logo({ onClick }) {
 function BellIcon(){
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#E6EDF3" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke={UI.iconMuted} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke={UI.iconMuted} strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }
+
