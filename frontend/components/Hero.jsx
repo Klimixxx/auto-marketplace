@@ -182,19 +182,22 @@ input: {
   display: 'flex',
   gap: 10,
   alignItems: 'flex-start',
-  padding: 12,
+  padding: 14,
   borderRadius: 14,
-  background: 'var(--card-bg)',               // МЯГКИЙ ФОН карточки
-  border: '1px solid var(--stats-border)',     // ТОНКАЯ РАМКА карточки
+  background: 'rgba(255,255,255,0.04)',      // прозрачный мягкий фон
+  border: '1px solid rgba(0,0,0,0.15)',      // тёмно-серая рамка с прозрачностью
+  backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа
 },
 
+
   featureIcon: {
-  width: 40, height: 40, borderRadius: 10,
+  width: 48, height: 48, borderRadius: 12,
   display: 'grid', placeItems: 'center',
-  background: 'rgba(17,24,39,0.04)',
-  border: '1px solid var(--stats-border)',
-  fontSize: 20,
+  background: 'rgba(255,255,255,0.06)',      // мягкий фон под иконку
+  border: '1px solid rgba(0,0,0,0.15)',      // та же рамка
+  fontSize: 22,                              // чуть больше иконка
 },
+
 
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
