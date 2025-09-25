@@ -4,11 +4,15 @@ import Router from 'next/router';
 
 const UI = {
   title: '#111827',
-  text: 'rgba(17,24,39,0.80)',
+  text: 'rgba(17,24,39,0.78)',
   border: 'rgba(17,24,39,0.12)',
-  glass: 'rgba(17,24,39,0.04)',    // лёгкое «стекло» под светлый фон
+  glass: 'rgba(255,255,255,0.65)',
+  glassBorder: 'rgba(17,24,39,0.08)',
   button: '#2a65f7',
   buttonHover: '#1e53d6',
+  accent: '#2a65f7',
+  featureBg: '#ffffff',
+  featureIconBg: '#F1F5F9',
 };
 
 
@@ -35,8 +39,8 @@ export default function Hero({ listingCount = 0 }) {
         </div>
 
         <h1 style={styles.title}>
-          Автомобили с аукционов —{' '}
-          <span style={styles.titleGradient}>прозрачно и удобно</span>
+          <span style={styles.titleBase}>Автомобили с аукционов — </span>
+          <span style={styles.titleAccent}>прозрачно и удобно</span>
         </h1>
 
         {/* подзаголовок убран ранее по задаче */}
@@ -94,7 +98,7 @@ const styles = {
     overflow: 'hidden',
     padding: '56px 0 28px',
     margin: '0 calc(50% - 50vw)',
-    background: 'transparent',
+    background: '#F8F5EF',
   },
   inner: {
     position:'relative',
@@ -109,7 +113,7 @@ const styles = {
     padding: '8px 12px',
     borderRadius: 999,
     background: UI.glass,
-    border: `1.5px solid ${UI.border}`,
+    border: `1.5px solid ${UI.glassBorder}`,
     color: UI.text,
     fontSize: 13.5,
     backdropFilter: 'blur(6px)',
@@ -128,35 +132,36 @@ const styles = {
     letterSpacing: 0.3,
     fontVariantNumeric: 'tabular-nums',
   },
-  badgeLabel: { color: 'rgba(255,255,255,0.9)' },
+  badgeLabel: { color: UI.text },
   title: {
     margin: '14px 0 8px',
     fontSize: '38px',
     lineHeight: 1.15,
-    color: '#fff',
+    color: UI.title,
     fontWeight: 700,
   },
-  titleGradient: {
-    backgroundImage: 'linear-gradient(90deg, #67e8f9, #c4b5fd)',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+  titleBase: {
+    color: UI.title,
+  },
+  titleAccent: {
+    color: UI.accent,
   },
   form: { marginTop: 18, display: 'flex', gap: 10, alignItems: 'center' },
   input: {
     flex: 1,
     padding: '14px 14px',
     borderRadius: 14,
-    background: 'rgba(255,255,255,0.06)',
+    background: '#ffffff',
     border: `1px solid ${UI.border}`,
     outline: 'none',
-    color: '#fff',
+    color: UI.title,
     fontSize: 16,
   },
   button: {
     padding: '14px 16px',
     borderRadius: 14,
     background: UI.button,
-    color: '#000',
+    color: '#ffffff',
     fontWeight: 600,
     border: 'none',
     cursor: 'pointer',
@@ -173,16 +178,16 @@ const styles = {
     alignItems: 'flex-start',
     padding: 12,
     borderRadius: 14,
-    background: 'rgba(255,255,255,0.04)',
+    background: UI.featureBg,
     border: `1px solid ${UI.border}`,
   },
   featureIcon: {
     width: 40, height: 40, borderRadius: 10,
     display: 'grid', placeItems: 'center',
-    background: 'rgba(255,255,255,0.06)',
+    background: UI.featureIconBg,
     border: `1px solid ${UI.border}`,
     fontSize: 20,
   },
-  featureTitle: { color:'#fff', fontWeight:600, fontSize:14, lineHeight:1.2 },
-  featureText: { color:'rgba(255,255,255,0.75)', fontSize:13, lineHeight:1.3 },
+  featureTitle: { color: UI.title, fontWeight:600, fontSize:14, lineHeight:1.2 },
+  featureText: { color: UI.text, fontSize:13, lineHeight:1.3 },
 };
