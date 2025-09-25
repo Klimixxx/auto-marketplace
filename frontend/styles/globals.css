@@ -759,8 +759,9 @@ listing-card__more-button {
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
-  color: var(--blue) !important;
+  color: #FFFFFF !important;
 }
+
 
 
 .nav-link:hover {
