@@ -732,12 +732,13 @@ listing-card__more-button {
 }
 
 .header-solid {
-  background: var(--bg) !important;
+  background: transparent !important;
   background-image: none !important;
-  border-bottom: 1px solid var(--border-strong) !important;
+  border-bottom: none !important;
   box-shadow: none !important;
   color: var(--text);
 }
+
 
 
 .header-searchbar {
@@ -768,7 +769,7 @@ listing-card__more-button {
   text-shadow: 0 0 12px rgba(103,232,249,0.35);
 }
 /* ===== Base UI Layer for Better Contrast on White ===== */
-body { color: var(--text); background: var(--bg); }
+body { color: var(--text); background: var(--page-bg); }
 h1, h2, h3, h4, h5, h6 { color: var(--text-strong); }
 p, li, label, dt, dd, th, td, span { color: var(--text); }
 small, .text-muted { color: var(--text-muted); }
@@ -883,9 +884,10 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 .header--bottom {
   background: var(--page-bg) !important;
   color: var(--text);
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: none !important;
   box-shadow: none;
 }
+
 
 
 
