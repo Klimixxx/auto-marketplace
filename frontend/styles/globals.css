@@ -878,13 +878,15 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
   box-shadow: none;
 }
 
-/* Нижняя полоса: молочный фон как у страницы */
+
+/* Нижняя полоса: фон как у всей страницы */
 .header--bottom {
-  background: var(--bg) !important;
+  background: var(--page-bg) !important;
   color: var(--text);
   border-bottom: 1px solid var(--border-strong);
   box-shadow: none;
 }
+
 
 
 
