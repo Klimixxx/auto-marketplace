@@ -734,6 +734,16 @@ listing-card__more-button {
   color:transparent;
 }
 
+/* Убираем градиент на ссылках верхнего меню и оставляем синий */
+.header--top .nav-link.gradtext,
+.header--bottom .nav-link.gradtext {
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  color: var(--blue) !important;
+}
+
+
 .nav-link:hover {
   text-shadow: 0 0 12px rgba(103,232,249,0.35);
 }
@@ -913,13 +923,14 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 
 /* Баланс/Аккаунт — рамка и текст в цвет уведомления */
 .notice-outline {
-  --notice: #60A5FA; /* если у колокольчика другой цвет — подставь его hex */
+  --notice: var(--text-600); /* серо-чёрный, как иконка уведомлений */
   border: 1px solid var(--notice);
   color: var(--notice);
   background: transparent;
   border-radius: 10px;
   padding: 8px 10px;
 }
+
 
 /* Карточки преимуществ (фон + рамка) */
 .feature-card {
