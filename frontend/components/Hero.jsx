@@ -184,8 +184,8 @@ input: {
   alignItems: 'flex-start',
   padding: 14,
   borderRadius: 14,
-  background: 'rgba(255,255,255,0.04)',      // прозрачный мягкий фон
-  border: '1px solid rgba(0,0,0,0.15)',      // тёмно-серая рамка с прозрачностью
+  background: 'rgba(0,0,0,0.06)',     // серо-тёмный полупрозрачный фон
+border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
   backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа
 },
 
@@ -193,8 +193,9 @@ input: {
   featureIcon: {
   width: 48, height: 48, borderRadius: 12,
   display: 'grid', placeItems: 'center',
-  background: 'rgba(255,255,255,0.06)',      // мягкий фон под иконку
-  border: '1px solid rgba(0,0,0,0.15)',      // та же рамка
+  background: 'rgba(0,0,0,0.08)',      // чуть более тёмный фон
+  border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
+
   fontSize: 22,                              // чуть больше иконка
 },
 
