@@ -31,7 +31,7 @@ export default function Hero({ listingCount = 0 }) {
         <div style={styles.badge}>
           <span style={styles.pulse} />
           <span style={styles.badgeNum}>{fmt.format(Math.max(0, listingCount))}</span>
-          <span style={styles.badgeLabel}>Объявлений</span>
+          <span style={styles.badgeLabel}>Объявлений ждут своих покупателей</span>
         </div>
 
         <h1 style={styles.title}>
