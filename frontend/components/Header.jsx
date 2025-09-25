@@ -8,8 +8,8 @@ const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — �
 
 const UI = {
   /* Верхняя часть шапки */
-  topBg: '#0B0B0F',
-  topText: '#E6EDF3', 
+  topBg: 'var(--smoky-top)',     // ДЫМНЫЙ фон (градиент)
+  topText: '#E6EDF3',
   topMuted: 'rgba(17,24,39,0.70)',
   border: 'rgba(255,255,255,0.12)',
   baseBg: 'transparent',
@@ -22,7 +22,7 @@ const UI = {
   inputPlaceholder: 'rgba(17,24,39,0.45)',
 
   /* Кнопки */
-  btnBg: '#2a65f7',
+  btnBg: 'var(--blue)',
   btnHover: '#1e53d6',
   btnText: '#ffffff',
   btnSoftBg: 'rgba(42,101,247,0.08)',
@@ -30,7 +30,7 @@ const UI = {
   btnSoftHoverBg: 'rgba(42,101,247,0.14)',
 
   /* Ссылки/иконки/меню */
-  link: '#2a65f7',
+  link: 'var(--blue)',           // ССЫЛКИ СИНИЕ как "прозрачно и удобно"
   linkHover: '#1e53d6',
   icon: '#111827',
   iconMuted: 'rgba(17,24,39,0.65)',
@@ -40,12 +40,16 @@ const UI = {
   menuBorder: 'rgba(17,24,39,0.10)',
 
   /* Прочее */
+  heroBtn: 'var(--blue)',        // «Найти» – синий
   heroBtnHover: '#1e53d6',
   red: '#ef4444',
   yellow: '#facc15',
   chipBg: 'rgba(42,101,247,0.06)',
   chipBorder: 'rgba(42,101,247,0.18)',
+  notice: '#60A5FA',             // ЦВЕТ иконки уведомлений (подстрой при необходимости)
+  pillBg: 'transparent',
 };
+
 
 function IconUser({ size = 20, color = 'currentColor' }) {
   return (
@@ -260,21 +264,52 @@ export default function Header() {
           alignItems:'center', gap:12, padding:'0 12px'
         }}>
           <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
-            <a href="/trades" className="nav-link gradtext">Торги</a>
-            <a href="/inspections" className="nav-link gradtext">Мои Осмотры</a>
-            <a href="/support" className="nav-link gradtext">Поддержка</a>
-            {me?.role === 'admin' && <a href="/admin" className="nav-link gradtext">Админ Панель</a>}
-          </nav>
+  <a 
+    href="/trades" 
+    className="nav-link gradtext" 
+    style={{ color: UI.link, textDecoration:'none' }}
+  >
+    Торги
+  </a>
+  <a 
+    href="/inspections" 
+    className="nav-link gradtext" 
+    style={{ color: UI.link, textDecoration:'none' }}
+  >
+    Мои Осмотры
+  </a>
+  <a 
+    href="/support" 
+    className="nav-link gradtext" 
+    style={{ color: UI.link, textDecoration:'none' }}
+  >
+    Поддержка
+  </a>
+  {me?.role === 'admin' && (
+    <a 
+      href="/admin" 
+      className="nav-link gradtext" 
+      style={{ color: UI.link, textDecoration:'none' }}
+    >
+      Админ Панель
+    </a>
+  )}
+</nav>
+
 
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             {me && (
-              <div style={{
-                padding:'6px 10px', borderRadius:10,
-                background: UI.chipBg, border:`1px solid ${UI.chipBorder}`, fontWeight:700
-              }}>
-                Баланс: {fmtRub.format(balance)}
-              </div>
-            )}
+  <div style={{
+    padding:'6px 10px', borderRadius:10,
+    background: 'transparent',
+    border:`1px solid ${UI.notice}`,
+    color: UI.notice,
+    fontWeight:700
+  }}>
+    Баланс: {fmtRub.format(balance)}
+  </div>
+)}
+
 
             {/* уведомления — компактнее контейнер */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
@@ -287,26 +322,27 @@ export default function Header() {
                 onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
                 title={authed ? 'Открыть меню' : 'Войти'}
                 style={{
-                  display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-                  background: UI.pillBg, border:`1px solid ${UI.border}`, borderRadius:10,
-                  cursor:'pointer', color:UI.topText
-                }}
-              >
-                <span style={{
-                  display:'inline-flex', width:24, height:24, borderRadius:'50%',
-                  background:'rgba(255,255,255,0.06)', alignItems:'center', justifyContent:'center',
-                  border:`1px solid ${UI.border}`
-                }}>
-                  <IconUser size={16} color={UI.topText} />
-                </span>
-                <span style={{
-                  fontWeight:700,
-                  maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                  color: authed ? UI.topText : UI.yellow
-                }}>
-                  {username}
-                </span>
-              </button>
+    display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+    background: 'transparent',
+    border:`1px solid ${UI.notice}`, borderRadius:10,
+    cursor:'pointer', color:UI.notice
+  }}
+>
+  <span style={{
+    display:'inline-flex', width:24, height:24, borderRadius:'50%',
+    background:'transparent', alignItems:'center', justifyContent:'center',
+    border:`1px solid ${UI.notice}`
+  }}>
+    <IconUser size={16} color={UI.notice} />
+  </span>
+  <span style={{
+    fontWeight:700,
+    maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+    color: authed ? UI.notice : UI.yellow
+  }}>
+    {username}
+  </span>
+</button>
 
               {authed && menuOpen && (
                 <div style={{
@@ -333,7 +369,7 @@ export default function Header() {
       </div>
 
       {/* Нижняя шапка */}
-      <div style={{ width:'100%', background:'#ffffff', borderBottom:`1px solid ${UI.border}` }}>
+      <div style={{ width:'100%', background:'var(--milky)', borderBottom:`1px solid ${UI.border}` }}>
         <div style={{
           maxWidth: MAXW, margin:'0 auto', height:64,
           display:'grid', gridTemplateColumns:'auto 1fr',
@@ -345,16 +381,22 @@ export default function Header() {
           {/* Поисковая группа: input и «Найти» соединены */}
           <div style={{ padding: 0 }}>
             <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:10 }}>
-              <button
-                type="button" onClick={() => router.push('/trades')}
-                style={{
-                  display:'inline-flex', alignItems:'center', gap:8,
-                  height:44, padding:'0 12px', borderRadius:10,
-                  background:UI.pillBg, color:UI.topText, cursor:'pointer', whiteSpace:'nowrap', border:'none'
-                }}
-              >
-                Все категории
-              </button>
+             <button
+  type="button" onClick={() => router.push('/trades')}
+  style={{
+    display:'inline-flex', alignItems:'center', gap:8,
+    height:44, padding:'0 12px', borderRadius:10,
+    background: UI.btnBg, color: UI.btnText,
+    border: '1px solid ' + UI.btnBg,
+    cursor:'pointer', whiteSpace:'nowrap',
+    fontWeight: 600
+  }}
+  onMouseEnter={(e)=>e.currentTarget.style.background = UI.btnHover}
+  onMouseLeave={(e)=>e.currentTarget.style.background = UI.btnBg}
+>
+  Все категории
+</button>
+
 
               {/* обёртка для связки input + button без зазора */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:0 }}>
