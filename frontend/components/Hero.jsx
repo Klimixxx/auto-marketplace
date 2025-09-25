@@ -9,6 +9,10 @@ const UI = {
   glass: 'rgba(17,24,39,0.04)',    // лёгкое «стекло» под светлый фон
   button: '#2a65f7',
   buttonHover: '#1e53d6',
+  btnBg: 'var(--blue)',
+  btnText: '#ffffff',
+  btnHover: '#1e53d6',
+
 };
 
 
@@ -49,7 +53,15 @@ export default function Hero({ listingCount = 0 }) {
             aria-label="Поиск"
             style={styles.input}
           />
-          <button type="submit" style={styles.button}>Найти</button>
+          <button
+  type="submit"
+  style={styles.button}
+  onMouseEnter={(e)=> (e.currentTarget.style.background = UI.btnHover)}
+  onMouseLeave={(e)=> (e.currentTarget.style.background = UI.btnBg)}
+>
+  Найти
+</button>
+
         </form>
 
         <div style={styles.features} className="features">
@@ -152,13 +164,13 @@ input: {
 },
 
   button: {
-    padding: '14px 16px',
-    borderRadius: 14,
-    background: UI.button,
-    color: '#000',
-    fontWeight: 600,
-    border: 'none',
-    cursor: 'pointer',
+  padding: '14px 16px',
+  borderRadius: 14,
+  background: UI.btnBg,            // как в шапке
+  color: UI.btnText,               // белый текст
+  fontWeight: 600,
+  border: '1px solid ' + UI.btnBg, // рамка в тон
+  cursor: 'pointer',
   },
   features: {
     marginTop: 18,
