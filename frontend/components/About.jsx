@@ -4,7 +4,7 @@ const UI = {
   title: 'var(--text-900)',       // чёрный заголовок
   text: 'var(--text-600)',        // черно-серый текст
   cardBg: '#FDFCF9',              // ТЕПЛЫЙ белый, чтобы не сливаться с фоном страницы
-  border: 'rgba(17,24,39,0.08)',  // тонкая «тёплая» рамка
+  border: 'var(--stats-border)',  // тонкая «тёплая» рамка
   red: '#EF4444',
   button: 'var(--blue)',          // синяя кнопка как «Найти»
   buttonHover: '#1e53d6',         // ховер темнее
@@ -18,7 +18,7 @@ const UI = {
   style={{
     position: 'relative',
     background: UI.cardBg,
-    border: `1px solid ${UI.border}`,
+    border: `1px solid var(--stats-border)`,
     borderRadius: 16,
     padding: 18,
     overflow: 'hidden',
@@ -41,7 +41,7 @@ const UI = {
               <div
                 style={{
     background: '#FFFFFF',
-    border: `1px solid ${UI.border}`,
+    border: `1px solid var(--stats-border)`,
     borderRadius: 14,
     overflow: 'hidden',
   }}
