@@ -129,18 +129,17 @@ const styles = {
     fontVariantNumeric: 'tabular-nums',
   },
   badgeLabel: { color: 'rgba(255,255,255,0.9)' },
-  title: {
+    title: {
     margin: '14px 0 8px',
     fontSize: '38px',
     lineHeight: 1.15,
-    color: '#fff',
+    color: '#111827',      // ЧЁРНЫЙ для "Автомобили с аукционов —"
     fontWeight: 700,
   },
   titleGradient: {
-    backgroundImage: 'linear-gradient(90deg, #67e8f9, #c4b5fd)',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+    color: '#2a65f7',      // СИНИЙ для "прозрачно и удобно"
   },
+
   form: { marginTop: 18, display: 'flex', gap: 10, alignItems: 'center' },
   input: {
     flex: 1,
