@@ -41,6 +41,9 @@
   --input-bg: #ffffff;
   --input-placeholder: rgba(17,24,39,0.45);
   --input-focus: rgba(42,101,247,0.45);
+  
+  /* Рамка как у бейджа статистики */
+  --stats-border: rgba(17,24,39,0.12);
 
   /* ===== State ===== */
   --success: #16a34a;
