@@ -416,31 +416,37 @@ function EducationFeature({ title, Icon }) {
   return (
     <div
       style={{
-        display:'grid',
-       gridTemplateColumns:'auto 1fr',
-       gap:12,
-       alignItems:'center',
-       background:'#FFFFFF',
-       border:'1px solid var(--stats-border)',
-       borderRadius:12,
-       padding:14,
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr',
+        gap: 12,
+        alignItems: 'center',
+        background: 'rgba(255,255,255,0.04)',   // фон как у статистики
+        border: '1px solid rgba(0,0,0,0.15)',   // рамка серо-темная
+        borderRadius: 12,
+        padding: 14,
+        minHeight: 88,                          // выравнивание по высоте
       }}
     >
       <div
         style={{
-         width:54, height:54, borderRadius:12,
-         display:'grid', placeItems:'center',
-         background:'transparent',
+          width: 52,
+          height: 52,
+          borderRadius: 10,
+          background: 'rgba(255,255,255,0.06)', // фон иконки как в статистике
+          border: '1px solid rgba(0,0,0,0.15)', // рамка иконки
+          display: 'grid',
+          placeItems: 'center',
         }}
       >
         <Icon />
       </div>
-      <div style={{ color:'var(--text-900)', fontSize:15.5, lineHeight:1.25 }}>
+      <div style={{ color: 'var(--text-900)', fontSize: 15.5, fontWeight: 600 }}>
         {title}
       </div>
     </div>
   );
 }
+
 
 /* Иконки (градиент как в Hero) — единичные определения */
 function UsersIcon() {
