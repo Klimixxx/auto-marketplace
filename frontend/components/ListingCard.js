@@ -146,6 +146,9 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         transition: 'box-shadow .2s ease, transform .2s ease',
         transform: isHovered ? 'translateY(-2px)' : 'none',
         overflow: 'hidden',
+        /* ВАЖНО: занимаем всю строку сетки родителя */
+        gridColumn: '1 / -1',
+        width: '100%',
       }}
     >
       {/* GRID: фото | контент | правая колонка */}
