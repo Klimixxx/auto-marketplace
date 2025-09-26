@@ -116,7 +116,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const price = l.current_price ?? l.start_price;
   const priceLabel = formatPrice(price, l.currency || 'RUB');
 
-  // характеристики (год теперь выводим в «eyebrow», сюда не добавляем)
+  // характеристики (год выводим в eyebrow, сюда не добавляем)
   const metaSet = new Set();
   const metaItems = [];
   const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
@@ -136,7 +136,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const tradeType = tradeTypeLabel(rawType) || 'Лот';
   const eyebrow = [tradeType, region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
-  // общий «сброс» таблеток для текстовых блоков
+  // общий сброс "таблеток" для текстовых блоков
   const resetPill = {
     background: 'transparent',
     border: 'none',
@@ -163,6 +163,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         cursor: detailHref ? 'pointer' : 'default',
       }}
     >
+      {/* Фото */}
       <div style={{ position: 'relative', paddingBottom: '56%', background: '#0f172a' }}>
         {activePhoto ? (
           <img src={activePhoto} alt={l.title || 'Объявление'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -172,7 +173,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         )}
 
-        {/* "В избранное" */}
+        {/* В избранное */}
         {onFav ? (
           <button
             type="button"
@@ -227,94 +228,112 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         ) : null}
       </div>
 
-      {/* ИНФО-ПАНЕЛЬ: теперь белая */}
-      <div
-        style={{
-          padding: '16px 18px',
-          display: 'grid',
-          gap: 10,
-          flex: '1 1 auto',
-          background: '#fff',
-        }}
-      >
-        {/* Синяя строка: Тип • Регион • Год */}
-        {eyebrow ? (
-          <div
-            className="listing-card__eyebrow"
-            style={{ ...resetPill, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}
-          >
-            {eyebrow}
-          </div>
-        ) : null}
-
-        {/* Заголовок чёрный */}
-        <h3
-          className="listing-card__title"
-          style={{ ...resetPill, margin: 0, fontSize: 18, color: '#000' }}
-        >
-          {l.title || 'Лот'}
-        </h3>
-
-        <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          {/* Цена без «таблетки» */}
-          <div
-            className="listing-card__price no-pill"
-            style={{
-              ...resetPill,
-              fontWeight: 700,
-              fontSize: 18,
-              color: '#000',
-              background: 'transparent',
-            }}
-          >
-            {priceLabel}
-          </div>
-        </div>
-
-        {/* Характеристики (опционально) */}
-        {metaItems.length ? (
-          <div className="listing-card__meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {metaItems.slice(0, 3).map((item, index) => (
-              <span
-                key={`${item}-${index}`}
-                className="chip"
-                style={{
-                  background: 'rgba(0,0,0,0.06)',
-                  border: 'none',
-                  borderRadius: 999,
-                  padding: '4px 10px',
-                  fontSize: 12,
-                  color: '#111827',
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {/* НИЖНИЕ КНОПКИ — на белом фоне */}
-      {(detailHref || sourceHref || l.source_url) && (
+      {/* ===== НИЖНИЙ БЕЛЫЙ БЛОК (инфо + кнопки) — единый, чтобы не было "треугольников" ===== */}
+      <div style={{ background: '#fff' }}>
+        {/* Инфо-панель */}
         <div
-          className="listing-card__footer"
           style={{
-            padding: '0 18px 18px',
-            display: 'flex',
+            padding: '16px 18px',
+            display: 'grid',
             gap: 10,
-            background: '#fff',
-            border: 'none',
+            flex: '1 1 auto',
+            background: 'transparent',
           }}
         >
-          {detailHref ? (
-            <span style={{ flex: 1 }}>
-              <button
-                type="button"
-                className="button button-small"
+          {/* Синяя строка: Тип • Регион • Год */}
+          {eyebrow ? (
+            <div
+              className="listing-card__eyebrow"
+              style={{ ...resetPill, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}
+            >
+              {eyebrow}
+            </div>
+          ) : null}
+
+          {/* Заголовок */}
+          <h3
+            className="listing-card__title"
+            style={{ ...resetPill, margin: 0, fontSize: 18, color: '#000' }}
+          >
+            {l.title || 'Лот'}
+          </h3>
+
+          {/* Цена — ПОЛНЫЙ СБРОС "ТАБЛЕТКИ" */}
+          <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div
+              className="listing-card__price no-pill"
+              style={{ ...resetPill, fontWeight: 700, fontSize: 18, color: '#000' }}
+            >
+              {priceLabel}
+            </div>
+          </div>
+
+          {/* Характеристики (по желанию) */}
+          {metaItems.length ? (
+            <div className="listing-card__meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {metaItems.slice(0, 3).map((item, index) => (
+                <span
+                  key={`${item}-${index}`}
+                  className="chip"
+                  style={{
+                    background: 'rgba(0,0,0,0.06)',
+                    border: 'none',
+                    borderRadius: 999,
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    color: '#111827',
+                  }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Кнопки (тот же белый фон блока-обёртки) */}
+        {(detailHref || sourceHref || l.source_url) && (
+          <div
+            className="listing-card__footer"
+            style={{
+              padding: '0 18px 18px',
+              display: 'flex',
+              gap: 10,
+              background: 'transparent',
+              border: 'none',
+            }}
+          >
+            {detailHref ? (
+              <span style={{ flex: 1 }}>
+                <button
+                  type="button"
+                  className="button button-small"
+                  style={{
+                    display: 'inline-flex',
+                    justifyContent: 'center',
+                    width: '100%',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    background: '#1E90FF',
+                    color: '#fff',
+                    fontWeight: 600,
+                    border: 'none',
+                    boxShadow: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Подробнее
+                </button>
+              </span>
+            ) : null}
+            {(sourceHref || l.source_url) ? (
+              <a
+                href={sourceHref || l.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="button button-small button-outline"
+                onClick={(event) => event.stopPropagation()}
                 style={{
-                  display: 'inline-flex',
-                  justifyContent: 'center',
-                  width: '100%',
                   borderRadius: 10,
                   padding: '10px 12px',
                   background: '#1E90FF',
@@ -322,48 +341,28 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                   fontWeight: 600,
                   border: 'none',
                   boxShadow: 'none',
+                  textDecoration: 'none',
                   cursor: 'pointer',
+                  display: 'inline-flex',
+                  justifyContent: 'center',
                 }}
               >
-                Подробнее
-              </button>
-            </span>
-          ) : null}
-          {(sourceHref || l.source_url) ? (
-            <a
-              href={sourceHref || l.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="button button-small button-outline"
-              onClick={(event) => event.stopPropagation()}
-              style={{
-                borderRadius: 10,
-                padding: '10px 12px',
-                background: '#1E90FF',
-                color: '#fff',
-                fontWeight: 600,
-                border: 'none',
-                boxShadow: 'none',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                justifyContent: 'center',
-              }}
-            >
-              Источник
-            </a>
-          ) : null}
-        </div>
-      )}
+                Источник
+              </a>
+            ) : null}
+          </div>
+        )}
+      </div>
 
-      {/* Локальный CSS для жёсткого убирания «таблеток» у цены */}
+      {/* Жёсткий сброс "таблетки" у цены (перебивает глобальные стили с !important) */}
       <style jsx>{`
-        .listing-card .no-pill,
-        .listing-card .no-pill * {
+        .listing-card .listing-card__price,
+        .listing-card .listing-card__price * {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
           border-radius: 0 !important;
+          padding: 0 !important;
           outline: none !important;
         }
       `}</style>
@@ -383,7 +382,3 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
   return cardContent;
 }
-
-const UI = {
-  borderActive: 'rgba(103,232,249,0.45)',
-};
