@@ -98,9 +98,10 @@ function formatPrice(value, currency = 'RUB') {
 function tradeTypeLabel(type) {
   if (!type) return null;
   const lower = String(type).toLowerCase();
-  if (lower === 'auction') return 'Аукцион';
+  if (lower === 'auction' || lower.includes('аукцион')) return 'Аукцион';
   if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
-  return localizeListingBadge(type) || translateValueByKey('asset_type', type) || type;
+  // если строка уже на русском (например "Публичное предложение") — вернуть как есть
+  return localizeListingBadge(type) || translateValueByKey('asset_type', type) || String(type);
 }
 
 export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, favoriteContext }) {
@@ -115,13 +116,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
   const price = l.current_price ?? l.start_price;
   const priceLabel = formatPrice(price, l.currency || 'RUB');
-  const description = l.description || l.details?.lot_details?.description || '';
-  const shortDescription = description.length > 160 ? `${description.slice(0, 157)}…` : description;
 
+  // Характеристики (оставляем, но год убираем из списка, тк он теперь в шапке)
   const metaSet = new Set();
   const metaItems = [];
   const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
-  if (year && !metaSet.has(year)) { metaSet.add(year); metaItems.push(`${year} г.`); }
+  // (Год в metaItems НЕ добавляем)
   const mileage = formatMileage(pickDetailValue(l, ['mileage', 'run', 'probeg', 'mileage_km']));
   if (mileage && !metaSet.has(mileage)) { metaSet.add(mileage); metaItems.push(mileage); }
   const engine = formatEngine(pickDetailValue(l, ['engine_volume', 'engine_volume_l', 'engine', 'engine_volume_liters']));
@@ -132,10 +132,11 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     if (text && !metaSet.has(text)) { metaSet.add(text); metaItems.push(text); }
   }
 
-  // NEW: Тип объявления + Регион (вместо старого eyebrow)
+  // NEW: Тип объявления + Регион + Год
   const region = l.region || pickDetailValue(l, ['region']);
-  const tradeType = tradeTypeLabel(l.trade_type) || 'Лот';
-  const eyebrow = [tradeType, region].filter(Boolean).join(' • ');
+  const rawType = l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
+  const tradeType = tradeTypeLabel(rawType) || 'Лот';
+  const eyebrow = [tradeType, region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
   const cardContent = (
     <article
@@ -143,13 +144,14 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        border: `1px solid ${isHovered ? UI.borderActive : 'rgba(255,255,255,0.10)'}`,
+        // УБРАНА белая рамка у карточки
+        border: 'none',
         borderRadius: 16,
         background: 'rgba(15,23,42,0.72)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
         transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
         boxShadow: isHovered ? '0 16px 32px rgba(0,0,0,0.35)' : 'none',
         cursor: detailHref ? 'pointer' : 'default',
@@ -164,7 +166,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         )}
 
-        {/* NEW: Кнопка "В избранное" на фото (левый верх), чёрная */}
+        {/* Кнопка "В избранное" на фото (левый верх), чёрная */}
         {onFav ? (
           <button
             type="button"
@@ -191,8 +193,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             <span>{favoriteContext === 'collection' ? 'Убрать' : (fav ? 'В избранном' : 'В избранное')}</span>
           </button>
         ) : null}
-
-        {/* УДАЛЕНО: старая плашка tradeType на фото */}
 
         {photos.length > 1 ? (
           <div style={{ position: 'absolute', left: 12, bottom: 12, display: 'flex', gap: 8 }}>
@@ -222,17 +222,15 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       </div>
 
       <div style={{ padding: '16px 18px', display: 'grid', gap: 10, flex: '1 1 auto' }}>
-        {/* NEW: синий eyebrow */}
+        {/* Синяя строка: Тип • Регион • Год */}
         {eyebrow ? <div className="listing-card__eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}>{eyebrow}</div> : null}
 
-        {/* NEW: заголовок чёрный */}
+        {/* Заголовок чёрный */}
         <h3 className="listing-card__title" style={{ margin: 0, fontSize: 18, color: '#000' }}>{l.title || 'Лот'}</h3>
 
         <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          {/* NEW: цена чёрная */}
+          {/* Цена чёрная */}
           <div className="listing-card__price" style={{ fontWeight: 700, fontSize: 18, color: '#000' }}>{priceLabel}</div>
-
-          {/* УДАЛЕНО: кнопка "В избранное" снизу — перенесена наверх на фото */}
         </div>
 
         {metaItems.length ? (
@@ -245,11 +243,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         ) : null}
 
-        {shortDescription && (
-          <div className="listing-card__description" style={{ whiteSpace: 'pre-line', color: 'rgba(226,232,240,0.75)', fontSize: 13 }}>
-            {shortDescription}
-          </div>
-        )}
+        {/* ОПИСАНИЕ УДАЛЕНО по ТЗ */}
       </div>
 
       {(detailHref || sourceHref || l.source_url) && (
