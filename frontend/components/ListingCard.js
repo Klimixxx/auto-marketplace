@@ -132,13 +132,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     if (text && !metaSet.has(text)) { metaSet.add(text); metaItems.push(text); }
   }
 
-  const location = [l.city, l.region].filter(Boolean).join(', ');
-  const tradeType = tradeTypeLabel(l.trade_type) || localizeListingBadge(l.status) || 'Лот';
-  const eyebrowParts = [translateValueByKey('asset_type', l.asset_type || pickDetailValue(l, ['assetType', 'type'])), location]
-    .filter(Boolean)
-    .map((part) => String(part).trim())
-    .filter(Boolean);
-  const eyebrow = eyebrowParts.join(' • ');
+  // NEW: Тип объявления + Регион (вместо старого eyebrow)
+  const region = l.region || pickDetailValue(l, ['region']);
+  const tradeType = tradeTypeLabel(l.trade_type) || 'Лот';
+  const eyebrow = [tradeType, region].filter(Boolean).join(' • ');
 
   const cardContent = (
     <article
@@ -166,22 +163,37 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             Нет фото
           </div>
         )}
-        {tradeType ? (
-          <span
+
+        {/* NEW: Кнопка "В избранное" на фото (левый верх), чёрная */}
+        {onFav ? (
+          <button
+            type="button"
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); onFav(); }}
             style={{
               position: 'absolute',
               left: 12,
               top: 12,
-              background: 'rgba(10,14,25,0.85)',
-              borderRadius: 999,
-              padding: '4px 12px',
-              fontSize: 12,
-              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 10,
+              border: '1px solid #000',
+              background: '#fff',
+              color: '#000',
+              padding: '6px 12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              boxShadow: '0 6px 16px rgba(0,0,0,0.15)',
             }}
+            aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
           >
-            {tradeType}
-          </span>
+            <span aria-hidden="true">{favoriteContext === 'collection' ? '✕' : (fav ? '★' : '☆')}</span>
+            <span>{favoriteContext === 'collection' ? 'Убрать' : (fav ? 'В избранном' : 'В избранное')}</span>
+          </button>
         ) : null}
+
+        {/* УДАЛЕНО: старая плашка tradeType на фото */}
+
         {photos.length > 1 ? (
           <div style={{ position: 'absolute', left: 12, bottom: 12, display: 'flex', gap: 8 }}>
             {photos.slice(0, 4).map((photo, index) => (
@@ -210,33 +222,17 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       </div>
 
       <div style={{ padding: '16px 18px', display: 'grid', gap: 10, flex: '1 1 auto' }}>
-        {eyebrow ? <div className="listing-card__eyebrow" style={{ fontSize: 12, color: 'rgba(226,232,240,0.7)' }}>{eyebrow}</div> : null}
-        <h3 className="listing-card__title" style={{ margin: 0, fontSize: 18, color: '#fff' }}>{l.title || 'Лот'}</h3>
+        {/* NEW: синий eyebrow */}
+        {eyebrow ? <div className="listing-card__eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}>{eyebrow}</div> : null}
+
+        {/* NEW: заголовок чёрный */}
+        <h3 className="listing-card__title" style={{ margin: 0, fontSize: 18, color: '#000' }}>{l.title || 'Лот'}</h3>
+
         <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          <div className="listing-card__price" style={{ fontWeight: 700, fontSize: 18 }}>{priceLabel}</div>
-          {onFav ? (
-            <button
-              type="button"
-              className={`bookmark-button${fav ? ' is-active' : ''}${favoriteContext === 'collection' ? ' is-collection' : ''}`}
-              onClick={(event) => { event.preventDefault(); event.stopPropagation(); onFav(); }}
-              style={{
-                borderRadius: 10,
-                border: `1px solid ${fav ? '#67e8f9' : 'rgba(255,255,255,0.18)'}`,
-                background: fav ? 'rgba(103,232,249,0.15)' : 'rgba(15,23,42,0.85)',
-                color: '#fff',
-                padding: '6px 12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 13,
-              }}
-              aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
-            >
-              <span aria-hidden="true">{favoriteContext === 'collection' ? '✕' : (fav ? '★' : '☆')}</span>
-              {favoriteContext === 'collection' ? 'Убрать из избранного' : (fav ? 'В избранном' : 'В избранное')}
-            </button>
-          ) : null}
+          {/* NEW: цена чёрная */}
+          <div className="listing-card__price" style={{ fontWeight: 700, fontSize: 18, color: '#000' }}>{priceLabel}</div>
+
+          {/* УДАЛЕНО: кнопка "В избранное" снизу — перенесена наверх на фото */}
         </div>
 
         {metaItems.length ? (
@@ -290,9 +286,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
               style={{
                 borderRadius: 10,
                 padding: '10px 12px',
-                border: `1px solid rgba(255,255,255,0.22)`,
+                background: '#1E90FF',
                 color: '#fff',
+                fontWeight: 600,
+                border: 'none',
                 textDecoration: 'none',
+                cursor: 'pointer',
               }}
             >
               Источник
