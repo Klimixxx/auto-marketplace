@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   localizeListingBadge,
@@ -96,7 +97,6 @@ function formatRuDateTime(input) {
 /* ---- lot status helpers ------------------------------------------------ */
 
 function extractLotStatus(listing) {
-  // Ищем статус в разных местах структуры
   const cand = [
     listing?.status,
     listing?.status?.name,
@@ -120,16 +120,15 @@ function extractLotStatus(listing) {
 function classifyStatus(name) {
   if (!name) return null;
   const lower = name.toLowerCase();
-  if (lower.includes('заверш')) return { label: 'Торги завершены', color: '#dc2626' }; // red-600
-  // разные формы "открыт приём заявок"
-  if (/(открыт|открыта|при[её]м|заявок)/i.test(lower)) return { label: 'Открыт прием заявок', color: '#16a34a' }; // green-600
-  // fallback — оригинальный текст и нейтральный серый индикатор
-  return { label: name, color: '#64748b' };
+  if (lower.includes('заверш')) return { label: 'Торги завершены', color: '#dc2626' }; // red
+  if (/(открыт|открыта|при[её]м|заявок)/i.test(lower)) return { label: 'Открыт прием заявок', color: '#16a34a' }; // green
+  return { label: name, color: '#64748b' }; // fallback gray
 }
 
 /* ---- component --------------------------------------------------------- */
 
 export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, favoriteContext }) {
+  const router = useRouter();
   const [isHovered, setHovered] = useState(false);
   const photos = useMemo(() => collectPhotos(l), [l]);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -159,7 +158,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     '';
   const shortDescription = description ? (description.length > 220 ? `${description.slice(0, 217)}…` : description) : '';
 
-  // даты (если есть)
+  // даты
   const dateFinish = pickDetailValue(l, [
     'datefinish', 'dateFinish', 'date_end', 'dateEnd', 'date_to', 'end_date', 'dateFinishRu'
   ]);
@@ -169,14 +168,30 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const rawStatus = extractLotStatus(l);
   const statusInfo = rawStatus ? classifyStatus(rawStatus) : null;
 
-  // общий жёсткий сброс «таблеток»
+  // общий сброс «таблеток»
   const resetPill = { background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none', padding: 0 };
 
-  const Content = (
+  // Навигация по клику на всю карточку
+  const handleCardClick = () => {
+    if (detailHref) router.push(detailHref);
+  };
+  const handleCardKey = (e) => {
+    if (!detailHref) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      router.push(detailHref);
+    }
+  };
+
+  return (
     <article
       className="listing-card"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKey}
+      role={detailHref ? 'link' : undefined}
+      tabIndex={detailHref ? 0 : -1}
       style={{
         background: '#fff',
         borderRadius: 16,
@@ -186,6 +201,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         overflow: 'hidden',
         gridColumn: '1 / -1',
         width: '100%',
+        cursor: detailHref ? 'pointer' : 'default',
       }}
     >
       {/* GRID: фото | контент | правая колонка */}
@@ -220,6 +236,34 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
               Нет фото
             </div>
           )}
+
+          {/* Избранное — не даём клику всплыть к карточке */}
+          {onFav ? (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: 12,
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: fav ? '#f59e0b' : '#64748b',
+                padding: '6px 10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 14,
+                boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+              }}
+              aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
+            >
+              <span aria-hidden="true">{fav ? '★' : '☆'}</span>
+              <span>{fav ? 'В избранном' : 'В избранное'}</span>
+            </button>
+          ) : null}
         </div>
 
         {/* центральная колонка: тексты */}
@@ -243,7 +287,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             <div style={{ fontSize: 13, color: '#94a3b8', whiteSpace: 'pre-line' }}>{shortDescription}</div>
           ) : null}
 
-          {/* строка с датой и регионом */}
+          {/* дата + регион */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
             {dateFinishLabel ? (
               <div style={{ fontSize: 13, color: '#0f172a' }}>
@@ -258,7 +302,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             ) : null}
           </div>
 
-          {/* НОВОЕ: статус лота под строкой с датой */}
+          {/* статус лота */}
           {statusInfo ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#0f172a' }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: statusInfo.color, display: 'inline-block' }} />
@@ -285,8 +329,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {detailHref ? (
-              <Link
-                href={detailHref}
+              <button
+                type="button"
+                className="btn-more"
+                onClick={(e) => { e.stopPropagation(); router.push(detailHref); }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -298,10 +344,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                   borderRadius: 10,
                   textDecoration: 'none',
                   flex: 1,
+                  border: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 Подробнее
-              </Link>
+              </button>
             ) : null}
 
             {(onFav || favoriteContext === 'collection') ? (
@@ -327,11 +375,11 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         </div>
       </div>
 
-      {/* локальный css-сброс, чтобы НИГДЕ не всплыли белые «таблетки» у цены */}
+      {/* локальные стили */}
       <style jsx>{`
-        .listing-card * {
-          box-sizing: border-box;
-        }
+        .listing-card * { box-sizing: border-box; }
+
+        /* Удаляем любые "таблетки" у цены */
         .listing-card .listing-card__price,
         .listing-card .listing-card__price * {
           background: transparent !important;
@@ -341,14 +389,21 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           padding: 0 !important;
           outline: none !important;
         }
+
+        /* Ховер-эффект для кнопки "Подробнее" */
+        .btn-more {
+          transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+        }
+        .btn-more:hover {
+          transform: scale(1.03);
+          box-shadow: 0 8px 20px rgba(30, 144, 255, .35);
+          filter: brightness(1.03);
+        }
+
         @media (max-width: 900px) {
-          .listing-card > div {
-            grid-template-columns: 1fr;
-          }
+          .listing-card > div { grid-template-columns: 1fr; }
         }
       `}</style>
     </article>
   );
-
-  return Content;
 }
