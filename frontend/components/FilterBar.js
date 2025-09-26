@@ -68,7 +68,6 @@ export default function FilterBar({ onSearch, initial }) {
     setTradeType('');
     setMinPrice('');
     setMaxPrice('');
-    // Можно сразу перезапустить поиск с пустыми значениями:
     onSearch({
       q: '',
       region: '',
@@ -82,9 +81,9 @@ export default function FilterBar({ onSearch, initial }) {
 
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
-      {/* Верхняя строка: общий поиск */}
-      <div className="row">
-        <label className="field col-span-12 lg:col-span-6">
+      <div className="row compact">
+        {/* Поиск */}
+        <label className="field col-span-12 md:col-span-6 lg:col-span-4">
           <span className="label">Поиск по названию или VIN</span>
           <div className="input-wrap">
             <input
@@ -96,11 +95,9 @@ export default function FilterBar({ onSearch, initial }) {
             <span className="icon" aria-hidden>🔎</span>
           </div>
         </label>
-      </div>
 
-      {/* Вторая строка: регион/город */}
-      <div className="row">
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
+        {/* Регион */}
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
           <div className="input-wrap">
             <select className="input pro select" value={region} onChange={(e) => setRegion(e.target.value)}>
@@ -112,7 +109,8 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
+        {/* Город */}
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Город</span>
           <div className="input-wrap">
             <select className="input pro select" value={city} onChange={(e) => setCity(e.target.value)}>
@@ -124,8 +122,9 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
-          <span className="label">Марка автомобиля</span>
+        {/* Марка */}
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
+          <span className="label">Марка</span>
           <div className="input-wrap">
             <select className="input pro select" value={brand} onChange={(e) => setBrand(e.target.value)}>
               <option value="">Все марки</option>
@@ -136,7 +135,8 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
+        {/* Тип торгов */}
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Тип торгов</span>
           <div className="input-wrap">
             <select className="input pro select" value={tradeType} onChange={(e) => setTradeType(e.target.value)}>
@@ -147,11 +147,9 @@ export default function FilterBar({ onSearch, initial }) {
             </select>
           </div>
         </label>
-      </div>
 
-      {/* Третья строка: цена от/до */}
-      <div className="row">
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
+        {/* Цена от/до */}
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Мин. цена</span>
           <div className="input-wrap">
             <input
@@ -165,7 +163,7 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
-        <label className="field col-span-12 md:col-span-6 lg:col-span-3">
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Макс. цена</span>
           <div className="input-wrap">
             <input
@@ -179,96 +177,82 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
-        {/* Пустые колонки для выравнивания на десктопе */}
-        <div className="col-span-12 lg:col-span-3 hide-on-mobile" />
-        <div className="col-span-12 lg:col-span-3 hide-on-mobile" />
+        {/* Кнопки */}
+        <div className="actions col-span-12 md:col-span-6 lg:col-span-2">
+          <button type="button" className="btn secondary" onClick={resetFilters}>
+            Сбросить
+          </button>
+          <button type="submit" className="btn primary">
+            Показать
+          </button>
+        </div>
       </div>
 
-      {/* Действия */}
-      <div className="actions row">
-        <button type="button" className="btn secondary" onClick={resetFilters}>
-          Сбросить
-        </button>
-        <button type="submit" className="btn primary">
-          Показать
-        </button>
-      </div>
-
-      {/* Стили — современный "взрослый" скин под наши карточки */}
+      {/* Стили: компактный размер и полупрозрачный голубой фон */}
       <style jsx>{`
         :root {
           --brand: #1E90FF;
           --text: #0f172a;
           --muted: #6b7280;
-          --line: #e5e7eb;
-          --bg: #ffffff;
-          --chip: #f1f5f9;
-          --shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
-          --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+          --line: #dbe3ed;
+          --filters-bg: rgba(230, 238, 248, .8); /* тот же голубой, что у "Нет фото", но слегка прозрачный */
         }
 
         .filters-panel-pro {
-          background: var(--bg);
-          border-radius: 16px;
-          border: 1px solid #eef2f7;
-          box-shadow: var(--shadow-sm);
-          padding: 16px;
-          display: grid;
-          gap: 14px;
-          position: relative;
+          background: var(--filters-bg);
+          border-radius: 14px;
+          border: 1px solid rgba(30,144,255,.08);
+          box-shadow: none;
+          padding: 12px;              /* было 16–18 -> сделали компактнее */
+          backdrop-filter: saturate(1.05) blur(1.5px);
         }
 
-        /* сетка 12 колонок с помощниками классов */
-        .row {
+        /* 12-колоночная сетка + адаптивные помощники */
+        .row.compact {
           display: grid;
           grid-template-columns: repeat(12, minmax(0, 1fr));
-          gap: 12px 14px;
-          align-items: start;
+          gap: 10px 12px;            /* меньше расстояния между полями */
+          align-items: end;
         }
         .col-span-12 { grid-column: span 12 / span 12; }
+        .col-span-6  { grid-column: span 6 / span 6; }
         .md\\:col-span-6 { grid-column: span 12 / span 12; }
-        .lg\\:col-span-3 { grid-column: span 12 / span 12; }
-        .lg\\:col-span-6 { grid-column: span 12 / span 12; }
+        .md\\:col-span-3 { grid-column: span 12 / span 12; }
+        .lg\\:col-span-4 { grid-column: span 12 / span 12; }
+        .lg\\:col-span-2 { grid-column: span 12 / span 12; }
 
         @media (min-width: 720px) {
           .md\\:col-span-6 { grid-column: span 6 / span 6; }
+          .md\\:col-span-3 { grid-column: span 3 / span 3; }
         }
         @media (min-width: 1024px) {
-          .lg\\:col-span-3 { grid-column: span 3 / span 3; }
-          .lg\\:col-span-6 { grid-column: span 6 / span 6; }
+          .lg\\:col-span-4 { grid-column: span 4 / span 4; }
+          .lg\\:col-span-2 { grid-column: span 2 / span 2; }
         }
 
-        .field { display: grid; gap: 6px; }
+        .field { display: grid; gap: 4px; }
         .label {
-          font-size: 12px;
+          font-size: 11px;           /* меньше подпись */
           color: var(--muted);
-          user-select: none;
         }
 
-        .input-wrap {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
+        .input-wrap { position: relative; display: flex; align-items: center; }
 
         .input.pro {
           width: 100%;
-          height: 44px;
+          height: 38px;              /* меньше высота */
           border: 1px solid var(--line);
-          border-radius: 12px;
-          padding: 0 14px;
-          background: #f9fafb;
+          border-radius: 10px;
+          padding: 0 12px;
+          background: rgba(255,255,255,.8);
           color: var(--text);
           outline: none;
-          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .08s ease;
-          will-change: transform;
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
-        .input.pro:hover {
-          background: #fff;
-        }
-        .input.pro:focus {
+        .input.pro:hover  { background: #fff; }
+        .input.pro:focus  {
           border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255, .15);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
           background: #fff;
         }
 
@@ -279,71 +263,62 @@ export default function FilterBar({ onSearch, initial }) {
           -moz-appearance: none;
           background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
           background-repeat: no-repeat;
-          background-position: right 12px center;
-          padding-right: 36px;
+          background-position: right 10px center;
+          padding-right: 30px;
         }
 
         .icon {
           position: absolute;
-          right: 12px;
+          right: 10px;
           pointer-events: none;
           font-size: 14px;
           opacity: .65;
         }
         .suffix {
           position: absolute;
-          right: 12px;
+          right: 10px;
           font-size: 12px;
-          color: #9aa1ae;
+          color: #8fa2b7;
           pointer-events: none;
         }
 
         .actions {
           display: flex;
+          gap: 8px;
           justify-content: flex-end;
-          gap: 10px;
-          margin-top: 2px;
         }
 
         .btn {
-          height: 44px;
-          border-radius: 12px;
-          padding: 0 16px;
+          height: 38px;              /* ниже, чтобы панель казалась компактной */
+          border-radius: 10px;
+          padding: 0 14px;
           font-weight: 700;
           cursor: pointer;
           border: none;
-          transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, background .15s ease, color .15s ease;
+          transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
         }
         .btn.primary {
-          background: var(--brand);
+          background: #1E90FF;
           color: #fff;
-          box-shadow: 0 10px 22px rgba(30,144,255, .25);
         }
         .btn.primary:hover {
           transform: translateY(-1px);
-          box-shadow: 0 12px 26px rgba(30,144,255, .35);
+          box-shadow: 0 8px 18px rgba(30,144,255,.28);
           filter: brightness(1.03);
         }
         .btn.secondary {
-          background: #f3f4f6;
+          background: rgba(255,255,255,.8);
           color: #111827;
           border: 1px solid var(--line);
         }
         .btn.secondary:hover {
           transform: translateY(-1px);
-          box-shadow: 0 6px 16px rgba(17, 24, 39, .08);
-          filter: brightness(1.02);
+          box-shadow: 0 6px 14px rgba(17,24,39,.08);
           background: #fff;
         }
 
-        .hide-on-mobile { display: none; }
-
-        @media (min-width: 1024px) {
-          .filters-panel-pro {
-            padding: 18px 18px 16px;
-            box-shadow: var(--shadow);
-          }
-          .hide-on-mobile { display: block; }
+        @media (max-width: 719.98px) {
+          .filters-panel-pro { padding: 10px; }
         }
       `}</style>
     </form>
