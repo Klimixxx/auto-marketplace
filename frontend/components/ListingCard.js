@@ -100,7 +100,6 @@ function tradeTypeLabel(type) {
   const lower = String(type).toLowerCase();
   if (lower === 'auction' || lower.includes('аукцион')) return 'Аукцион';
   if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
-  // если строка уже на русском (например "Публичное предложение") — вернуть как есть
   return localizeListingBadge(type) || translateValueByKey('asset_type', type) || String(type);
 }
 
@@ -117,11 +116,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const price = l.current_price ?? l.start_price;
   const priceLabel = formatPrice(price, l.currency || 'RUB');
 
-  // Характеристики (оставляем, но год убираем из списка, тк он теперь в шапке)
+  // характеристики (год больше сюда не добавляем)
   const metaSet = new Set();
   const metaItems = [];
   const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
-  // (Год в metaItems НЕ добавляем)
   const mileage = formatMileage(pickDetailValue(l, ['mileage', 'run', 'probeg', 'mileage_km']));
   if (mileage && !metaSet.has(mileage)) { metaSet.add(mileage); metaItems.push(mileage); }
   const engine = formatEngine(pickDetailValue(l, ['engine_volume', 'engine_volume_l', 'engine', 'engine_volume_liters']));
@@ -132,11 +130,20 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     if (text && !metaSet.has(text)) { metaSet.add(text); metaItems.push(text); }
   }
 
-  // NEW: Тип объявления + Регион + Год
+  // Тип + Регион + Год
   const region = l.region || pickDetailValue(l, ['region']);
   const rawType = l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
   const tradeType = tradeTypeLabel(rawType) || 'Лот';
   const eyebrow = [tradeType, region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
+
+  // общий «сброс» стилевых таблеток для текстовых блоков
+  const resetPill = {
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    boxShadow: 'none',
+    padding: 0,
+  };
 
   const cardContent = (
     <article
@@ -144,7 +151,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        // УБРАНА белая рамка у карточки
+        // убираем рамку у карточки
         border: 'none',
         borderRadius: 16,
         background: 'rgba(15,23,42,0.72)',
@@ -166,7 +173,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         )}
 
-        {/* Кнопка "В избранное" на фото (левый верх), чёрная */}
+        {/* "В избранное" (сохраняем рамку у кнопки) */}
         {onFav ? (
           <button
             type="button"
@@ -222,28 +229,57 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       </div>
 
       <div style={{ padding: '16px 18px', display: 'grid', gap: 10, flex: '1 1 auto' }}>
-        {/* Синяя строка: Тип • Регион • Год */}
-        {eyebrow ? <div className="listing-card__eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}>{eyebrow}</div> : null}
+        {/* Синяя строка: Тип • Регион • Год (жёсткий сброс таблеток) */}
+        {eyebrow ? (
+          <div
+            className="listing-card__eyebrow"
+            style={{ ...resetPill, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: '#1E90FF' }}
+          >
+            {eyebrow}
+          </div>
+        ) : null}
 
-        {/* Заголовок чёрный */}
-        <h3 className="listing-card__title" style={{ margin: 0, fontSize: 18, color: '#000' }}>{l.title || 'Лот'}</h3>
+        {/* Заголовок чёрный — без рамок/фона */}
+        <h3
+          className="listing-card__title"
+          style={{ ...resetPill, margin: 0, fontSize: 18, color: '#000' }}
+        >
+          {l.title || 'Лот'}
+        </h3>
 
         <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          {/* Цена чёрная */}
-          <div className="listing-card__price" style={{ fontWeight: 700, fontSize: 18, color: '#000' }}>{priceLabel}</div>
+          {/* Цена чёрная — без рамок/фона */}
+          <div
+            className="listing-card__price"
+            style={{ ...resetPill, fontWeight: 700, fontSize: 18, color: '#000' }}
+          >
+            {priceLabel}
+          </div>
         </div>
 
+        {/* Характеристики (без белых таблеток) — можно скрыть совсем, если нужно */}
         {metaItems.length ? (
           <div className="listing-card__meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {metaItems.slice(0, 3).map((item, index) => (
-              <span key={`${item}-${index}`} className="chip" style={{ background: 'rgba(103,232,249,0.12)', borderRadius: 999, padding: '4px 10px', fontSize: 12 }}>
+              <span
+                key={`${item}-${index}`}
+                className="chip"
+                style={{
+                  // делаем нейтральнее, чтобы не выглядело белой таблеткой
+                  background: 'rgba(103,232,249,0.12)',
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                }}
+              >
                 {item}
               </span>
             ))}
           </div>
         ) : null}
 
-        {/* ОПИСАНИЕ УДАЛЕНО по ТЗ */}
+        {/* Описание скрыто по ТЗ */}
       </div>
 
       {(detailHref || sourceHref || l.source_url) && (
