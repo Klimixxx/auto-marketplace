@@ -116,7 +116,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const price = l.current_price ?? l.start_price;
   const priceLabel = formatPrice(price, l.currency || 'RUB');
 
-  // характеристики (год больше сюда не добавляем)
+  // характеристики (год теперь выводим в «eyebrow», сюда не добавляем)
   const metaSet = new Set();
   const metaItems = [];
   const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
@@ -136,7 +136,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const tradeType = tradeTypeLabel(rawType) || 'Лот';
   const eyebrow = [tradeType, region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
-  // общий «сброс» стилевых таблеток для текстовых блоков
+  // общий «сброс» таблеток для текстовых блоков
   const resetPill = {
     background: 'transparent',
     border: 'none',
@@ -151,7 +151,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        // убираем рамку у карточки
         border: 'none',
         borderRadius: 16,
         background: 'rgba(15,23,42,0.72)',
@@ -173,7 +172,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         )}
 
-        {/* "В избранное" (сохраняем рамку у кнопки) */}
+        {/* "В избранное" */}
         {onFav ? (
           <button
             type="button"
@@ -228,8 +227,17 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         ) : null}
       </div>
 
-      <div style={{ padding: '16px 18px', display: 'grid', gap: 10, flex: '1 1 auto' }}>
-        {/* Синяя строка: Тип • Регион • Год (жёсткий сброс таблеток) */}
+      {/* ИНФО-ПАНЕЛЬ: фон как у рамок на главной */}
+      <div
+        style={{
+          padding: '16px 18px',
+          display: 'grid',
+          gap: 10,
+          flex: '1 1 auto',
+          background: 'var(--frame-bg, rgba(59,67,81,0.85))', // <- тот же фон, что и на главной (если переменная задана)
+        }}
+      >
+        {/* Синяя строка: Тип • Регион • Год */}
         {eyebrow ? (
           <div
             className="listing-card__eyebrow"
@@ -239,7 +247,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         ) : null}
 
-        {/* Заголовок чёрный — без рамок/фона */}
+        {/* Заголовок чёрный */}
         <h3
           className="listing-card__title"
           style={{ ...resetPill, margin: 0, fontSize: 18, color: '#000' }}
@@ -248,16 +256,26 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         </h3>
 
         <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          {/* Цена чёрная — без рамок/фона */}
+          {/* Цена без белой рамки */}
           <div
             className="listing-card__price"
-            style={{ ...resetPill, fontWeight: 700, fontSize: 18, color: '#000' }}
+            style={{
+              ...resetPill,
+              fontWeight: 700,
+              fontSize: 18,
+              color: '#000',
+              background: 'transparent',
+              border: 'none',
+              boxShadow: 'none',
+              borderRadius: 0,
+              outline: 'none',
+            }}
           >
             {priceLabel}
           </div>
         </div>
 
-        {/* Характеристики (без белых таблеток) — можно скрыть совсем, если нужно */}
+        {/* Характеристики (аккуратные чипы) */}
         {metaItems.length ? (
           <div className="listing-card__meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {metaItems.slice(0, 3).map((item, index) => (
@@ -265,7 +283,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                 key={`${item}-${index}`}
                 className="chip"
                 style={{
-                  // делаем нейтральнее, чтобы не выглядело белой таблеткой
                   background: 'rgba(103,232,249,0.12)',
                   border: 'none',
                   borderRadius: 999,
@@ -279,11 +296,20 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         ) : null}
 
-        {/* Описание скрыто по ТЗ */}
+        {/* Описания нет по ТЗ */}
       </div>
 
       {(detailHref || sourceHref || l.source_url) && (
-        <div className="listing-card__footer" style={{ padding: '0 18px 18px', display: 'flex', gap: 10 }}>
+        <div
+          className="listing-card__footer"
+          style={{
+            padding: '0 18px 18px',
+            display: 'flex',
+            gap: 10,
+            background: 'transparent', // без белой подложки
+            border: 'none',
+          }}
+        >
           {detailHref ? (
             <span style={{ flex: 1 }}>
               <button
@@ -298,7 +324,8 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                   background: '#1E90FF',
                   color: '#fff',
                   fontWeight: 600,
-                  border: 'none',
+                  border: 'none',        // без белых рамок у кнопки
+                  boxShadow: 'none',
                   cursor: 'pointer',
                 }}
               >
@@ -319,9 +346,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                 background: '#1E90FF',
                 color: '#fff',
                 fontWeight: 600,
-                border: 'none',
+                border: 'none',        // без белых рамок у кнопки
+                boxShadow: 'none',
                 textDecoration: 'none',
                 cursor: 'pointer',
+                display: 'inline-flex',
+                justifyContent: 'center',
               }}
             >
               Источник
