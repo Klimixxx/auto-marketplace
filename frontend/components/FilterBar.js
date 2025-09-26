@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 const TRADE_TYPE_LABELS = {
@@ -84,7 +85,7 @@ export default function FilterBar({ onSearch, initial }) {
       <div className="row compact">
         {/* Поиск */}
         <label className="field col-span-12 md:col-span-6 lg:col-span-4">
-          <span className="label">Поиск по названию или VIN</span>
+          <span className="label">Поиск</span>
           <div className="input-wrap">
             <input
               className="input pro"
@@ -92,7 +93,7 @@ export default function FilterBar({ onSearch, initial }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <span className="icon" aria-hidden>🔎</span>
+            {/* иконку поиска убрали по ТЗ */}
           </div>
         </label>
 
@@ -159,7 +160,7 @@ export default function FilterBar({ onSearch, initial }) {
               value={minPrice}
               onChange={(e) => setMinPrice(e.target.value)}
             />
-            <span className="suffix">₽</span>
+            {/* Убрали символ ₽ */}
           </div>
         </label>
 
@@ -173,18 +174,23 @@ export default function FilterBar({ onSearch, initial }) {
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
             />
-            <span className="suffix">₽</span>
+            {/* Убрали символ ₽ */}
           </div>
         </label>
 
         {/* Кнопки */}
-        <div className="actions col-span-12 md:col-span-6 lg:col-span-2">
-          <button type="button" className="btn secondary" onClick={resetFilters}>
-            Сбросить
-          </button>
-          <button type="submit" className="btn primary">
-            Показать
-          </button>
+        <div className="actions col-span-12">
+          <div className="left-actions">
+            <Link href="/collection" className="btn ghost">Мои избранные</Link>
+          </div>
+          <div className="right-actions">
+            <button type="button" className="btn secondary" onClick={resetFilters}>
+              Сбросить
+            </button>
+            <button type="submit" className="btn primary">
+              Показать
+            </button>
+          </div>
         </div>
       </div>
 
@@ -195,7 +201,7 @@ export default function FilterBar({ onSearch, initial }) {
           --text: #0f172a;
           --muted: #6b7280;
           --line: #dbe3ed;
-          --filters-bg: rgba(230, 238, 248, .8); /* тот же голубой, что у "Нет фото", но слегка прозрачный */
+          --filters-bg: rgba(230, 238, 248, .8);
         }
 
         .filters-panel-pro {
@@ -203,7 +209,7 @@ export default function FilterBar({ onSearch, initial }) {
           border-radius: 14px;
           border: 1px solid rgba(30,144,255,.08);
           box-shadow: none;
-          padding: 12px;              /* было 16–18 -> сделали компактнее */
+          padding: 12px;
           backdrop-filter: saturate(1.05) blur(1.5px);
         }
 
@@ -211,7 +217,7 @@ export default function FilterBar({ onSearch, initial }) {
         .row.compact {
           display: grid;
           grid-template-columns: repeat(12, minmax(0, 1fr));
-          gap: 10px 12px;            /* меньше расстояния между полями */
+          gap: 10px 12px;
           align-items: end;
         }
         .col-span-12 { grid-column: span 12 / span 12; }
@@ -232,15 +238,16 @@ export default function FilterBar({ onSearch, initial }) {
 
         .field { display: grid; gap: 4px; }
         .label {
-          font-size: 11px;           /* меньше подпись */
-          color: var(--muted);
+          font-size: 11px;
+          color: var(--brand);      /* подписи стали синими */
+          font-weight: 600;
         }
 
         .input-wrap { position: relative; display: flex; align-items: center; }
 
         .input.pro {
           width: 100%;
-          height: 38px;              /* меньше высота */
+          height: 38px;
           border: 1px solid var(--line);
           border-radius: 10px;
           padding: 0 12px;
@@ -267,29 +274,19 @@ export default function FilterBar({ onSearch, initial }) {
           padding-right: 30px;
         }
 
-        .icon {
-          position: absolute;
-          right: 10px;
-          pointer-events: none;
-          font-size: 14px;
-          opacity: .65;
-        }
-        .suffix {
-          position: absolute;
-          right: 10px;
-          font-size: 12px;
-          color: #8fa2b7;
-          pointer-events: none;
-        }
+        /* иконку поиска и суффикс ₽ мы удалили, соответствующие стили не нужны */
 
         .actions {
           display: flex;
+          justify-content: space-between; /* слева — "Мои избранные", справа — Сбросить/Показать */
           gap: 8px;
-          justify-content: flex-end;
+          align-items: center;
+          margin-top: 4px;
         }
+        .right-actions { display: flex; gap: 8px; }
 
         .btn {
-          height: 38px;              /* ниже, чтобы панель казалась компактной */
+          height: 38px;
           border-radius: 10px;
           padding: 0 14px;
           font-weight: 700;
@@ -316,9 +313,21 @@ export default function FilterBar({ onSearch, initial }) {
           box-shadow: 0 6px 14px rgba(17,24,39,.08);
           background: #fff;
         }
+        .btn.ghost {
+          background: transparent;
+          color: #1E90FF;
+          border: 1px solid rgba(30,144,255,.35);
+        }
+        .btn.ghost:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 14px rgba(30,144,255,.25);
+          background: rgba(255,255,255,.65);
+        }
 
         @media (max-width: 719.98px) {
           .filters-panel-pro { padding: 10px; }
+          .actions { flex-direction: column; align-items: stretch; }
+          .right-actions { justify-content: stretch; }
         }
       `}</style>
     </form>
