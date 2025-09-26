@@ -114,6 +114,36 @@ function extractLotStatus(listing) {
       if (c.title) return String(c.title).trim();
     }
   }
+
+  const parserSources = [
+    listing?.parser,
+    listing?.details?.parser,
+    listing?.details?.lot_details?.parser,
+  ];
+  const parserKeys = [
+    'status',
+    'status_name',
+    'statusName',
+    'lot_status',
+    'lotStatus',
+    'status_lot',
+    'Статус лота',
+    'статус лота',
+  ];
+  for (const src of parserSources) {
+    if (!src || typeof src !== 'object') continue;
+    for (const key of parserKeys) {
+      const value = src?.[key];
+      if (!value) continue;
+      if (typeof value === 'string') return value.trim();
+      if (typeof value === 'object') {
+        if (value.name) return String(value.name).trim();
+        if (value.title) return String(value.title).trim();
+        if (value.value) return String(value.value).trim();
+      }
+    }
+  }
+
   return null;
 }
 
