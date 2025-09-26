@@ -93,6 +93,40 @@ function formatRuDateTime(input) {
   return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/* ---- lot status helpers ------------------------------------------------ */
+
+function extractLotStatus(listing) {
+  // Ищем статус в разных местах структуры
+  const cand = [
+    listing?.status,
+    listing?.status?.name,
+    listing?.details?.status,
+    listing?.details?.status?.name,
+    listing?.details?.lot_details?.status,
+    listing?.details?.lot_details?.status?.name,
+    pickDetailValue(listing, ['status_name', 'statusName', 'lot_status']),
+  ];
+  for (const c of cand) {
+    if (!c) continue;
+    if (typeof c === 'string') return c.trim();
+    if (typeof c === 'object') {
+      if (c.name) return String(c.name).trim();
+      if (c.title) return String(c.title).trim();
+    }
+  }
+  return null;
+}
+
+function classifyStatus(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  if (lower.includes('заверш')) return { label: 'Торги завершены', color: '#dc2626' }; // red-600
+  // разные формы "открыт приём заявок"
+  if (/(открыт|открыта|при[её]м|заявок)/i.test(lower)) return { label: 'Открыт прием заявок', color: '#16a34a' }; // green-600
+  // fallback — оригинальный текст и нейтральный серый индикатор
+  return { label: name, color: '#64748b' };
+}
+
 /* ---- component --------------------------------------------------------- */
 
 export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, favoriteContext }) {
@@ -131,6 +165,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   ]);
   const dateFinishLabel = formatRuDateTime(dateFinish);
 
+  // статус лота
+  const rawStatus = extractLotStatus(l);
+  const statusInfo = rawStatus ? classifyStatus(rawStatus) : null;
+
   // общий жёсткий сброс «таблеток»
   const resetPill = { background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none', padding: 0 };
 
@@ -146,7 +184,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         transition: 'box-shadow .2s ease, transform .2s ease',
         transform: isHovered ? 'translateY(-2px)' : 'none',
         overflow: 'hidden',
-        /* ВАЖНО: занимаем всю строку сетки родителя */
         gridColumn: '1 / -1',
         width: '100%',
       }}
@@ -197,17 +234,16 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             {l.title || 'Лот'}
           </h3>
 
-          {/* вторичные строки под заголовком можно заменить на свои поля */}
           <div style={{ fontSize: 13, color: '#64748b' }}>
             {l.number ? <span style={{ marginRight: 8 }}>№{l.number}</span> : null}
             {l.lot_number ? <span style={{ marginRight: 8 }}>Лот №{l.lot_number}</span> : null}
-            {/* сюда можно добавить ещё мелкие метки */}
           </div>
 
           {shortDescription ? (
             <div style={{ fontSize: 13, color: '#94a3b8', whiteSpace: 'pre-line' }}>{shortDescription}</div>
           ) : null}
 
+          {/* строка с датой и регионом */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
             {dateFinishLabel ? (
               <div style={{ fontSize: 13, color: '#0f172a' }}>
@@ -221,6 +257,14 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
               </div>
             ) : null}
           </div>
+
+          {/* НОВОЕ: статус лота под строкой с датой */}
+          {statusInfo ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#0f172a' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: statusInfo.color, display: 'inline-block' }} />
+              <span>Статус лота: <b>{statusInfo.label}</b></span>
+            </div>
+          ) : null}
         </div>
 
         {/* правая колонка: цены и действия */}
@@ -256,7 +300,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                   flex: 1,
                 }}
               >
-                Смотреть
+                Подробнее
               </Link>
             ) : null}
 
@@ -306,7 +350,5 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     </article>
   );
 
-  // По макету кликабельна кнопка «Смотреть», а не вся карточка.
-  // Если хочешь кликабельной всю карточку — скажи, оберну в <Link>.
   return Content;
 }
