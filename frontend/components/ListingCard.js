@@ -227,14 +227,14 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         ) : null}
       </div>
 
-      {/* ИНФО-ПАНЕЛЬ: фон как у рамок на главной */}
+      {/* ИНФО-ПАНЕЛЬ: теперь белая */}
       <div
         style={{
           padding: '16px 18px',
           display: 'grid',
           gap: 10,
           flex: '1 1 auto',
-          background: 'var(--frame-bg, rgba(59,67,81,0.85))', // <- тот же фон, что и на главной (если переменная задана)
+          background: '#fff',
         }}
       >
         {/* Синяя строка: Тип • Регион • Год */}
@@ -256,26 +256,22 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         </h3>
 
         <div className="listing-card__price-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          {/* Цена без белой рамки */}
+          {/* Цена без «таблетки» */}
           <div
-            className="listing-card__price"
+            className="listing-card__price no-pill"
             style={{
               ...resetPill,
               fontWeight: 700,
               fontSize: 18,
               color: '#000',
               background: 'transparent',
-              border: 'none',
-              boxShadow: 'none',
-              borderRadius: 0,
-              outline: 'none',
             }}
           >
             {priceLabel}
           </div>
         </div>
 
-        {/* Характеристики (аккуратные чипы) */}
+        {/* Характеристики (опционально) */}
         {metaItems.length ? (
           <div className="listing-card__meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {metaItems.slice(0, 3).map((item, index) => (
@@ -283,11 +279,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                 key={`${item}-${index}`}
                 className="chip"
                 style={{
-                  background: 'rgba(103,232,249,0.12)',
+                  background: 'rgba(0,0,0,0.06)',
                   border: 'none',
                   borderRadius: 999,
                   padding: '4px 10px',
                   fontSize: 12,
+                  color: '#111827',
                 }}
               >
                 {item}
@@ -295,10 +292,9 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             ))}
           </div>
         ) : null}
-
-        {/* Описания нет по ТЗ */}
       </div>
 
+      {/* НИЖНИЕ КНОПКИ — на белом фоне */}
       {(detailHref || sourceHref || l.source_url) && (
         <div
           className="listing-card__footer"
@@ -306,7 +302,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             padding: '0 18px 18px',
             display: 'flex',
             gap: 10,
-            background: 'transparent', // без белой подложки
+            background: '#fff',
             border: 'none',
           }}
         >
@@ -324,7 +320,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                   background: '#1E90FF',
                   color: '#fff',
                   fontWeight: 600,
-                  border: 'none',        // без белых рамок у кнопки
+                  border: 'none',
                   boxShadow: 'none',
                   cursor: 'pointer',
                 }}
@@ -346,7 +342,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
                 background: '#1E90FF',
                 color: '#fff',
                 fontWeight: 600,
-                border: 'none',        // без белых рамок у кнопки
+                border: 'none',
                 boxShadow: 'none',
                 textDecoration: 'none',
                 cursor: 'pointer',
@@ -359,6 +355,18 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           ) : null}
         </div>
       )}
+
+      {/* Локальный CSS для жёсткого убирания «таблеток» у цены */}
+      <style jsx>{`
+        .listing-card .no-pill,
+        .listing-card .no-pill * {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          outline: none !important;
+        }
+      `}</style>
     </article>
   );
 
