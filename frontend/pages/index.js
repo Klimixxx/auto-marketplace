@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Hero from '../components/Hero';
-import FeaturedListings from '../components/FeaturedListings'; // путь от страницы до компонента
 import About from '../components/About';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
 
