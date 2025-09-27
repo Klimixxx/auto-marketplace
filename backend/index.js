@@ -557,6 +557,7 @@ app.get('/api/listings', async (req, res) => {
         'public offer',
         'public-offer',
         'публичное предложение',
+        'торговое предложение',
       ]));
       for (const synonym of synonyms) {
         params.push(synonym.toLowerCase());
@@ -568,7 +569,10 @@ app.get('/api/listings', async (req, res) => {
         const placeholder = `$${params.length}`;
         return `(
           lower(coalesce(trade_type, '')) LIKE ${placeholder}
-          OR lower(coalesce(details::text, '')) LIKE ${placeholder}
+          OR (
+            coalesce(trade_type, '') = ''
+            AND lower(coalesce(details::text, '')) LIKE ${placeholder}
+          )
         )`;
       });
       where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
@@ -592,7 +596,10 @@ app.get('/api/listings', async (req, res) => {
         const placeholder = `$${params.length}`;
         return `(
           lower(coalesce(trade_type, '')) LIKE ${placeholder}
-          OR lower(coalesce(details::text, '')) LIKE ${placeholder}
+          OR (
+            coalesce(trade_type, '') = ''
+            AND lower(coalesce(details::text, '')) LIKE ${placeholder}
+          )
         )`;
       });
       where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
