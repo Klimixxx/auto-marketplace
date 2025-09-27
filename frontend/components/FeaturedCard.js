@@ -104,7 +104,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setLocalFav(v => !v);
-    onFav?.();           // уведомим родителя (он обновит localStorage)
+    onFav?.();           // родитель запишет в localStorage
   };
 
   return (
@@ -132,28 +132,22 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         {/* синяя строка */}
         {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
 
-        {/* чёрный заголовок — как в "Торгах" */}
+        {/* ЧЁРНЫЙ заголовок — зафиксирован жёстко */}
         <Link href={href} className="f-title" title={title}>{title}</Link>
 
         {description ? <p className="f-desc">{description}</p> : null}
 
-        <div className="f-meta">
-          {/* синяя цена справа (если есть) */}
-          {priceLabel ? (
-            <div className="f-price" title="Текущая цена">{priceLabel}</div>
-          ) : <span />}
-
-          {dateFinishLabel ? (
-            <div className="f-date">
-              Окончание текущего периода: <b>{dateFinishLabel}</b>
-            </div>
-          ) : (
-            <span className="f-date muted">Дата не указана</span>
-          )}
+        {/* Дата отдельной строкой (чтобы внизу цена была в одной линии с кнопкой) */}
+        <div className="f-date-row">
+          {dateFinishLabel
+            ? <div className="f-date">Окончание текущего периода: <b>{dateFinishLabel}</b></div>
+            : <span className="f-date muted">Дата не указана</span>}
         </div>
       </div>
 
-      <div className="f-actions">
+      {/* НИЖНЯЯ СТРОКА: СЛЕВА ЦЕНА, СПРАВА КНОПКА */}
+      <div className="f-footer">
+        {priceLabel ? <div className="f-price" title="Текущая цена">{priceLabel}</div> : <span />}
         <Link href={href} className="btn primary more">Подробнее</Link>
       </div>
 
@@ -186,7 +180,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         .f-body{ padding:12px 12px 6px; display:grid; gap:6px; }
         .eyebrow{ font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF; }
         .f-title{
-          font-weight:700; color:#000;
+          font-weight:700; color:#000 !important; /* ЖЁСТКО фиксируем чёрный */
           text-decoration:none; line-height:1.25;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
@@ -195,44 +189,39 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
 
-        .f-meta{
-          display:grid;
-          grid-template-columns: auto 1fr;
-          gap: 8px 10px;
-          align-items:center;
+        .f-date-row{ display:flex; align-items:center; justify-content:space-between; }
+        .f-date{ font-size:12px; color:#0f172a; }
+        .f-date.muted{ color:#94a3b8; }
+
+        /* Низ: цена + кнопка в ОДНОЙ строке */
+        .f-footer{
+          padding:8px 12px 12px;
+          display:flex; align-items:center; justify-content:space-between; gap:10px;
         }
         .f-price{
           color:#1d4ed8;          /* синий */
           font-weight:800;
           font-size:16px;
-          justify-self:start;
+          line-height:1;
         }
-        .f-date{ font-size:12px; color:#0f172a; justify-self:end; text-align:right; }
-        .f-date.muted{ color:#94a3b8; }
 
-        .f-actions{
-          padding:8px 12px 12px;
-          display:flex; gap:8px; align-items:center; justify-content:flex-end;
-        }
         .btn{
           height:36px; border-radius:10px; padding:0 12px; font-weight:700; cursor:pointer; border:none;
           display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
-          transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-          will-change: transform;
+          transition: none;         /* убрали анимацию */
         }
         .btn.primary{
           background:#1E90FF; color:#fff;
         }
-        /* Ховер как в "Торгах": лёгкое увеличение, цвет/текст НЕ меняются */
+        /* УБРАЛИ ХОВЕР-АНИМАЦИЮ ПОЛНОСТЬЮ */
         .btn.primary:hover,
         .btn.primary:focus{
-          transform: scale(1.03);
-          box-shadow:0 10px 22px rgba(30,144,255,.35);
-          filter: brightness(1.03);
-          color:#fff !important;
           background:#1E90FF !important;
+          color:#fff !important;
+          transform:none !important;
+          box-shadow:none !important;
+          filter:none !important;
         }
-
         .btn.more{ margin-left:auto; }
       `}</style>
     </article>
