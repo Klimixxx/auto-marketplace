@@ -305,6 +305,110 @@ function KeyValueList({ entries, renderValue, valueClassName, valueStyle }) {
   );
 }
 
+function pickLotValue(source, keys = []) {
+  if (!source || typeof source !== 'object' || !keys.length) return null;
+  for (const key of keys) {
+    if (key in source) {
+      const value = source[key];
+      if (value != null && value !== '') return value;
+    }
+  }
+  return null;
+}
+
+function arrayFrom(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'object') {
+    if (Array.isArray(value.items)) return value.items;
+    if (Array.isArray(value.list)) return value.list;
+    if (Array.isArray(value.data)) return value.data;
+    if (Array.isArray(value.results)) return value.results;
+    return Object.values(value);
+  }
+  return [];
+}
+
+function normalizePeriodPriceEntry(entry, index = 0) {
+  if (!entry || typeof entry !== 'object') return null;
+
+  const start = entry.date_start || entry.start_date || entry.period_start || entry.dateBegin || entry.date_from || entry.begin || entry.start || entry.from || null;
+  const end = entry.date_end || entry.end_date || entry.period_end || entry.dateFinish || entry.date_to || entry.finish || entry.end || entry.to || null;
+  const priceRaw = entry.price ?? entry.current_price ?? entry.currentPrice ?? entry.start_price ?? entry.startPrice ?? entry.value ?? entry.amount ?? entry.cost ?? entry.price_min ?? entry.minimum_price ?? entry.min_price ?? null;
+  const minPriceRaw = entry.min_price ?? entry.minimum_price ?? entry.price_min ?? entry.priceMin ?? null;
+  const depositRaw = entry.deposit ?? entry.deposit_amount ?? entry.bail ?? entry.zadatok ?? entry.pledge ?? entry.guarantee ?? entry.collateral ?? null;
+
+  const priceNumber = parseNumberValue(priceRaw);
+  const minPriceNumber = parseNumberValue(minPriceRaw);
+  const depositNumber = parseNumberValue(depositRaw);
+
+  return {
+    id: entry.id || entry.period_id || entry.code || entry.key || `period-${index}`,
+    start,
+    end,
+    priceRaw,
+    minPriceRaw,
+    depositRaw,
+    priceNumber,
+    minPriceNumber,
+    depositNumber,
+  };
+}
+
+function extractPeriodPriceSchedule(details) {
+  const lotDetails = details?.lot_details && typeof details.lot_details === 'object' ? details.lot_details : {};
+  const pools = [
+    lotDetails?.period_prices,
+    lotDetails?.periodPrices,
+    lotDetails?.price_schedule,
+    lotDetails?.priceSchedule,
+    lotDetails?.offer_schedule,
+    lotDetails?.price_periods,
+    lotDetails?.pricePeriods,
+    lotDetails?.price_graph,
+    lotDetails?.schedule,
+    details?.period_prices,
+    details?.periodPrices,
+  ];
+
+  const entries = [];
+  const seen = new Set();
+  let index = 0;
+  for (const pool of pools) {
+    const arr = arrayFrom(pool);
+    for (const entry of arr) {
+      const normalized = normalizePeriodPriceEntry(entry, index++);
+      if (!normalized) continue;
+      const key = normalized.id || `${normalized.start || ''}-${normalized.end || ''}-${index}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push(normalized);
+    }
+  }
+
+  const deadline = pickLotValue(lotDetails, [
+    'application_deadline',
+    'applications_deadline',
+    'application_end_date',
+    'applications_end_date',
+    'application_end',
+    'applications_end',
+    'deadline',
+    'deadline_date',
+    'date_deadline',
+    'deadline_applications',
+    'applications_deadline',
+  ]) || pickLotValue(details, [
+    'application_deadline',
+    'applications_deadline',
+    'application_end_date',
+    'applications_end_date',
+    'deadline',
+  ]);
+
+  return { entries, deadline };
+}
+
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
   const listingIdRaw = item?.id != null ? String(item.id).trim() : '';
@@ -333,6 +437,9 @@ export default function ListingPage({ item }) {
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const prices = Array.isArray(details?.prices) ? details.prices : [];
   const documents = normalizeDocuments(Array.isArray(details?.documents) ? details.documents : []);
+  const periodSchedule = extractPeriodPriceSchedule(details);
+  const periodScheduleEntries = Array.isArray(periodSchedule?.entries) ? periodSchedule.entries : [];
+  const periodScheduleDeadline = periodSchedule?.deadline;
   const fedresursMeta = details?.fedresurs_meta;
   const currency = item?.currency || 'RUB';
 
@@ -471,6 +578,53 @@ export default function ListingPage({ item }) {
             <section className="detail-section">
               <h2>Характеристики</h2>
               <KeyValueGrid entries={lotEntries} />
+            </section>
+          )}
+
+          {periodScheduleEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>График снижения цены</h2>
+              <div className="panel table-scroll" style={{ padding: 0 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ ...PRICE_HEADER_STYLE, width: 60 }}>№</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата начала</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата окончания</th>
+                      <th style={PRICE_HEADER_STYLE}>Цена, руб.</th>
+                      <th style={PRICE_HEADER_STYLE}>Задаток, руб.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periodScheduleEntries.map((entry, index) => {
+                      const startText = entry.start ? formatDateTime(entry.start) : '—';
+                      const endText = entry.end ? formatDateTime(entry.end) : '—';
+                      const priceNumeric = entry.priceNumber != null ? entry.priceNumber : entry.minPriceNumber;
+                      const priceText = priceNumeric != null
+                        ? fmtPrice(priceNumeric, currency)
+                        : (entry.priceRaw != null ? formatValueForDisplay('price', entry.priceRaw) : '—');
+                      const depositText = entry.depositNumber != null
+                        ? fmtPrice(entry.depositNumber, currency)
+                        : (entry.depositRaw != null ? formatValueForDisplay('deposit', entry.depositRaw) : '—');
+
+                      return (
+                        <tr key={entry.id || `period-${index}`}>
+                          <td style={{ ...PRICE_CELL_STYLE, textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
+                          <td style={PRICE_CELL_STYLE}>{startText}</td>
+                          <td style={PRICE_CELL_STYLE}>{endText}</td>
+                          <td style={PRICE_CELL_STYLE}>{priceText}</td>
+                          <td style={PRICE_CELL_STYLE}>{depositText}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {periodScheduleDeadline ? (
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 12 }}>
+                  Дата окончания приёма заявок по лоту: <b>{formatDateTime(periodScheduleDeadline)}</b>
+                </div>
+              ) : null}
             </section>
           )}
 
