@@ -8,7 +8,17 @@ function api(path) {
 }
 
 const FAV_KEY = 'favorites_ids';
-const getId = (l) => String(l?.id || l?.guid || l?.slug || '');
+
+/* Делаем id устойчивее: больше источников */
+const getId = (l) => String(
+  l?.id ??
+  l?.guid ??
+  l?.slug ??
+  l?.lot_id ??
+  l?.lotId ??
+  l?.number ??
+  ''
+);
 
 function readFavSet() {
   try {
@@ -69,7 +79,7 @@ export default function FeaturedListings({ listings: initial }) {
             <FeaturedCard
               key={getId(l)}
               l={l}
-              detailHref={`/trades/${l.slug || l.id || l.guid || ''}`}
+              detailHref={`/trades/${l.slug || l.id || l.guid || l?.lot_id || ''}`}
               onFav={() => toggleFavorite(l)}
               fav={favoritesSet.has(getId(l))}
             />
