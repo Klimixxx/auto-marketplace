@@ -627,6 +627,11 @@ app.get('/api/listings', async (req, res) => {
         where.push(positiveClause);
       }
     } else if (normalizedParam === 'open_auction') {
+      const trimmedTradeField = "btrim(coalesce(trade_type, ''))";
+      const tradeField = `lower(${trimmedTradeField})`;
+      const detailsField = "lower(coalesce(details::text, ''))";
+      const hasTradeValue = `${trimmedTradeField} <> ''`;
+      
       const equalityClauses = [];
       const synonyms = Array.from(new Set([
         'open_auction',
@@ -638,17 +643,17 @@ app.get('/api/listings', async (req, res) => {
       ]));
       for (const synonym of synonyms) {
         params.push(synonym.toLowerCase());
-        equalityClauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+        equalityClauses.push(`${tradeField} = $${params.length}`);
       }
       const likePatterns = ['%аукцион%', '%auction%', '%открыт%'];
       const likeClauses = likePatterns.map((pattern) => {
         params.push(pattern);
         const placeholder = `$${params.length}`;
         return `(
-          lower(coalesce(trade_type, '')) LIKE ${placeholder}
+          ${tradeField} LIKE ${placeholder}
           OR (
-            coalesce(trade_type, '') = ''
-            AND lower(coalesce(details::text, '')) LIKE ${placeholder}
+            NOT (${hasTradeValue})
+            AND ${detailsField} LIKE ${placeholder}
           )
         )`;
       });
@@ -657,9 +662,11 @@ app.get('/api/listings', async (req, res) => {
       const exclusionClauses = [];
       for (const pattern of exclusionPatterns) {
         params.push(pattern);
-        exclusionClauses.push(`lower(coalesce(trade_type, '')) NOT LIKE $${params.length}`);
+        const tradePlaceholder = `$${params.length}`;
+        exclusionClauses.push(`${tradeField} NOT LIKE ${tradePlaceholder}`);
         params.push(pattern);
-        exclusionClauses.push(`lower(coalesce(details::text, '')) NOT LIKE $${params.length}`);
+        const detailsPlaceholder = `$${params.length}`;
+        exclusionClauses.push(`(${hasTradeValue} OR ${detailsField} NOT LIKE ${detailsPlaceholder})`);
       }
       const exclusion = exclusionClauses.length ? exclusionClauses.join(' AND ') : 'TRUE';
       where.push(`((${combinedClauses.join(' OR ')}) AND ${exclusion})`);
