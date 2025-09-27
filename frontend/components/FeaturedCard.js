@@ -63,9 +63,21 @@ function fmtPrice(v, cur='RUB') {
   if (v == null || v === '') return null;
   try {
     return new Intl.NumberFormat('ru-RU', { style:'currency', currency: cur, maximumFractionDigits: 0 }).format(v);
-  } catch {
-    return `${v} ${cur}`;
-  }
+  } catch { return `${v} ${cur}`; }
+}
+
+/* статус лота: имя + цвет точки как в «Торгах» */
+function getStatusName(listing) {
+  const raw = pick(listing, ['status','lot_status']) ?? listing?.status;
+  const name = typeof raw === 'object' ? (raw?.name || raw?.title) : raw;
+  return name || null;
+}
+function statusDotColor(name) {
+  const txt = String(name || '').toLowerCase();
+  if (!txt) return '#94a3b8';
+  if (txt.includes('открыт')) return '#16a34a';        // открыт приём заявок
+  if (txt.includes('заверш')) return '#ef4444';        // торги завершены
+  return '#94a3b8';
 }
 
 /* ------------------ card ------------------ */
@@ -77,32 +89,35 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
   useEffect(() => { setLocalFav(!!fav); }, [fav]);
 
   const title = l.title || 'Лот';
-  const description =
-    l.description ||
-    l.details?.description ||
-    l.details?.lot_details?.description ||
-    '';
 
-  // Верхняя синяя строка: Тип • Регион • Год выпуска
+  // Верхняя синяя строка: Тип • Регион • Год выпуска (как в «Торгах»)
   const region = l.region || pick(l, ['region']);
   const year = pick(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const rawType = l.trade_type ?? pick(l, ['trade_type', 'type']);
   const eyebrow = [tradeTypeLabel(rawType), region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
-  // Цена и дата
+  // Цена (текущая/начальная — как есть в данных)
   const currency = l.currency || 'RUB';
-  const currentPrice = l.current_price ?? l.start_price ?? pick(l, ['current_price','price','start_price']);
+  const currentPrice = l.current_price ?? l.price ?? l.start_price ?? pick(l, ['current_price','price','start_price']);
   const priceLabel = fmtPrice(currentPrice, currency);
+
+  // Дата окончания периода
   const dateFinish = pick(l, ['datefinish','dateFinish','date_end','dateEnd','end_date','date_to']);
   const dateFinishLabel = formatRuDateTime(dateFinish);
+
+  // Статус лота
+  const lotStatusName = getStatusName(l);
+  const lotStatusColor = statusDotColor(lotStatusName);
+
+  // Ссылка «Источник»
+  const sourceUrl = pick(l, ['possible_url','source_url','original_url','url','href']) || null;
 
   const href = detailHref || `/trades/${l.slug || l.id || l.guid || ''}`;
 
   const toggleFav = (e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+    e?.preventDefault?.(); e?.stopPropagation?.();
     setLocalFav(v => !v);
-    onFav?.();           // родитель пишет в localStorage
+    onFav?.(); // родитель запишет/синхронизирует избранное
   };
 
   return (
@@ -110,13 +125,8 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
       <div className="f-photo">
         {photo ? <img src={photo} alt={title} /> : <div className="no-photo">Нет фото</div>}
 
-        {/* Пилюля "В избранное" */}
-        <button
-          type="button"
-          className="fav-pill"
-          onClick={toggleFav}
-          aria-label={localFav ? 'Удалить из избранного' : 'Добавить в избранное'}
-        >
+        {/* В избранное — как в «Торгах» */}
+        <button type="button" className="fav-pill" onClick={toggleFav} aria-label={localFav ? 'Удалить из избранного' : 'Добавить в избранное'}>
           <span aria-hidden="true">{localFav ? '★' : '☆'}</span>
           <span>{localFav ? 'В избранном' : 'В избранное'}</span>
         </button>
@@ -128,19 +138,29 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         {/* ЗАГОЛОВОК ВСЕГДА ЧЕРНЫЙ */}
         <Link href={href} className="f-title" title={title}>{title}</Link>
 
-        {description ? <p className="f-desc">{description}</p> : null}
-
-        <div className="f-date-row">
+        {/* Окончание периода + статус (как на «Торгах») */}
+        <div className="f-info">
           {dateFinishLabel
             ? <div className="f-date">Окончание текущего периода: <b>{dateFinishLabel}</b></div>
             : <span className="f-date muted">Дата не указана</span>}
+          {lotStatusName ? (
+            <div className="f-status">
+              <span className="dot" style={{ background: lotStatusColor }} />
+              <span className="text">{lotStatusName}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* Низ: слева цена, справа кнопка */}
+      {/* Низ: слева цена, справа кнопки «Подробнее» и «Источник» */}
       <div className="f-footer">
         {priceLabel ? <div className="f-price" title="Текущая цена">{priceLabel}</div> : <span />}
-        <Link href={href} className="btn primary more">Подробнее</Link>
+        <div className="actions">
+          {sourceUrl && (
+            <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="btn link">Источник</a>
+          )}
+          <Link href={href} className="btn primary">Подробнее</Link>
+        </div>
       </div>
 
       <style jsx>{`
@@ -149,8 +169,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           border-radius:14px;
           box-shadow:0 1px 2px rgba(15,23,42,.06);
           overflow:hidden;
-          display:flex;
-          flex-direction:column;
+          display:flex; flex-direction:column;
           transition:transform .18s ease, box-shadow .18s ease;
         }
         .f-card:hover{ transform: translateY(-3px); box-shadow:0 12px 28px rgba(15,23,42,.12); }
@@ -171,24 +190,18 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         .f-body{ padding:12px 12px 6px; display:grid; gap:6px; }
         .eyebrow{ font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF; }
 
-        /* ЧЕРНЫЙ ЗАГОЛОВОК — везде, даже на hover/visited */
         .f-title{
-          font-weight:700; text-decoration:none; line-height:1.25;
-          display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
+          font-weight:700; line-height:1.25; text-decoration:none;
+          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
           color:#000 !important;
         }
-        .f-title:hover,
-        .f-title:active,
-        .f-title:visited{ color:#000 !important; }
+        .f-title:hover, .f-title:active, .f-title:visited{ color:#000 !important; }
 
-        .f-desc{
-          margin:0; color:#6b7280; font-size:13px; line-height:1.35;
-          display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
-        }
-
-        .f-date-row{ display:flex; align-items:center; justify-content:space-between; }
+        .f-info{ display:grid; gap:6px; }
         .f-date{ font-size:12px; color:#0f172a; }
         .f-date.muted{ color:#94a3b8; }
+        .f-status{ display:flex; align-items:center; gap:8px; font-size:13px; }
+        .dot{ width:10px; height:10px; border-radius:50%; flex:0 0 10px; }
 
         .f-footer{
           padding:8px 12px 12px;
@@ -197,26 +210,25 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         .f-price{
           color:#1d4ed8; font-weight:800; font-size:16px; line-height:1;
         }
+        .actions{ display:flex; gap:8px; }
 
         .btn{
           height:36px; border-radius:10px; padding:0 12px; font-weight:700;
           display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
-          border:none; cursor:pointer;
-          transition: none; /* убрана любая анимация */
+          border:none; cursor:pointer; transition:none;
         }
-
-        /* ЖЁСТКО фиксируем поведение кнопки: текст НЕ пропадает */
-        .btn.primary{
-          background:#1E90FF !important; color:#fff !important;
-        }
-        .btn.primary:hover,
-        .btn.primary:focus,
-        .btn.primary:active{
+        .btn.primary{ background:#1E90FF !important; color:#fff !important; }
+        .btn.primary:hover, .btn.primary:focus, .btn.primary:active{
           background:#1E90FF !important; color:#fff !important;
           transform:none !important; box-shadow:none !important; filter:none !important;
         }
-
-        .btn.more{ margin-left:auto; }
+        .btn.link{
+          background:#1E90FF !important; color:#fff !important;
+        }
+        .btn.link:hover, .btn.link:focus, .btn.link:active{
+          background:#1E90FF !important; color:#fff !important;
+          transform:none !important; box-shadow:none !important; filter:none !important;
+        }
       `}</style>
     </article>
   );
