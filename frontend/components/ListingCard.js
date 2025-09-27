@@ -6,6 +6,7 @@ import {
   translateValueByKey,
 } from '../lib/lotFormatting';
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
+import computeTradeTiming from '../lib/tradeTiming';
 
 /* ---- helpers ----------------------------------------------------------- */
 
@@ -669,6 +670,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
   // prices
   const tradeTypeInfo = useMemo(() => resolveTradeType(l), [l]);
+  const timing = useMemo(() => computeTradeTiming(l), [l]);
   const listingKind = tradeTypeInfo?.kind || null;
 
   const currency = l.currency || 'RUB';
@@ -700,6 +702,14 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       secondaryLabel = 'Задаток';
     }
   } else if (listingKind === 'public_offer') {
+    if (timing?.currentPriceNumber != null) {
+      primaryValue = timing.currentPriceNumber;
+      primaryLabel = 'Текущая цена';
+      if (numericStart != null && Math.abs(numericStart - timing.currentPriceNumber) > 1) {
+        secondaryValue = numericStart;
+        secondaryLabel = 'Стартовая цена';
+      }
+    } else if (numericCurrent != null) {
     if (numericCurrent != null) {
       primaryValue = numericCurrent;
       primaryLabel = 'Текущая цена';
@@ -750,14 +760,21 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const shortDescription = description ? (description.length > 220 ? `${description.slice(0, 217)}…` : description) : '';
 
   // даты
-  const dateFinish = pickDetailValue(l, [
+  const fallbackDateFinish = pickDetailValue(l, [
     'datefinish', 'dateFinish', 'date_end', 'dateEnd', 'date_to', 'end_date', 'dateFinishRu'
   ]);
+  const dateFinish = timing?.currentPeriod?.end
+    || timing?.applicationDeadline
+    || timing?.finishDate
+    || fallbackDateFinish;
   const dateFinishLabel = formatRuDateTime(dateFinish);
+  const stageLabel = timing?.currentPeriodIndex != null && timing?.periodsCount
+    ? `Этап ${timing.currentPeriodIndex + 1} из ${timing.periodsCount}`
+    : null;
 
   // статус лота
   const rawStatus = extractLotStatus(l);
-  const statusInfo = rawStatus ? classifyStatus(rawStatus) : null;
+  const statusInfo = timing?.status || (rawStatus ? classifyStatus(rawStatus) : null);
 
   // общий сброс «таблеток»
   const resetPill = { background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none', padding: 0 };
@@ -879,10 +896,19 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           ) : null}
 
           {/* дата + регион */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
-            {dateFinishLabel ? (
-              <div style={{ fontSize: 13, color: '#0f172a' }}>
-                Окончание текущего периода: <b>{dateFinishLabel}</b>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 8 }}>
+            {(stageLabel || dateFinishLabel) ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#0f172a' }}>
+                {stageLabel ? (
+                  <span>
+                    Текущий этап: <b>{stageLabel}</b>
+                  </span>
+                ) : null}
+                {dateFinishLabel ? (
+                  <span>
+                    До: <b>{dateFinishLabel}</b>
+                  </span>
+                ) : null}
               </div>
             ) : null}
             {region ? (
