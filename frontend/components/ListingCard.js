@@ -96,8 +96,12 @@ const TYPE_FIELD_KEYS = [
   'tradeType',
   'procedure_type',
   'procedureType',
+  'procedure_kind',
+  'procedureKind',
   'auction_type',
   'auctionType',
+  'auction_format',
+  'auctionFormat',
   'format',
   'kind',
   'trade_stage',
@@ -118,13 +122,63 @@ const TYPE_FIELD_KEYS = [
   'tradeStageHighlights',
 ];
 
-const TYPE_KEY_PATTERN = /(type|offer|trade|торг|процед)/i;
+const TYPE_LABEL_FIELDS = [
+  'label',
+  'name',
+  'title',
+  'caption',
+  'key',
+  'property',
+  'field',
+  'parameter',
+  'param',
+  'attribute',
+  'header',
+  'heading',
+  'question',
+  'type_name',
+  'typeName',
+];
+
+const TYPE_VALUE_FIELDS = [
+  'value',
+  'val',
+  'value_text',
+  'valueText',
+  'text',
+  'content',
+  'data',
+  'info',
+  'description',
+  'values',
+  'items',
+  'options',
+  'variants',
+  'answers',
+];
+
+const TYPE_KEY_PATTERN = /(type|offer|trade|торг|процед|аукцион|auction)/i;
+const TYPE_LABEL_PATTERN = /(торг|аукцион|процед|предлож|offer|auction|trade)/i;
+const TYPE_LABEL_ONLY_PATTERN = /^(?:тип|вид)\s+(?:торг|процед)/i;
 
 function collectTypeStrings(source, out) {
   if (!source && source !== 0) return;
   if (typeof source === 'string' || typeof source === 'number') {
     const text = String(source).trim();
-    if (text) out.push(text);
+    if (!text) return;
+    const pairMatch = text.match(/^\s*([^:–—-]{1,80})[:–—-]\s*(.+)$/);
+    if (pairMatch && TYPE_LABEL_PATTERN.test(pairMatch[1])) {
+      const valueText = pairMatch[2].trim();
+      if (valueText) out.push(valueText);
+      return;
+    }
+    const stripped = text.replace(/^(?:\s*(?:тип|вид)\s+(?:торг|процед)\s*(?:[:–—-]\s*)?)/i, '').trim();
+    if (stripped && stripped !== text) {
+      collectTypeStrings(stripped, out);
+      return;
+    }
+    if (TYPE_LABEL_ONLY_PATTERN.test(text)) return;
+    out.push(text);
     return;
   }
   if (Array.isArray(source)) {
@@ -132,8 +186,27 @@ function collectTypeStrings(source, out) {
     return;
   }
   if (typeof source === 'object') {
+    const labelMatches = TYPE_LABEL_FIELDS.some(
+      (field) => typeof source[field] === 'string' && TYPE_LABEL_PATTERN.test(source[field])
+    );
+
+    if (labelMatches) {
+      for (const field of TYPE_VALUE_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(source, field)) {
+          collectTypeStrings(source[field], out);
+        }
+      }
+    }
+
     for (const [key, value] of Object.entries(source)) {
       if (TYPE_FIELD_KEYS.includes(key) || TYPE_KEY_PATTERN.test(key)) {
+        collectTypeStrings(value, out);
+        continue;
+      }
+      if (labelMatches && TYPE_LABEL_FIELDS.includes(key)) continue;
+      if (Array.isArray(value) || (value && typeof value === 'object')) {
+        collectTypeStrings(value, out);
+      } else if ((typeof value === 'string' || typeof value === 'number') && !TYPE_LABEL_FIELDS.includes(key)) {
         collectTypeStrings(value, out);
       }
     }
