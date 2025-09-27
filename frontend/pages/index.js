@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Hero from '../components/Hero';
+import FeaturedListings from '../components/FeaturedListings'; // путь от страницы до компонента
 import About from '../components/About';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
 
@@ -602,6 +603,9 @@ export default function Home() {
   return (
     <>
       <Hero listingCount={summary?.totalListings ?? 0} />
+      {/* Интересные предложения — 6 карточек-витрина */}
+      <FeaturedListings />
+
       <About />
 
       <div className="container">
