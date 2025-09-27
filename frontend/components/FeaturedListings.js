@@ -1,5 +1,4 @@
-// components/FeaturedListings.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import FeaturedCard from './FeaturedCard';
 
@@ -8,23 +7,48 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
+const favKey = 'favorites_ids';
+const getId = (l) => String(l?.id || l?.guid || l?.slug || '');
+
 export default function FeaturedListings({ listings: initial }) {
   const [listings, setListings] = useState(initial || []);
+  const [favTick, setFavTick] = useState(0);
 
   useEffect(() => {
     let ignore = false;
     async function load() {
-      if (initial && initial.length) return; // уже передали
+      if (initial && initial.length) return;
       try {
         const res = await fetch(api('/api/listings?limit=6'));
         const data = await res.json();
         const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
         if (!ignore) setListings(items.slice(0, 6));
-      } catch (e) { /* необязательно логировать */ }
+      } catch {}
     }
     load();
     return () => { ignore = true; };
   }, [initial]);
+
+  const favoritesSet = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(favKey);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(arr);
+    } catch { return new Set(); }
+  }, [favTick]);
+
+  function toggleFavorite(lot) {
+    const id = getId(lot);
+    if (!id) return;
+    try {
+      const raw = localStorage.getItem(favKey);
+      const arr = raw ? JSON.parse(raw) : [];
+      const set = new Set(arr);
+      if (set.has(id)) set.delete(id); else set.add(id);
+      localStorage.setItem(favKey, JSON.stringify(Array.from(set)));
+      setFavTick((x) => x + 1);
+    } catch {}
+  }
 
   if (!listings?.length) return null;
 
@@ -39,9 +63,11 @@ export default function FeaturedListings({ listings: initial }) {
         <div className="grid">
           {listings.slice(0, 6).map((l) => (
             <FeaturedCard
-              key={l.id || l.guid || l.slug}
+              key={getId(l)}
               l={l}
               detailHref={`/trades/${l.slug || l.id || l.guid || ''}`}
+              onFav={() => toggleFavorite(l)}
+              fav={favoritesSet.has(getId(l))}
             />
           ))}
         </div>
