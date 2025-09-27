@@ -1,4 +1,4 @@
-// frontend/components/FeaturedCard.js
+// components/FeaturedCard.js
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
@@ -52,6 +52,15 @@ function formatRuDateTime(input) {
   });
 }
 
+function tradeTypeLabel(type) {
+  if (!type) return null;
+  const lower = String(type).toLowerCase();
+  if (lower === 'auction' || lower.includes('аукцион')) return 'Аукцион';
+  if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
+  // запасной вариант — исходное значение
+  return String(type);
+}
+
 /* ------------------ card ------------------ */
 export default function FeaturedCard({ l, detailHref, onFav, fav }) {
   const [hover, setHover] = useState(false);
@@ -64,6 +73,12 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
     l.details?.description ||
     l.details?.lot_details?.description ||
     '';
+
+  // Верхняя синяя строка: Тип • Регион • Год выпуска
+  const region = l.region || pick(l, ['region']);
+  const year = pick(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
+  const rawType = l.trade_type ?? pick(l, ['trade_type', 'type']);
+  const eyebrow = [tradeTypeLabel(rawType), region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
   const dateFinish = pick(l, ['datefinish','dateFinish','date_end','dateEnd','end_date','date_to']);
   const dateFinishLabel = formatRuDateTime(dateFinish);
@@ -83,20 +98,24 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           <div className="no-photo">Нет фото</div>
         )}
 
-        {/* избранное в углу фото */}
+        {/* Кнопка "В избранное" как в "Торгах" — слева сверху */}
         {onFav ? (
           <button
             type="button"
-            className="fav"
+            className="fav-pill"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
             aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
           >
-            {fav ? '❤️' : '🤍'}
+            <span aria-hidden="true">{fav ? '★' : '☆'}</span>
+            <span>{fav ? 'В избранном' : 'В избранное'}</span>
           </button>
         ) : null}
       </div>
 
       <div className="f-body">
+        {/* синяя строка */}
+        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
+
         <Link href={href} className="f-title" title={title}>
           {title}
         </Link>
@@ -115,16 +134,6 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
       </div>
 
       <div className="f-actions">
-        {onFav ? (
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
-          >
-            {fav ? 'В избранном' : 'В избранное'}
-          </button>
-        ) : null}
-
         <Link href={href} className="btn primary more">
           Подробнее
         </Link>
@@ -141,19 +150,28 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           transition:transform .18s ease, box-shadow .18s ease;
         }
         .f-card:hover{ transform: translateY(-3px); box-shadow:0 12px 28px rgba(15,23,42,.12); }
+
         .f-photo{ position:relative; aspect-ratio: 16/9; background:#e6eef8; }
         .f-photo img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
         .no-photo{ position:absolute; inset:0; display:grid; place-items:center; color:#9aa7b8; font-weight:600; }
-        .fav{
-          position:absolute; right:10px; top:10px; height:32px; min-width:32px;
-          border-radius:999px; border:1px solid #e5e7eb; background:#fff; padding:0 10px;
-          display:flex; align-items:center; justify-content:center; cursor:pointer;
-          box-shadow:0 6px 14px rgba(0,0,0,.08);
+
+        /* Пилюля "В избранное" слева сверху (как в Торгах) */
+        .fav-pill{
+          position:absolute; left:10px; top:10px;
+          border-radius:10px; border:1px solid #e5e7eb;
+          background:#fff; color:#000;
+          padding:6px 10px; cursor:pointer;
+          display:flex; align-items:center; gap:6px; font-size:13px;
+          box-shadow:0 6px 16px rgba(0,0,0,0.08);
         }
 
         .f-body{ padding:12px 12px 6px; display:grid; gap:6px; }
+        .eyebrow{
+          font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF;
+        }
         .f-title{
-          font-weight:700; color:#0f172a; text-decoration:none; line-height:1.25;
+          font-weight:700; color:#000; /* черный как в Торгах */
+          text-decoration:none; line-height:1.25;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
         .f-desc{
@@ -166,17 +184,17 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
 
         .f-actions{
           padding:8px 12px 12px;
-          display:flex; gap:8px; align-items:center; justify-content:space-between;
+          display:flex; gap:8px; align-items:center; justify-content:flex-end;
         }
         .btn{
           height:36px; border-radius:10px; padding:0 12px; font-weight:700; cursor:pointer; border:none;
           display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
-          transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+          transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
         }
         .btn.primary{ background:#1E90FF; color:#fff; }
-        .btn.primary:hover{ transform:translateY(-1px); box-shadow:0 10px 22px rgba(30,144,255,.32); filter:brightness(1.03); }
-        .btn.ghost{ background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; }
-        .btn.ghost:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(17,24,39,.08); background:#fff; }
+        /* Ховер как в Торгах — слегка увеличиваем, текст остается читаемым */
+        .btn.primary:hover{ transform: scale(1.03); box-shadow:0 10px 22px rgba(30,144,255,.35); filter: brightness(1.03); }
+
         .btn.more{ margin-left:auto; }
       `}</style>
     </article>
