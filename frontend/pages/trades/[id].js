@@ -7,6 +7,7 @@ import {
   translateValueByKey,
 } from '../../lib/lotFormatting';
 import { formatTradeTypeLabel } from '../../lib/tradeTypes';
+import computeTradeTiming from '../../lib/tradeTiming';
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '';
 
@@ -317,102 +318,45 @@ function pickLotValue(source, keys = []) {
   return null;
 }
 
-function arrayFrom(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'object') {
-    if (Array.isArray(value.items)) return value.items;
-    if (Array.isArray(value.list)) return value.list;
-    if (Array.isArray(value.data)) return value.data;
-    if (Array.isArray(value.results)) return value.results;
-    return Object.values(value);
-  }
-  return [];
-}
-
-function normalizePeriodPriceEntry(entry, index = 0) {
-  if (!entry || typeof entry !== 'object') return null;
-
-  const start = entry.date_start || entry.start_date || entry.period_start || entry.dateBegin || entry.date_from || entry.begin || entry.start || entry.from || null;
-  const end = entry.date_end || entry.end_date || entry.period_end || entry.dateFinish || entry.date_to || entry.finish || entry.end || entry.to || null;
-  const priceRaw = entry.price ?? entry.current_price ?? entry.currentPrice ?? entry.start_price ?? entry.startPrice ?? entry.value ?? entry.amount ?? entry.cost ?? entry.price_min ?? entry.minimum_price ?? entry.min_price ?? null;
-  const minPriceRaw = entry.min_price ?? entry.minimum_price ?? entry.price_min ?? entry.priceMin ?? null;
-  const depositRaw = entry.deposit ?? entry.deposit_amount ?? entry.bail ?? entry.zadatok ?? entry.pledge ?? entry.guarantee ?? entry.collateral ?? null;
-
-  const priceNumber = parseNumberValue(priceRaw);
-  const minPriceNumber = parseNumberValue(minPriceRaw);
-  const depositNumber = parseNumberValue(depositRaw);
-
-  return {
-    id: entry.id || entry.period_id || entry.code || entry.key || `period-${index}`,
-    start,
-    end,
-    priceRaw,
-    minPriceRaw,
-    depositRaw,
-    priceNumber,
-    minPriceNumber,
-    depositNumber,
-  };
-}
-
-function extractPeriodPriceSchedule(details) {
-  const lotDetails = details?.lot_details && typeof details.lot_details === 'object' ? details.lot_details : {};
-  const pools = [
-    lotDetails?.period_prices,
-    lotDetails?.periodPrices,
-    lotDetails?.price_schedule,
-    lotDetails?.priceSchedule,
-    lotDetails?.offer_schedule,
-    lotDetails?.price_periods,
-    lotDetails?.pricePeriods,
-    lotDetails?.price_graph,
-    lotDetails?.schedule,
-    details?.period_prices,
-    details?.periodPrices,
-  ];
-
-  const entries = [];
-  const seen = new Set();
-  let index = 0;
-  for (const pool of pools) {
-    const arr = arrayFrom(pool);
-    for (const entry of arr) {
-      const normalized = normalizePeriodPriceEntry(entry, index++);
-      if (!normalized) continue;
-      const key = normalized.id || `${normalized.start || ''}-${normalized.end || ''}-${index}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      entries.push(normalized);
-    }
-  }
-
-  const deadline = pickLotValue(lotDetails, [
-    'application_deadline',
-    'applications_deadline',
-    'application_end_date',
-    'applications_end_date',
-    'application_end',
-    'applications_end',
-    'deadline',
-    'deadline_date',
-    'date_deadline',
-    'deadline_applications',
-    'applications_deadline',
-  ]) || pickLotValue(details, [
-    'application_deadline',
-    'applications_deadline',
-    'application_end_date',
-    'applications_end_date',
-    'deadline',
-  ]);
-
-  return { entries, deadline };
-}
 
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
   const listingIdRaw = item?.id != null ? String(item.id).trim() : '';
+  const timing = computeTradeTiming(item || {});
+  const statusInfo = timing?.status || null;
+  const periods = Array.isArray(timing?.periods) ? timing.periods : [];
+  const currentPeriodIndex = timing?.currentPeriodIndex;
+  const currentPeriod = timing?.currentPeriod || (typeof currentPeriodIndex === 'number' ? periods[currentPeriodIndex] : null);
+  const currentStageLabel = (typeof currentPeriodIndex === 'number' && timing?.periodsCount)
+    ? `${currentPeriodIndex + 1} из ${timing.periodsCount}`
+    : null;
+  const stageEndDate = timing?.currentPeriod?.end || null;
+  const stageEndLabel = stageEndDate ? formatDateTime(stageEndDate) : null;
+  const applicationDeadlineDate = timing?.applicationDeadline || null;
+  const applicationDeadlineLabel = applicationDeadlineDate
+    && (!stageEndDate || applicationDeadlineDate.getTime() !== stageEndDate.getTime())
+      ? formatDateTime(applicationDeadlineDate)
+      : null;
+  const finishDate = timing?.finishDate || null;
+  const finishLabel = finishDate
+    && (!applicationDeadlineDate || finishDate.getTime() !== applicationDeadlineDate.getTime())
+      ? formatDateTime(finishDate)
+      : (item?.end_date ? formatDateTime(item.end_date) : null);
+  const fallbackStatusLabel = item?.status
+    ? translateValueByKey('status', item.status) || translateFieldKey(item.status)
+    : null;
+  const statusDisplay = statusInfo || (fallbackStatusLabel ? { label: fallbackStatusLabel, color: '#64748b' } : null);
+  const summaryStartPrice = item?.start_price
+    ?? periods[0]?.priceNumber
+    ?? periods[0]?.minPriceNumber
+    ?? null;
+  const summaryCurrentPrice = timing?.currentPriceNumber != null
+    ? timing.currentPriceNumber
+    : (item?.current_price
+      ?? currentPeriod?.priceNumber
+      ?? currentPeriod?.minPriceNumber
+      ?? item?.start_price
+      ?? null);
 
   const [openInspection, setOpenInspection] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -438,9 +382,8 @@ export default function ListingPage({ item }) {
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const prices = Array.isArray(details?.prices) ? details.prices : [];
   const documents = normalizeDocuments(Array.isArray(details?.documents) ? details.documents : []);
-  const periodSchedule = extractPeriodPriceSchedule(details);
-  const periodScheduleEntries = Array.isArray(periodSchedule?.entries) ? periodSchedule.entries : [];
-  const periodScheduleDeadline = periodSchedule?.deadline;
+  const periodScheduleEntries = periods;
+  const periodScheduleDeadline = applicationDeadlineDate;
   const fedresursMeta = details?.fedresurs_meta;
   const currency = item?.currency || 'RUB';
 
@@ -475,8 +418,6 @@ export default function ListingPage({ item }) {
   const locationLabel = [item?.city, item?.region].filter(Boolean).join(', ');
   const tradeTypeLabel = item?.trade_type_label
     || formatTradeType(item?.trade_type_resolved ?? item?.trade_type);
-  const statusLabel = item?.status ? translateValueByKey('status', item.status) || translateFieldKey(item.status) : null;
-  const endDateLabel = item?.end_date ? formatDate(item.end_date) : null;
 
   return (
     <div className="container detail-page">
@@ -528,18 +469,33 @@ export default function ListingPage({ item }) {
             <div className="detail-summary__prices">
               <div className="detail-summary__price">
                 <div className="detail-summary__price-label">Стартовая цена</div>
-                <div className="detail-summary__price-value">{fmtPrice(item?.start_price, currency)}</div>
+                <div className="detail-summary__price-value">{fmtPrice(summaryStartPrice, currency)}</div>
               </div>
               <div className="detail-summary__price">
                 <div className="detail-summary__price-label">Текущая цена</div>
-                <div className="detail-summary__price-value">{fmtPrice(item?.current_price, currency)}</div>
+                <div className="detail-summary__price-value">{fmtPrice(summaryCurrentPrice, currency)}</div>
               </div>
             </div>
 
-          {(statusLabel || endDateLabel) && (
+          {(statusDisplay || currentStageLabel || stageEndLabel || applicationDeadlineLabel || finishLabel) && (
               <div className="detail-summary__status">
-                {statusLabel ? <div><strong>Статус:</strong> {statusLabel}</div> : null}
-                {endDateLabel ? <div><strong>Дата окончания:</strong> {endDateLabel}</div> : null}
+                {statusDisplay ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {statusDisplay.color ? (
+                      <span style={{ width: 10, height: 10, borderRadius: 999, background: statusDisplay.color, display: 'inline-block' }} />
+                    ) : null}
+                    <div><strong>Статус:</strong> {statusDisplay.label}</div>
+                  </div>
+                ) : null}
+                {currentStageLabel ? <div><strong>Текущий этап:</strong> {currentStageLabel}</div> : null}
+                {stageEndLabel ? <div><strong>Окончание этапа:</strong> {stageEndLabel}</div> : null}
+                {applicationDeadlineLabel ? <div><strong>Приём заявок до:</strong> {applicationDeadlineLabel}</div> : null}
+                {!stageEndLabel && !applicationDeadlineLabel && finishLabel ? (
+                  <div><strong>Дата окончания:</strong> {finishLabel}</div>
+                ) : null}
+                {finishLabel && (stageEndLabel || applicationDeadlineLabel) && finishLabel !== stageEndLabel && finishLabel !== applicationDeadlineLabel ? (
+                  <div><strong>Завершение торгов:</strong> {finishLabel}</div>
+                ) : null}
               </div>
             )}
 
@@ -599,6 +555,7 @@ export default function ListingPage({ item }) {
                   </thead>
                   <tbody>
                     {periodScheduleEntries.map((entry, index) => {
+                      const isActive = typeof currentPeriodIndex === 'number' && currentPeriodIndex === index;
                       const startText = entry.start ? formatDateTime(entry.start) : '—';
                       const endText = entry.end ? formatDateTime(entry.end) : '—';
                       const priceNumeric = entry.priceNumber != null ? entry.priceNumber : entry.minPriceNumber;
@@ -610,7 +567,10 @@ export default function ListingPage({ item }) {
                         : (entry.depositRaw != null ? formatValueForDisplay('deposit', entry.depositRaw) : '—');
 
                       return (
-                        <tr key={entry.id || `period-${index}`}>
+                        <tr
+                          key={entry.id || `period-${index}`}
+                          style={isActive ? { background: 'rgba(30,144,255,0.08)' } : undefined}
+                        >
                           <td style={{ ...PRICE_CELL_STYLE, textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
                           <td style={PRICE_CELL_STYLE}>{startText}</td>
                           <td style={PRICE_CELL_STYLE}>{endText}</td>
