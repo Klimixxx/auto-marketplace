@@ -326,7 +326,9 @@ function BestOfferCard({ item, width }) {
   const cover = resolveCover(item);
   const price = formatPrice(item.current_price ?? item.start_price, item.currency || 'RUB');
   const location = [item.city, item.region].filter(Boolean).join(', ');
-  const tradeType = item.trade_type ? item.trade_type === 'auction' ? 'Аукцион' : 'Торговое предложение' : 'Лот';
+  const tradeType = item.trade_type_label
+    || formatTradeTypeLabel(item.trade_type_resolved ?? item.trade_type)
+    || 'Лот';
 
   return (
     <article
