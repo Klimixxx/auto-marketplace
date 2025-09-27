@@ -102,11 +102,11 @@ function buildKeyValueEntries(source) {
 }
 
 function formatTradeType(value) {
+  const mapped = formatTradeTypeLabel(value);
+  if (mapped) return mapped;
   if (!value) return null;
   const normalized = String(value).trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === 'auction' || normalized === 'аукцион') return 'Аукцион';
-  if (normalized === 'offer' || normalized.includes('публич')) return 'Торговое предложение';
   if (normalized === 'tender' || normalized === 'torgi') return 'Торги';
   return translateFieldKey(value);
 }
@@ -472,7 +472,8 @@ export default function ListingPage({ item }) {
   if (vinValue) addChip(`VIN ${vinValue}`);
 
   const locationLabel = [item?.city, item?.region].filter(Boolean).join(', ');
-  const tradeTypeLabel = formatTradeType(item?.trade_type);
+  const tradeTypeLabel = item?.trade_type_label
+    || formatTradeType(item?.trade_type_resolved ?? item?.trade_type);
   const statusLabel = item?.status ? translateValueByKey('status', item.status) || translateFieldKey(item.status) : null;
   const endDateLabel = item?.end_date ? formatDate(item.end_date) : null;
 
