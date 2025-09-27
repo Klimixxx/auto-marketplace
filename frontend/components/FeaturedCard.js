@@ -1,6 +1,5 @@
-// components/FeaturedCard.js
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 /* ------------------ helpers ------------------ */
 function collectPhotos(listing) {
@@ -57,15 +56,16 @@ function tradeTypeLabel(type) {
   const lower = String(type).toLowerCase();
   if (lower === 'auction' || lower.includes('аукцион')) return 'Аукцион';
   if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
-  // запасной вариант — исходное значение
   return String(type);
 }
 
 /* ------------------ card ------------------ */
 export default function FeaturedCard({ l, detailHref, onFav, fav }) {
-  const [hover, setHover] = useState(false);
   const photos = useMemo(() => collectPhotos(l), [l]);
   const photo = photos[0] || null;
+
+  const [localFav, setLocalFav] = useState(!!fav);
+  useEffect(() => { setLocalFav(!!fav); }, [fav]);
 
   const title = l.title || 'Лот';
   const description =
@@ -85,12 +85,15 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
 
   const href = detailHref || `/trades/${l.slug || l.id || l.guid || ''}`;
 
+  const toggleFav = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setLocalFav(v => !v);
+    onFav?.();
+  };
+
   return (
-    <article
-      className="f-card"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
+    <article className="f-card">
       <div className="f-photo">
         {photo ? (
           <img src={photo} alt={title} />
@@ -98,27 +101,24 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           <div className="no-photo">Нет фото</div>
         )}
 
-        {/* Кнопка "В избранное" как в "Торгах" — слева сверху */}
-        {onFav ? (
-          <button
-            type="button"
-            className="fav-pill"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
-            aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
-          >
-            <span aria-hidden="true">{fav ? '★' : '☆'}</span>
-            <span>{fav ? 'В избранном' : 'В избранное'}</span>
-          </button>
-        ) : null}
+        {/* Пилюля "В избранное" — как в "Торгах" */}
+        <button
+          type="button"
+          className="fav-pill"
+          onClick={toggleFav}
+          aria-label={localFav ? 'Удалить из избранного' : 'Добавить в избранное'}
+        >
+          <span aria-hidden="true">{localFav ? '★' : '☆'}</span>
+          <span>{localFav ? 'В избранном' : 'В избранное'}</span>
+        </button>
       </div>
 
       <div className="f-body">
         {/* синяя строка */}
         {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
 
-        <Link href={href} className="f-title" title={title}>
-          {title}
-        </Link>
+        {/* чёрный заголовок — как в "Торгах" */}
+        <Link href={href} className="f-title" title={title}>{title}</Link>
 
         {description ? (
           <p className="f-desc">{description}</p>
@@ -134,9 +134,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
       </div>
 
       <div className="f-actions">
-        <Link href={href} className="btn primary more">
-          Подробнее
-        </Link>
+        <Link href={href} className="btn primary more">Подробнее</Link>
       </div>
 
       <style jsx>{`
@@ -155,7 +153,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         .f-photo img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
         .no-photo{ position:absolute; inset:0; display:grid; place-items:center; color:#9aa7b8; font-weight:600; }
 
-        /* Пилюля "В избранное" слева сверху (как в Торгах) */
+        /* Пилюля "В избранное" слева сверху */
         .fav-pill{
           position:absolute; left:10px; top:10px;
           border-radius:10px; border:1px solid #e5e7eb;
@@ -166,11 +164,9 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         }
 
         .f-body{ padding:12px 12px 6px; display:grid; gap:6px; }
-        .eyebrow{
-          font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF;
-        }
+        .eyebrow{ font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF; }
         .f-title{
-          font-weight:700; color:#000; /* черный как в Торгах */
+          font-weight:700; color:#000;
           text-decoration:none; line-height:1.25;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
@@ -190,10 +186,20 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           height:36px; border-radius:10px; padding:0 12px; font-weight:700; cursor:pointer; border:none;
           display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
           transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+          will-change: transform;
         }
-        .btn.primary{ background:#1E90FF; color:#fff; }
-        /* Ховер как в Торгах — слегка увеличиваем, текст остается читаемым */
-        .btn.primary:hover{ transform: scale(1.03); box-shadow:0 10px 22px rgba(30,144,255,.35); filter: brightness(1.03); }
+        .btn.primary{
+          background:#1E90FF; color:#fff;
+        }
+        /* Ховер как в "Торгах": лёгкое увеличение, цвет/текст НЕ меняются */
+        .btn.primary:hover,
+        .btn.primary:focus{
+          transform: scale(1.03);
+          box-shadow:0 10px 22px rgba(30,144,255,.35);
+          filter: brightness(1.03);
+          color:#fff !important;
+          background:#1E90FF !important;
+        }
 
         .btn.more{ margin-left:auto; }
       `}</style>
