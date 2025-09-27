@@ -603,7 +603,7 @@ export default function Home() {
     <>
       <Hero listingCount={summary?.totalListings ?? 0} />
       {/* Интересные предложения — 6 карточек-витрина */}
-      <FeaturedListings />
+     
 
       <About />
 
