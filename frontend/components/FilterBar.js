@@ -1,12 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
-const TRADE_TYPE_LABELS = {
-  public_offer: 'Публичное предложение',
-  open_auction: 'Открытый аукцион',
-  auction: 'Аукцион',
-  offer: 'Торговое предложение',
-};
+import { TRADE_TYPE_LABELS, formatTradeTypeLabel } from '../lib/tradeTypes';
 
 function api(path) {
   const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -145,7 +139,7 @@ export default function FilterBar({ onSearch, initial }) {
             <select className="input pro select" value={tradeType} onChange={(e) => setTradeType(e.target.value)}>
               <option value="">Все типы</option>
               {meta.tradeTypes?.map((value) => (
-                <option key={value} value={value}>{TRADE_TYPE_LABELS[value] || value}</option>
+                <option key={value} value={value}>{TRADE_TYPE_LABELS[value] || formatTradeTypeLabel(value) || value}</option>
               ))}
             </select>
           </div>
