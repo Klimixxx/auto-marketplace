@@ -1,7 +1,9 @@
 // components/FeaturedListings.js
+'use client';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-// 👇 Если ListingCard лежит в другой папке — поправьте путь
+// Если ListingCard лежит в другом месте — поправь путь импорта:
 import ListingCard from './ListingCard';
 
 function api(path) {
@@ -14,19 +16,20 @@ export default function FeaturedListings({ listings: initial }) {
 
   useEffect(() => {
     let ignore = false;
+
     async function load() {
-      if (initial && initial.length) return; // уже передали с сервера
+      if (initial && initial.length) return; // уже передали сверху
       try {
-        // Берём первые 6 — как “витрину”
+        // Берём ПЕРВЫЕ 6, чтобы отрисовать ровно как на "Торги"
         const res = await fetch(api('/api/listings?limit=6'));
         const data = await res.json();
         const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
         if (!ignore) setListings(items.slice(0, 6));
       } catch (e) {
-        // не критично — просто не покажем блок
-        console.error('Failed to load featured listings', e);
+        console.error('Featured load error:', e);
       }
     }
+
     load();
     return () => { ignore = true; };
   }, [initial]);
@@ -42,17 +45,16 @@ export default function FeaturedListings({ listings: initial }) {
         </div>
 
         <div className="grid">
-          {listings.slice(0, 6).map((lot) => {
+          {listings.map((lot) => {
             const key =
               lot?.id ?? lot?.guid ?? lot?.slug ?? lot?.lot_id ?? lot?.lotId ?? lot?.number ?? Math.random();
-            // ⬇️ Передаём lot сразу под несколькими именами — ваш ListingCard возьмёт нужное
+            // ВАЖНО: рендерим РОВНО ListingCard, как на "Торги"
             return (
               <ListingCard
                 key={String(key)}
-                listing={lot}
-                lot={lot}
-                item={lot}
-                data={lot}
+                listing={lot}   // основной проп
+                lot={lot}       // на случай, если внутри ожидается lot
+                item={lot}      // и такой тоже иногда встречался
               />
             );
           })}
@@ -62,41 +64,22 @@ export default function FeaturedListings({ listings: initial }) {
       <style jsx>{`
         .featured { padding: 18px 0 8px; }
         .container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 12px; }
-
         .header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
           margin-bottom: 12px;
         }
-        .title {
-          margin: 0;
-          font-size: 22px;
-          font-weight: 800;
-          color: #0f172a;
-          letter-spacing: .2px;
-        }
+        .title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
         .all-link {
-          color: #1E90FF;
-          font-weight: 700;
-          text-decoration: none;
-          transition: opacity .15s ease, transform .15s ease;
+          color: #1E90FF; font-weight: 700; text-decoration: none;
         }
-        .all-link:hover { opacity: .9; transform: translateY(-1px); }
-
-        /* Сетка карточек — как на Торгах: 3 / 2 / 1 */
+        /* Сетка под карточки — аккуратно, чтобы не ломать стили ListingCard */
         .grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 16px;
         }
-        @media (max-width: 1000px) {
-          .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
-        @media (max-width: 640px) {
-          .grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 640px)  { .grid { grid-template-columns: 1fr; } }
       `}</style>
     </section>
   );
