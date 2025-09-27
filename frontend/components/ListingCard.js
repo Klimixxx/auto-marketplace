@@ -5,6 +5,7 @@ import {
   localizeListingBadge,
   translateValueByKey,
 } from '../lib/lotFormatting';
+import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 
 /* ---- helpers ----------------------------------------------------------- */
 
@@ -80,18 +81,12 @@ function formatPrice(value, currency = 'RUB') {
 }
 
 function tradeTypeLabel(type) {
+  const mapped = formatTradeTypeLabel(type);
+  if (mapped) return mapped;
   if (!type && type !== 0) return null;
   const text = String(type).trim();
   if (!text) return null;
-  const lower = text.toLowerCase();
-  if (lower === 'public_offer' || lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) {
-    return 'Публичное предложение';
-  }
-  if (lower === 'open_auction') return 'Открытый аукцион';
-  if (lower === 'auction' || lower.includes('аукцион')) {
-    return (lower.includes('открыт') || lower.includes('open')) ? 'Открытый аукцион' : 'Аукцион';
-  }
-  return localizeListingBadge(type) || translateValueByKey('asset_type', type) || text;
+  return localizeListingBadge(text) || translateValueByKey('asset_type', text) || text;
 }
 
 const TYPE_FIELD_KEYS = [
@@ -131,6 +126,13 @@ function resolveTradeType(listing) {
   const candidates = [];
   const push = (value) => collectTypeStrings(value, candidates);
 
+  const backendLabel = listing?.trade_type_label || listing?.resolved_trade_type_label || null;
+  const backendRaw = listing?.trade_type_resolved ?? listing?.resolved_trade_type ?? listing?.normalized_trade_type ?? listing?.trade_type;
+  const backendKind = normalizeTradeTypeCode(backendRaw);
+
+  push(backendLabel);
+  push(backendRaw);
+
   push(listing?.trade_type);
   push(listing?.type);
   push(listing?.additional_data);
@@ -163,40 +165,50 @@ function resolveTradeType(listing) {
   const hasAuction = lowers.some((text) => text.includes('аукцион') || text.includes('auction'));
   const hasOpen = lowers.some((text) => text.includes('открыт') || text.includes('open'));
 
-  const base = String(listing?.trade_type || '').trim().toLowerCase();
+  const base = normalizeTradeTypeCode(backendRaw || listing?.trade_type);
 
-  let kind = null;
-  if (hasPublic) {
-    kind = 'public_offer';
-  } else if (hasAuction) {
-    kind = hasOpen ? 'open_auction' : 'open_auction';
-  } else if (base) {
-    if (base === 'offer') kind = 'public_offer';
-    else if (base === 'auction') kind = 'open_auction';
-    else kind = base;
+  let kind = backendKind || null;
+  if (!kind) {
+    if (hasPublic) {
+      kind = 'public_offer';
+    } else if (hasAuction) {
+      kind = 'open_auction';
+    } else if (base) {
+      kind = base;
+    }
+  }
+  if (!kind && normalized.length) {
+    const hintKind = normalizeTradeTypeCode(normalized[0]);
+    if (hintKind) kind = hintKind;
   }
 
-  let label = null;
-  if (kind === 'public_offer') {
-    label = normalized.find((text) => {
-      const lower = text.toLowerCase();
-      return lower.includes('публич') || lower.includes('предлож') || lower.includes('offer');
-    }) || tradeTypeLabel('public_offer');
-  } else if (kind === 'open_auction') {
-    const auctionLabel = normalized.find((text) => /аукцион|auction/i.test(text));
-    if (auctionLabel) {
-      const lower = auctionLabel.toLowerCase();
-      if (lower.includes('открыт') || lower.includes('open')) {
-        label = auctionLabel;
+  let label = backendLabel || null;
+  if (!label) {
+    if (kind === 'public_offer') {
+      label = normalized.find((text) => {
+        const lower = text.toLowerCase();
+        return lower.includes('публич') || lower.includes('предлож') || lower.includes('offer');
+      }) || tradeTypeLabel('public_offer');
+    } else if (kind === 'open_auction') {
+      const auctionLabel = normalized.find((text) => /аукцион|auction/i.test(text));
+      if (auctionLabel) {
+        const lower = auctionLabel.toLowerCase();
+        if (lower.includes('открыт') || lower.includes('open')) {
+          label = auctionLabel;
+        } else {
+          label = hasOpen ? tradeTypeLabel('open_auction') : tradeTypeLabel('auction');
+        }
       } else {
         label = hasOpen ? tradeTypeLabel('open_auction') : tradeTypeLabel('auction');
       }
-    } else {
-      label = hasOpen ? tradeTypeLabel('open_auction') : tradeTypeLabel('auction');
     }
-  } else if (kind) {
-    label = tradeTypeLabel(kind) || normalized[0] || null;
   }
+
+  if (!label && kind) {
+    label = tradeTypeLabel(kind);
+  }
+  if (!label && normalized.length) {
+    label = tradeTypeLabel(normalized[0]);
 
   return { kind, label, candidates: normalized };
 }
@@ -617,8 +629,8 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
   // eyebrow: Тип • Регион • Год
   const region = l.region || pickDetailValue(l, ['region']);
-  const rawType = l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
-  const tradeType = tradeTypeInfo?.label || tradeTypeLabel(rawType) || 'Лот';
+  const rawType = l.trade_type_resolved ?? l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
+  const tradeType = tradeTypeInfo?.label || l.trade_type_label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l) : null;
   const eyebrow = additionalEyebrow || [tradeType, region, fallbackYear ? `${fallbackYear} г.` : null].filter(Boolean).join(' • ');
