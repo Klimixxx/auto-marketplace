@@ -340,6 +340,51 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
 const TRADE_TYPE_KEYS = ['type', 'Type', 'trade_type', 'tradeType', 'procedure_type', 'procedureType', 'auction_type', 'auctionType', 'format', 'kind'];
 
+const TRADE_TYPE_LABELS = {
+  public_offer: 'Публичное предложение',
+  open_auction: 'Открытый аукцион',
+};
+
+function cleanText(value) {
+  if (!value && value !== 0) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function normalizeTradeTypeCode(value) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
+  if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
+  if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) return 'public_offer';
+  if (lower === 'auction' || lower.includes('аукцион') || lower.includes('auction')) return 'open_auction';
+  return lower;
+}
+
+function tradeTypeLabelFromCode(value) {
+  const normalized = normalizeTradeTypeCode(value);
+  if (!normalized) return null;
+  if (TRADE_TYPE_LABELS[normalized]) return TRADE_TYPE_LABELS[normalized];
+  return null;
+}
+
+function withTradeTypeInfo(record) {
+  if (!record) return record;
+  const resolved = resolveListingTradeType(record);
+  const normalized = normalizeTradeTypeCode(resolved) || normalizeTradeTypeCode(record?.trade_type);
+  const label = record?.trade_type_label
+    || tradeTypeLabelFromCode(resolved)
+    || tradeTypeLabelFromCode(record?.trade_type)
+    || cleanText(resolved)
+    || cleanText(record?.trade_type);
+  return {
+    ...record,
+    trade_type_resolved: normalized || null,
+    trade_type_label: label || null,
+  };
+}
+
 function collectTradeTypeHints(source, out) {
   if (!source && source !== 0) return;
   if (typeof source === 'string' || typeof source === 'number') {
@@ -394,10 +439,10 @@ function resolveListingTradeType(record) {
   const hasAuction = lowers.some((text) => text.includes('аукцион') || text.includes('auction'));
   const hasOpen = lowers.some((text) => text.includes('открыт') || text.includes('open'));
 
-  const base = String(record?.trade_type || '').trim().toLowerCase();
+  const base = normalizeTradeTypeCode(record?.trade_type);
 
-  if (hasPublic || base === 'offer') return 'public_offer';
-  if (hasAuction || base === 'auction') return hasOpen ? 'open_auction' : 'open_auction';
+  if (hasPublic || base === 'public_offer') return 'public_offer';
+  if (hasAuction || base === 'open_auction') return 'open_auction';
   if (base) return base;
   return null;
 }
@@ -525,7 +570,8 @@ app.get('/api/listings', async (req, res) => {
       query(totalSql, params),
       query(listSql, params)
     ]);
-    res.json({ items: rows, total: count, page: pageNum, pageCount: Math.ceil(count / size) });
+    const items = rows.map(withTradeTypeInfo);
+    res.json({ items, total: count, page: pageNum, pageCount: Math.ceil(count / size) });
   } catch (e) {
     console.error('Listings error:', e);
     res.status(500).json({ error: 'Failed to load listings' });
@@ -562,7 +608,7 @@ app.get('/api/listings/meta', async (_req, res) => {
 
     const tradeTypeSet = new Set();
     for (const row of tradeTypes.rows) {
-      const normalized = resolveListingTradeType(row);
+      const normalized = normalizeTradeTypeCode(resolveListingTradeType(row) || row.trade_type);
       if (normalized) tradeTypeSet.add(normalized);
     }
     const preferredOrder = ['public_offer', 'open_auction', 'auction', 'offer'];
@@ -604,7 +650,8 @@ app.get('/api/listings/featured', async (req, res) => {
         LIMIT $1`,
       [limit]
     );
-    res.json({ items: rows });
+    const items = rows.map(withTradeTypeInfo);
+    res.json({ items });
   } catch (e) {
     console.error('listings featured error:', e);
     res.status(500).json({ error: 'Failed to load featured listings' });
@@ -615,7 +662,7 @@ app.get('/api/listings/:id', async (req, res) => {
   const { id } = req.params;
   const { rows } = await query('SELECT * FROM listings WHERE id = $1', [id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
+  res.json(withTradeTypeInfo(rows[0]));
 });
 
 // ===== Favorites =====
@@ -901,7 +948,7 @@ app.get('/api/me/favorites', auth, async (req, res) => {
     `SELECT l.* FROM favorites f JOIN listings l ON l.id=f.listing_id
      WHERE f.user_id=$1 ORDER BY f.created_at DESC`, [userId]
   );
-  res.json({ items: rows });
+  res.json({ items: rows.map(withTradeTypeInfo) });
 });
 
 // ===== Admin =====
