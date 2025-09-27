@@ -1,10 +1,9 @@
-// components/FeaturedListings.js
+// frontend/components/FeaturedListings.js
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-// Если ListingCard лежит в другом месте — поправь путь импорта:
-import ListingCard from './ListingCard';
+import ListingCard from './ListingCard'; // ← тот самый компонент со страницы "Торги"
 
 function api(path) {
   const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -12,26 +11,32 @@ function api(path) {
 }
 
 export default function FeaturedListings({ listings: initial }) {
-  const [listings, setListings] = useState(initial || []);
+  // если что-то придёт сверху — возьмём первые 6, иначе подгрузим сами
+  const [listings, setListings] = useState(
+    Array.isArray(initial) ? initial.slice(0, 6) : []
+  );
 
   useEffect(() => {
-    let ignore = false;
-
+    let alive = true;
     async function load() {
-      if (initial && initial.length) return; // уже передали сверху
+      if (initial && initial.length) return;
       try {
-        // Берём ПЕРВЫЕ 6, чтобы отрисовать ровно как на "Торги"
         const res = await fetch(api('/api/listings?limit=6'));
         const data = await res.json();
-        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
-        if (!ignore) setListings(items.slice(0, 6));
+        const items = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data)
+          ? data
+          : [];
+        if (alive) setListings(items.slice(0, 6));
       } catch (e) {
-        console.error('Featured load error:', e);
+        console.error('Featured listings load failed:', e);
       }
     }
-
     load();
-    return () => { ignore = true; };
+    return () => {
+      alive = false;
+    };
   }, [initial]);
 
   if (!listings?.length) return null;
@@ -45,16 +50,23 @@ export default function FeaturedListings({ listings: initial }) {
         </div>
 
         <div className="grid">
-          {listings.map((lot) => {
+          {listings.map((lot, i) => {
             const key =
-              lot?.id ?? lot?.guid ?? lot?.slug ?? lot?.lot_id ?? lot?.lotId ?? lot?.number ?? Math.random();
-            // ВАЖНО: рендерим РОВНО ListingCard, как на "Торги"
+              lot?.id ??
+              lot?.guid ??
+              lot?.slug ??
+              lot?.lot_id ??
+              lot?.lotId ??
+              lot?.number ??
+              `k${i}`;
+
+            // РЕНДЕРИМ РОВНО ListingCard, как на "Торги"
             return (
               <ListingCard
                 key={String(key)}
-                listing={lot}   // основной проп
-                lot={lot}       // на случай, если внутри ожидается lot
-                item={lot}      // и такой тоже иногда встречался
+                listing={lot}
+                lot={lot}
+                item={lot}
               />
             );
           })}
@@ -63,22 +75,21 @@ export default function FeaturedListings({ listings: initial }) {
 
       <style jsx>{`
         .featured { padding: 18px 0 8px; }
-        .container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 12px; }
+        .container { width:100%; max-width:1200px; margin:0 auto; padding:0 12px; }
         .header {
-          display: flex; align-items: center; justify-content: space-between; gap: 12px;
-          margin-bottom: 12px;
+          display:flex; align-items:center; justify-content:space-between; gap:12px;
+          margin-bottom:12px;
         }
-        .title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
-        .all-link {
-          color: #1E90FF; font-weight: 700; text-decoration: none;
-        }
-        /* Сетка под карточки — аккуратно, чтобы не ломать стили ListingCard */
+        .title { margin:0; font-size:22px; font-weight:800; color:#0f172a; }
+        .all-link { color:#1E90FF; font-weight:700; text-decoration:none; }
+
+        /* сетка под те же карточки, что и на "Торги" */
         .grid {
-          display: grid;
+          display:grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 16px;
+          gap:16px;
         }
-        @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
         @media (max-width: 640px)  { .grid { grid-template-columns: 1fr; } }
       `}</style>
     </section>
