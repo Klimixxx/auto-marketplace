@@ -338,7 +338,39 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
 // ===== Listings (каталог) =====
 
-const TRADE_TYPE_KEYS = ['type', 'Type', 'trade_type', 'tradeType', 'procedure_type', 'procedureType', 'auction_type', 'auctionType', 'format', 'kind'];
+const TRADE_TYPE_KEYS = [
+  'type', 'Type',
+  'trade_type', 'tradeType',
+  'procedure_type', 'procedureType',
+  'procedure_kind', 'procedureKind',
+  'auction_type', 'auctionType',
+  'auction_format', 'auctionFormat',
+  'format', 'kind',
+  'lot_type', 'lotType',
+  'sale_type', 'saleType',
+  'trade_stage', 'tradeStage',
+  'trade_format', 'tradeFormat',
+  'trading_type', 'tradingType',
+  'trade_offer', 'tradeOffer',
+  'trade_type_highlights', 'tradeTypeHighlights',
+  'trading_type_highlights', 'tradingTypeHighlights',
+  'trade_offer_highlights', 'tradeOfferHighlights',
+  'trade_stage_highlights', 'tradeStageHighlights',
+];
+
+const TRADE_TYPE_LABEL_FIELDS = [
+  'label', 'name', 'title', 'caption', 'key', 'property', 'field', 'parameter', 'param', 'attribute',
+  'header', 'heading', 'question', 'type_name', 'typeName',
+];
+
+const TRADE_TYPE_VALUE_FIELDS = [
+  'value', 'val', 'value_text', 'valueText', 'text', 'content', 'data', 'info', 'description',
+  'values', 'items', 'options', 'variants', 'answers',
+];
+
+const TRADE_TYPE_KEY_PATTERN = /(type|offer|trade|торг|процед|аукцион|auction)/i;
+const TRADE_TYPE_LABEL_PATTERN = /(торг|аукцион|процед|предлож|offer|auction|trade)/i;
+const TRADE_TYPE_LABEL_ONLY_PATTERN = /^(?:тип|вид)\s+(?:торг|процед)/i;
 
 const TRADE_TYPE_LABELS = {
   public_offer: 'Публичное предложение',
@@ -389,7 +421,20 @@ function collectTradeTypeHints(source, out) {
   if (!source && source !== 0) return;
   if (typeof source === 'string' || typeof source === 'number') {
     const text = String(source).trim();
-    if (text) out.push(text);
+    if (!text) return;
+    const pairMatch = text.match(/^\s*([^:–—-]{1,80})[:–—-]\s*(.+)$/);
+    if (pairMatch && TRADE_TYPE_LABEL_PATTERN.test(pairMatch[1])) {
+      const valueText = pairMatch[2].trim();
+      if (valueText) out.push(valueText);
+      return;
+    }
+    const stripped = text.replace(/^(?:\s*(?:тип|вид)\s+(?:торг|процед)\s*(?:[:–—-]\s*)?)/i, '').trim();
+    if (stripped && stripped !== text) {
+      collectTradeTypeHints(stripped, out);
+      return;
+    }
+    if (TRADE_TYPE_LABEL_ONLY_PATTERN.test(text)) return;
+    out.push(text);
     return;
   }
   if (Array.isArray(source)) {
@@ -397,9 +442,28 @@ function collectTradeTypeHints(source, out) {
     return;
   }
   if (typeof source === 'object') {
-    for (const key of TRADE_TYPE_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
-        collectTradeTypeHints(source[key], out);
+    const labelMatches = TRADE_TYPE_LABEL_FIELDS.some(
+      (field) => typeof source[field] === 'string' && TRADE_TYPE_LABEL_PATTERN.test(source[field])
+    );
+
+    if (labelMatches) {
+      for (const field of TRADE_TYPE_VALUE_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(source, field)) {
+          collectTradeTypeHints(source[field], out);
+        }
+      }
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      if (TRADE_TYPE_KEYS.includes(key) || TRADE_TYPE_KEY_PATTERN.test(key)) {
+        collectTradeTypeHints(value, out);
+        continue;
+      }
+      if (labelMatches && TRADE_TYPE_LABEL_FIELDS.includes(key)) continue;
+      if (Array.isArray(value) || (value && typeof value === 'object')) {
+        collectTradeTypeHints(value, out);
+      } else if ((typeof value === 'string' || typeof value === 'number') && !TRADE_TYPE_LABEL_FIELDS.includes(key)) {
+        collectTradeTypeHints(value, out);
       }
     }
   }
@@ -407,6 +471,7 @@ function collectTradeTypeHints(source, out) {
 
 function resolveListingTradeType(record) {
   const hints = [];
+  collectTradeTypeHints(record?.trade_type_label, hints);
   collectTradeTypeHints(record?.trade_type, hints);
   collectTradeTypeHints(record?.type, hints);
   collectTradeTypeHints(record?.additional_data, hints);
@@ -483,40 +548,76 @@ app.get('/api/listings', async (req, res) => {
     }
   }
   if (trade_type) {
-    const normalized = String(trade_type).trim().toLowerCase();
-    if (normalized === 'public_offer') {
-      params.push('offer');
-      const offerParam = params.length;
-      params.push('%публич%');
-      const publicRu = params.length;
-      params.push('%public%');
-      const publicEn = params.length;
-      params.push('%предлож%');
-      const proposalRu = params.length;
-      params.push('%offer%');
-      const offerWord = params.length;
-      where.push(`(
-        lower(coalesce(trade_type, '')) = $${offerParam}
-        OR lower(coalesce(details::text, '')) LIKE $${publicRu}
-        OR lower(coalesce(details::text, '')) LIKE $${publicEn}
-        OR lower(coalesce(details::text, '')) LIKE $${proposalRu}
-        OR lower(coalesce(details::text, '')) LIKE $${offerWord}
+    const normalizedParam = normalizeTradeTypeCode(trade_type);
+    if (normalizedParam === 'public_offer') {
+      const equalityClauses = [];
+      const synonyms = Array.from(new Set([
+        'public_offer',
+        'offer',
+        'public offer',
+        'public-offer',
+        'публичное предложение',
+      ]));
+      for (const synonym of synonyms) {
+        params.push(synonym.toLowerCase());
+        equalityClauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+      }
+      const likePatterns = ['%публич%', '%предлож%', '%offer%', '%public%'];
+      const likeClauses = likePatterns.map((pattern) => {
+        params.push(pattern);
+        const placeholder = `$${params.length}`;
+        return `(
+          lower(coalesce(trade_type, '')) LIKE ${placeholder}
+          OR lower(coalesce(details::text, '')) LIKE ${placeholder}
+        )`;
+      });
+      where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
+    } else if (normalizedParam === 'open_auction') {
+      const equalityClauses = [];
+      const synonyms = Array.from(new Set([
+        'open_auction',
+        'auction',
+        'open auction',
+        'open-auction',
+        'открытый аукцион',
+        'аукцион',
+      ]));
+      for (const synonym of synonyms) {
+        params.push(synonym.toLowerCase());
+        equalityClauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+      }
+      const likePatterns = ['%аукцион%', '%auction%', '%открыт%'];
+      const likeClauses = likePatterns.map((pattern) => {
+        params.push(pattern);
+        const placeholder = `$${params.length}`;
+        return `(
+          lower(coalesce(trade_type, '')) LIKE ${placeholder}
+          OR lower(coalesce(details::text, '')) LIKE ${placeholder}
+        )`;
+      });
+      where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
+    } else if (normalizedParam) {
+      const clauses = [];
+      params.push(normalizedParam);
+      clauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+      const spaced = normalizedParam.replace(/_/g, ' ');
+      if (spaced && spaced !== normalizedParam) {
+        params.push(spaced);
+        clauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+      }
+      params.push(`%${normalizedParam}%`);
+      clauses.push(`(
+        lower(coalesce(trade_type, '')) LIKE $${params.length}
+        OR lower(coalesce(details::text, '')) LIKE $${params.length}
       )`);
-    } else if (normalized === 'open_auction') {
-      params.push('auction');
-      const auctionParam = params.length;
-      params.push('%аукцион%');
-      const auctionRu = params.length;
-      params.push('%auction%');
-      const auctionEn = params.length;
-      where.push(`(
-        lower(coalesce(trade_type, '')) = $${auctionParam}
-        OR lower(coalesce(details::text, '')) LIKE $${auctionRu}
-        OR lower(coalesce(details::text, '')) LIKE $${auctionEn}
-      )`);
-    } else if (normalized) {
-      params.push(normalized);
-      where.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
+      if (spaced && spaced !== normalizedParam) {
+        params.push(`%${spaced}%`);
+        clauses.push(`(
+          lower(coalesce(trade_type, '')) LIKE $${params.length}
+          OR lower(coalesce(details::text, '')) LIKE $${params.length}
+        )`);
+      }
+      where.push(`(${clauses.join(' OR ')})`);
     }
   }
   if (status)     { params.push(status);     where.push(`status = $${params.length}`); }
