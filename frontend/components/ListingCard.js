@@ -80,11 +80,125 @@ function formatPrice(value, currency = 'RUB') {
 }
 
 function tradeTypeLabel(type) {
-  if (!type) return null;
-  const lower = String(type).toLowerCase();
-  if (lower === 'auction' || lower.includes('аукцион')) return 'Аукцион';
-  if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
-  return localizeListingBadge(type) || translateValueByKey('asset_type', type) || String(type);
+  if (!type && type !== 0) return null;
+  const text = String(type).trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (lower === 'public_offer' || lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) {
+    return 'Публичное предложение';
+  }
+  if (lower === 'open_auction') return 'Открытый аукцион';
+  if (lower === 'auction' || lower.includes('аукцион')) {
+    return (lower.includes('открыт') || lower.includes('open')) ? 'Открытый аукцион' : 'Аукцион';
+  }
+  return localizeListingBadge(type) || translateValueByKey('asset_type', type) || text;
+}
+
+const TYPE_FIELD_KEYS = [
+  'type',
+  'Type',
+  'trade_type',
+  'tradeType',
+  'procedure_type',
+  'procedureType',
+  'auction_type',
+  'auctionType',
+  'format',
+  'kind',
+];
+
+function collectTypeStrings(source, out) {
+  if (!source && source !== 0) return;
+  if (typeof source === 'string' || typeof source === 'number') {
+    const text = String(source).trim();
+    if (text) out.push(text);
+    return;
+  }
+  if (Array.isArray(source)) {
+    source.forEach((item) => collectTypeStrings(item, out));
+    return;
+  }
+  if (typeof source === 'object') {
+    for (const key of TYPE_FIELD_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        collectTypeStrings(source[key], out);
+      }
+    }
+  }
+}
+
+function resolveTradeType(listing) {
+  const candidates = [];
+  const push = (value) => collectTypeStrings(value, candidates);
+
+  push(listing?.trade_type);
+  push(listing?.type);
+  push(listing?.additional_data);
+  push(listing?.additionalData);
+
+  const details = listing?.details || {};
+  const lot = details?.lot_details || {};
+
+  push(details);
+  push(details?.additional_data);
+  push(details?.additionalData);
+  push(lot);
+  push(lot?.additional_data);
+  push(lot?.additionalData);
+
+  const normalized = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    if (!candidate && candidate !== 0) continue;
+    const text = String(candidate).replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(text);
+  }
+
+  const lowers = normalized.map((value) => value.toLowerCase());
+  const hasPublic = lowers.some((text) => text.includes('публич') || text.includes('public') || text.includes('предлож') || text.includes('offer'));
+  const hasAuction = lowers.some((text) => text.includes('аукцион') || text.includes('auction'));
+  const hasOpen = lowers.some((text) => text.includes('открыт') || text.includes('open'));
+
+  const base = String(listing?.trade_type || '').trim().toLowerCase();
+
+  let kind = null;
+  if (hasPublic) {
+    kind = 'public_offer';
+  } else if (hasAuction) {
+    kind = hasOpen ? 'open_auction' : 'open_auction';
+  } else if (base) {
+    if (base === 'offer') kind = 'public_offer';
+    else if (base === 'auction') kind = 'open_auction';
+    else kind = base;
+  }
+
+  let label = null;
+  if (kind === 'public_offer') {
+    label = normalized.find((text) => {
+      const lower = text.toLowerCase();
+      return lower.includes('публич') || lower.includes('предлож') || lower.includes('offer');
+    }) || tradeTypeLabel('public_offer');
+  } else if (kind === 'open_auction') {
+    const auctionLabel = normalized.find((text) => /аукцион|auction/i.test(text));
+    if (auctionLabel) {
+      const lower = auctionLabel.toLowerCase();
+      if (lower.includes('открыт') || lower.includes('open')) {
+        label = auctionLabel;
+      } else {
+        label = hasOpen ? tradeTypeLabel('open_auction') : tradeTypeLabel('auction');
+      }
+    } else {
+      label = hasOpen ? tradeTypeLabel('open_auction') : tradeTypeLabel('auction');
+    }
+  } else if (kind) {
+    label = tradeTypeLabel(kind) || normalized[0] || null;
+  }
+
+  return { kind, label, candidates: normalized };
 }
 
 const ADDITIONAL_DATA_KEYS = [
@@ -293,7 +407,7 @@ function extractAdditionalData(listing) {
   return result;
 }
 
-function buildAdditionalEyebrow(listing) {
+function buildAdditionalEyebrow(listing, tradeTypeInfo) {
   const parts = [];
   const seen = new Set();
   const push = (value) => {
@@ -306,6 +420,8 @@ function buildAdditionalEyebrow(listing) {
     parts.push(text);
   };
 
+  if (tradeTypeInfo?.label) push(tradeTypeInfo.label);
+
   const brand = listing?.brand || pickDetailValue(listing, ['brand']);
   const model = listing?.model || pickDetailValue(listing, ['model']);
   const titleLine = [brand, model].filter(Boolean).join(' ');
@@ -317,34 +433,7 @@ function buildAdditionalEyebrow(listing) {
   const additionalEntries = extractAdditionalData(listing);
   additionalEntries.forEach(push);
 
-  return parts.join(', ');
-}
-
-function detectListingKind(listing) {
-  const candidates = [
-    listing?.trade_type,
-    listing?.type,
-    listing?.details?.trade_type,
-    listing?.details?.type,
-    listing?.details?.lot_details?.trade_type,
-    listing?.details?.lot_details?.type,
-    listing?.details?.lot_details?.procedure_type,
-    listing?.details?.lot_details?.auction_type,
-  ];
-
-  for (const value of candidates) {
-    if (!value) continue;
-    const normalized = String(value).trim().toLowerCase();
-    if (!normalized) continue;
-    if (normalized.includes('публич') || normalized.includes('public') || normalized.includes('offer')) {
-      return 'public_offer';
-    }
-    if ((normalized.includes('открыт') && normalized.includes('аукцион')) || normalized.includes('open auction')) {
-      return 'open_auction';
-    }
-  }
-
-  return null;
+  return parts.join(' • ');
 }
 
 function toArray(value) {
