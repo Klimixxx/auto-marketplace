@@ -62,7 +62,7 @@ function normalizeNumber(value) {
 
 function formatPriceNumber(value) {
   try {
-    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
+   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
   } catch { return String(value); }
 }
 
@@ -86,6 +86,337 @@ function tradeTypeLabel(type) {
   if (lower === 'offer' || lower.includes('публич')) return 'Торговое предложение';
   return localizeListingBadge(type) || translateValueByKey('asset_type', type) || String(type);
 }
+
+const ADDITIONAL_DATA_KEYS = [
+  'additional_data',
+  'additionalData',
+  'additional',
+  'additional_info',
+  'additionalInformation',
+  'extra',
+  'extra_data',
+  'extraData',
+  'characteristics',
+  'short_characteristics',
+  'main_characteristics',
+  'specifications',
+  'specs',
+  'vehicle_info',
+  'car_info',
+  'parameters',
+  'params',
+  'car_params',
+  'tech_data',
+  'tech_characteristics',
+  'technical_data',
+  'technical_characteristics',
+  'key_parameters',
+  'consumer_properties',
+];
+
+const LABEL_KEYWORDS_TO_SKIP = [
+  'пробег',
+  'мощност',
+  'horse',
+  'power',
+  'кпп',
+  'короб',
+  'трансмис',
+  'привод',
+  'топлив',
+  'двигател',
+  'fuel',
+  'engine',
+  'vin',
+  'кузов',
+  'л.с',
+  'лс',
+  'квт',
+  'акпп',
+  'вариатор',
+  'robot',
+  'автомат',
+  'год',
+];
+
+function appendUnit(text, unit) {
+  if (!text || !unit) return text;
+  const trimmed = String(text).trim();
+  const unitLower = String(unit).trim().toLowerCase();
+  if (!unitLower) return trimmed;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes(unitLower)) return trimmed;
+  return `${trimmed} ${unit}`.trim();
+}
+
+function formatAdditionalPair(label, rawValue, unit) {
+  if (rawValue == null || rawValue === '') return null;
+
+  let text = null;
+  if (typeof rawValue === 'number') {
+    text = formatPriceNumber(rawValue);
+  } else if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return null;
+    const numeric = normalizeNumber(trimmed);
+    const digitsOnly = trimmed.replace(/[0-9.,\s-]/g, '') === '';
+    if (numeric != null && digitsOnly) {
+      text = formatPriceNumber(numeric);
+    } else {
+      text = trimmed;
+    }
+  } else {
+    return null;
+  }
+
+  const lowerLabel = label ? String(label).trim().toLowerCase() : '';
+  if (unit) {
+    text = appendUnit(text, unit);
+  } else if (lowerLabel) {
+    if (lowerLabel.includes('пробег') || lowerLabel.includes('км')) {
+      text = appendUnit(text, 'км');
+    } else if (lowerLabel.includes('л.с') || lowerLabel.includes('лс') || lowerLabel.includes('мощност') || lowerLabel.includes('horse') || lowerLabel.includes('power')) {
+      text = appendUnit(text, 'л.с.');
+    } else if (lowerLabel.includes('квт') || lowerLabel.includes('kw')) {
+      text = appendUnit(text, 'кВт');
+    }
+  }
+
+  if (!lowerLabel || LABEL_KEYWORDS_TO_SKIP.some((kw) => lowerLabel.includes(kw))) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  const normalizedLabel = String(label).trim();
+  if (!normalizedLabel) return text.replace(/\s+/g, ' ').trim();
+
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes(lowerLabel)) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  return `${normalizedLabel} ${text}`.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeAdditionalEntry(entry, defaultLabel = null) {
+  if (entry == null || entry === '') return null;
+
+  if (typeof entry === 'string' || typeof entry === 'number') {
+    return formatAdditionalPair(defaultLabel, entry);
+  }
+
+  if (typeof entry === 'object') {
+    const label = entry.label ?? entry.name ?? entry.title ?? entry.caption ?? entry.key ?? entry.type ?? entry.property ?? defaultLabel;
+    const unit = entry.unit ?? entry.units ?? entry.measure ?? entry.suffix ?? entry.postfix ?? null;
+    let value = entry.value ?? entry.amount ?? entry.val ?? entry.text ?? entry.content ?? entry.info ?? entry.data ?? entry.description ?? entry.value_text ?? entry.price ?? entry.price_value ?? null;
+
+    if (Array.isArray(value)) {
+      const normalized = value.map((v) => normalizeAdditionalEntry(v, label)).filter(Boolean);
+      if (normalized.length) return normalized.join(', ');
+      value = null;
+    }
+
+    if (value == null || value === '') {
+      const entries = Object.entries(entry).filter(([key]) => !['label', 'name', 'title', 'caption', 'key', 'type', 'property', 'unit', 'units', 'measure', 'suffix', 'postfix', 'value', 'val', 'amount', 'text', 'content', 'info', 'data', 'description', 'value_text', 'price', 'price_value'].includes(key));
+      const nested = entries.map(([key, val]) => normalizeAdditionalEntry(val, key)).filter(Boolean);
+      if (nested.length) return nested.join(', ');
+      return null;
+    }
+
+    return formatAdditionalPair(label, value, unit);
+  }
+
+  return null;
+}
+
+function extractAdditionalData(listing) {
+  const result = [];
+  const seen = new Set();
+
+  const push = (value, label) => {
+    const formatted = normalizeAdditionalEntry(value, label);
+    if (!formatted) return;
+    const normalized = formatted.replace(/\s+/g, ' ').trim();
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(normalized);
+  };
+
+  const lotDetails = listing?.details?.lot_details || {};
+  const details = listing?.details && typeof listing.details === 'object' ? listing.details : {};
+
+  const sources = [lotDetails, details, listing];
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    for (const key of ADDITIONAL_DATA_KEYS) {
+      if (!(key in source)) continue;
+      const value = source[key];
+      if (value == null || value === '') continue;
+      if (Array.isArray(value)) {
+        value.forEach((entry) => push(entry));
+      } else {
+        push(value);
+      }
+    }
+  }
+
+  const fallbackPairs = [
+    ['engine_power', 'Мощность'],
+    ['power_hp', 'Мощность'],
+    ['horsepower', 'Мощность'],
+    ['power', 'Мощность'],
+    ['mileage', 'Пробег'],
+    ['probeg', 'Пробег'],
+    ['run', 'Пробег'],
+    ['mileage_km', 'Пробег'],
+    ['mileage_value', 'Пробег'],
+    ['transmission', 'Коробка передач'],
+    ['transmission_type', 'Коробка передач'],
+    ['gearbox', 'Коробка передач'],
+    ['kpp', 'Коробка передач'],
+    ['drive', 'Привод'],
+    ['drive_type', 'Привод'],
+    ['wheel', 'Руль'],
+    ['steering', 'Руль'],
+    ['fuel', 'Топливо'],
+    ['fuel_type', 'Топливо'],
+    ['engine', 'Двигатель'],
+    ['engine_type', 'Двигатель'],
+  ];
+
+  for (const [key, label] of fallbackPairs) {
+    const value = pickDetailValue(listing, [key]);
+    if (value != null && value !== '') push(value, label);
+  }
+
+  return result;
+}
+
+function buildAdditionalEyebrow(listing) {
+  const parts = [];
+  const seen = new Set();
+  const push = (value) => {
+    if (!value && value !== 0) return;
+    const text = String(value).replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(text);
+  };
+
+  const brand = listing?.brand || pickDetailValue(listing, ['brand']);
+  const model = listing?.model || pickDetailValue(listing, ['model']);
+  const titleLine = [brand, model].filter(Boolean).join(' ');
+  if (titleLine) push(titleLine);
+
+  const year = pickDetailValue(listing, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
+  if (year) push(`${year} г.`);
+
+  const additionalEntries = extractAdditionalData(listing);
+  additionalEntries.forEach(push);
+
+  return parts.join(', ');
+}
+
+function detectListingKind(listing) {
+  const candidates = [
+    listing?.trade_type,
+    listing?.type,
+    listing?.details?.trade_type,
+    listing?.details?.type,
+    listing?.details?.lot_details?.trade_type,
+    listing?.details?.lot_details?.type,
+    listing?.details?.lot_details?.procedure_type,
+    listing?.details?.lot_details?.auction_type,
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) continue;
+    if (normalized.includes('публич') || normalized.includes('public') || normalized.includes('offer')) {
+      return 'public_offer';
+    }
+    if ((normalized.includes('открыт') && normalized.includes('аукцион')) || normalized.includes('open auction')) {
+      return 'open_auction';
+    }
+  }
+
+  return null;
+}
+
+function toArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'object') {
+    if (Array.isArray(value.items)) return value.items;
+    if (Array.isArray(value.list)) return value.list;
+    if (Array.isArray(value.data)) return value.data;
+    if (Array.isArray(value.results)) return value.results;
+    return Object.values(value);
+  }
+  return [];
+}
+
+function extractPeriodPrices(listing) {
+  const lot = listing?.details?.lot_details || {};
+  const details = listing?.details && typeof listing.details === 'object' ? listing.details : {};
+  const pools = [
+    listing?.period_prices,
+    listing?.periodPrices,
+    details?.period_prices,
+    details?.periodPrices,
+    lot?.period_prices,
+    lot?.periodPrices,
+    lot?.price_schedule,
+    lot?.priceSchedule,
+    lot?.offer_schedule,
+    lot?.price_periods,
+    lot?.pricePeriods,
+    lot?.price_graph,
+    lot?.schedule,
+  ];
+
+  const entries = [];
+  for (const pool of pools) {
+    const arr = toArray(pool);
+    for (const entry of arr) {
+      if (entry && typeof entry === 'object') entries.push(entry);
+    }
+  }
+  return entries;
+}
+
+function findMinimalPeriodPrice(entries) {
+  let min = null;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const candidates = [
+      entry.min_price,
+      entry.minPrice,
+      entry.minimum_price,
+      entry.minimumPrice,
+      entry.price_min,
+      entry.priceMin,
+      entry.price,
+      entry.current_price,
+      entry.currentPrice,
+      entry.amount,
+      entry.cost,
+      entry.value,
+    ];
+    for (const candidate of candidates) {
+      const num = normalizeNumber(candidate);
+      if (num != null) {
+        if (min == null || num < min) min = num;
+      }
+    }
+  }
+  return min;
+}
+
 
 function formatRuDateTime(input) {
   if (!input) return null;
@@ -138,17 +469,70 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const photo = photos[activePhotoIndex] || photos[0] || null;
 
   // prices
-  const price = l.current_price ?? l.start_price ?? pickDetailValue(l, ['current_price', 'price', 'start_price']);
-  const minPrice = pickDetailValue(l, ['min_price', 'minimal_price', 'price_min', 'minimum_price']);
-  const priceLabel = formatPrice(price, l.currency || 'RUB');
-  const minPriceLabel = minPrice != null ? formatPrice(minPrice, l.currency || 'RUB') : null;
+  const listingKind = useMemo(() => detectListingKind(l), [l]);
+  const periodPriceEntries = useMemo(() => extractPeriodPrices(l), [l]);
+  const minimalPeriodPrice = useMemo(() => findMinimalPeriodPrice(periodPriceEntries), [periodPriceEntries]);
+
+  const currency = l.currency || 'RUB';
+  const startPriceRaw = l.start_price ?? pickDetailValue(l, ['start_price', 'startPrice', 'initial_price']);
+  const currentPriceRaw = l.current_price ?? pickDetailValue(l, ['current_price', 'currentPrice', 'price']);
+  const minPriceRaw = l.min_price ?? pickDetailValue(l, ['min_price', 'minimal_price', 'price_min', 'minimum_price']);
+  const stepRaw = pickDetailValue(l, ['auction_step', 'price_step', 'step', 'bid_step', 'bid_increment', 'increase_step', 'step_value']);
+  const depositRaw = pickDetailValue(l, ['deposit', 'deposit_amount', 'zadatok', 'pledge', 'bail', 'guarantee']);
+
+  const numericStart = normalizeNumber(startPriceRaw);
+  const numericCurrent = normalizeNumber(currentPriceRaw);
+  const numericMin = normalizeNumber(minPriceRaw);
+  const numericStep = normalizeNumber(stepRaw);
+  const numericDeposit = normalizeNumber(depositRaw);
+
+  let primaryValue = numericCurrent ?? numericStart;
+  let primaryLabel = numericCurrent != null ? 'Текущая цена' : 'Начальная цена';
+  let secondaryValue = null;
+  let secondaryLabel = null;
+
+  if (listingKind === 'open_auction') {
+    primaryValue = numericStart ?? numericCurrent ?? null;
+    primaryLabel = 'Начальная цена';
+    if (numericStep != null) {
+      secondaryValue = numericStep;
+      secondaryLabel = 'Величина повышения';
+    } else if (numericDeposit != null) {
+      secondaryValue = numericDeposit;
+      secondaryLabel = 'Задаток';
+    }
+  } else if (listingKind === 'public_offer') {
+    primaryValue = numericCurrent ?? numericStart ?? null;
+    primaryLabel = numericCurrent != null ? 'Текущая цена' : 'Начальная цена';
+    const minimalOfferPrice = minimalPeriodPrice ?? numericMin;
+    if (minimalOfferPrice != null && (primaryValue == null || minimalOfferPrice < primaryValue)) {
+      secondaryValue = minimalOfferPrice;
+      secondaryLabel = 'Минимальная цена';
+    }
+  } else {
+    primaryValue = numericCurrent ?? numericStart ?? null;
+    primaryLabel = numericCurrent != null ? 'Текущая цена' : 'Начальная цена';
+    if (numericMin != null && (primaryValue == null || numericMin < primaryValue)) {
+      secondaryValue = numericMin;
+      secondaryLabel = 'Минимальная цена';
+    }
+  }
+
+  const priceLabel = formatPrice(primaryValue, currency);
+  const secondaryPriceLabel = (secondaryValue != null && (primaryValue == null || Math.abs(secondaryValue - primaryValue) > 1))
+    ? formatPrice(secondaryValue, currency)
+    : null;
+
+  // eyebrow
 
   // eyebrow: Тип • Регион • Год
   const region = l.region || pickDetailValue(l, ['region']);
-  const year = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const rawType = l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
   const tradeType = tradeTypeLabel(rawType) || 'Лот';
-  const eyebrow = [tradeType, region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
+  const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
+  const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l) : null;
+  const eyebrow = additionalEyebrow || [tradeType, region, fallbackYear ? `${fallbackYear} г.` : null].filter(Boolean).join(' • ');
+  
 
   // description (короткий)
   const description =
@@ -315,13 +699,13 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         <div style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr auto', alignContent: 'start', gap: 12 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ ...resetPill, fontSize: 18, fontWeight: 800, color: '#1d4ed8' }}>{priceLabel}</div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Текущая цена</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{primaryLabel}</div>
           </div>
 
-          {minPriceLabel ? (
+          {secondaryPriceLabel && secondaryLabel ? (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ ...resetPill, fontSize: 16, fontWeight: 800, color: '#e11d48' }}>{minPriceLabel}</div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Минимальная цена</div>
+              <div style={{ ...resetPill, fontSize: 16, fontWeight: 800, color: '#e11d48' }}>{secondaryPriceLabel}</div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{secondaryLabel}</div>
             </div>
           ) : null}
 
