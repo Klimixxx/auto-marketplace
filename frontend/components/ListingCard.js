@@ -617,7 +617,6 @@ function findMinimalPeriodPrice(entries) {
   return min;
 }
 
-
 function formatRuDateTime(input) {
   if (!input) return null;
   const d = new Date(input);
@@ -651,9 +650,9 @@ function extractLotStatus(listing) {
 function classifyStatus(name) {
   if (!name) return null;
   const lower = name.toLowerCase();
-  if (lower.includes('заверш')) return { label: 'Торги завершены', color: '#dc2626' }; // red
-  if (/(открыт|открыта|при[её]м|заявок)/i.test(lower)) return { label: 'Открыт прием заявок', color: '#16a34a' }; // green
-  return { label: name, color: '#64748b' }; // fallback gray
+  if (lower.includes('заверш')) return { label: 'Торги завершены', color: '#dc2626' };
+  if (/(открыт|открыта|при[её]м|заявок)/i.test(lower)) return { label: 'Открыт прием заявок', color: '#16a34a' };
+  return { label: name, color: '#64748b' };
 }
 
 /* ---- component --------------------------------------------------------- */
@@ -686,6 +685,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const numericStep = normalizeNumber(stepRaw);
   const numericDeposit = normalizeNumber(depositRaw);
 
+  // исправленный блок расчёта цен
   let primaryValue = numericCurrent ?? numericStart;
   let primaryLabel = numericCurrent != null ? 'Текущая цена' : 'Начальная цена';
   let secondaryValue = null;
@@ -710,7 +710,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
         secondaryLabel = 'Стартовая цена';
       }
     } else if (numericCurrent != null) {
-    if (numericCurrent != null) {
       primaryValue = numericCurrent;
       primaryLabel = 'Текущая цена';
       if (numericStart != null) {
@@ -749,7 +748,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l, tradeTypeInfo) : null;
   const eyebrow = additionalEyebrow || [tradeType, region, fallbackYear ? `${fallbackYear} г.` : null].filter(Boolean).join(' • ');
-  
 
   // description (короткий)
   const description =
