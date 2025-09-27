@@ -89,12 +89,10 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
   const rawType = l.trade_type ?? pick(l, ['trade_type', 'type']);
   const eyebrow = [tradeTypeLabel(rawType), region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
-  // Цена
+  // Цена и дата
   const currency = l.currency || 'RUB';
   const currentPrice = l.current_price ?? l.start_price ?? pick(l, ['current_price','price','start_price']);
   const priceLabel = fmtPrice(currentPrice, currency);
-
-  // Дата
   const dateFinish = pick(l, ['datefinish','dateFinish','date_end','dateEnd','end_date','date_to']);
   const dateFinishLabel = formatRuDateTime(dateFinish);
 
@@ -104,19 +102,15 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setLocalFav(v => !v);
-    onFav?.();           // родитель запишет в localStorage
+    onFav?.();           // родитель пишет в localStorage
   };
 
   return (
     <article className="f-card">
       <div className="f-photo">
-        {photo ? (
-          <img src={photo} alt={title} />
-        ) : (
-          <div className="no-photo">Нет фото</div>
-        )}
+        {photo ? <img src={photo} alt={title} /> : <div className="no-photo">Нет фото</div>}
 
-        {/* Пилюля "В избранное" — как в "Торгах" */}
+        {/* Пилюля "В избранное" */}
         <button
           type="button"
           className="fav-pill"
@@ -129,15 +123,13 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
       </div>
 
       <div className="f-body">
-        {/* синяя строка */}
         {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
 
-        {/* ЧЁРНЫЙ заголовок — зафиксирован жёстко */}
+        {/* ЗАГОЛОВОК ВСЕГДА ЧЕРНЫЙ */}
         <Link href={href} className="f-title" title={title}>{title}</Link>
 
         {description ? <p className="f-desc">{description}</p> : null}
 
-        {/* Дата отдельной строкой (чтобы внизу цена была в одной линии с кнопкой) */}
         <div className="f-date-row">
           {dateFinishLabel
             ? <div className="f-date">Окончание текущего периода: <b>{dateFinishLabel}</b></div>
@@ -145,7 +137,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         </div>
       </div>
 
-      {/* НИЖНЯЯ СТРОКА: СЛЕВА ЦЕНА, СПРАВА КНОПКА */}
+      {/* Низ: слева цена, справа кнопка */}
       <div className="f-footer">
         {priceLabel ? <div className="f-price" title="Текущая цена">{priceLabel}</div> : <span />}
         <Link href={href} className="btn primary more">Подробнее</Link>
@@ -167,7 +159,6 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         .f-photo img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
         .no-photo{ position:absolute; inset:0; display:grid; place-items:center; color:#9aa7b8; font-weight:600; }
 
-        /* Пилюля "В избранное" слева сверху */
         .fav-pill{
           position:absolute; left:10px; top:10px;
           border-radius:10px; border:1px solid #e5e7eb;
@@ -179,51 +170,21 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
 
         .f-body{ padding:12px 12px 6px; display:grid; gap:6px; }
         .eyebrow{ font-size:12px; font-weight:600; letter-spacing:.2px; color:#1E90FF; }
+
+        /* ЧЕРНЫЙ ЗАГОЛОВОК — везде, даже на hover/visited */
         .f-title{
-          font-weight:700; color:#000 !important; /* ЖЁСТКО фиксируем чёрный */
-          text-decoration:none; line-height:1.25;
+          font-weight:700; text-decoration:none; line-height:1.25;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
+          color:#000 !important;
         }
+        .f-title:hover,
+        .f-title:active,
+        .f-title:visited{ color:#000 !important; }
+
         .f-desc{
           margin:0; color:#6b7280; font-size:13px; line-height:1.35;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
 
         .f-date-row{ display:flex; align-items:center; justify-content:space-between; }
-        .f-date{ font-size:12px; color:#0f172a; }
-        .f-date.muted{ color:#94a3b8; }
-
-        /* Низ: цена + кнопка в ОДНОЙ строке */
-        .f-footer{
-          padding:8px 12px 12px;
-          display:flex; align-items:center; justify-content:space-between; gap:10px;
-        }
-        .f-price{
-          color:#1d4ed8;          /* синий */
-          font-weight:800;
-          font-size:16px;
-          line-height:1;
-        }
-
-        .btn{
-          height:36px; border-radius:10px; padding:0 12px; font-weight:700; cursor:pointer; border:none;
-          display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
-          transition: none;         /* убрали анимацию */
-        }
-        .btn.primary{
-          background:#1E90FF; color:#fff;
-        }
-        /* УБРАЛИ ХОВЕР-АНИМАЦИЮ ПОЛНОСТЬЮ */
-        .btn.primary:hover,
-        .btn.primary:focus{
-          background:#1E90FF !important;
-          color:#fff !important;
-          transform:none !important;
-          box-shadow:none !important;
-          filter:none !important;
-        }
-        .btn.more{ margin-left:auto; }
-      `}</style>
-    </article>
-  );
-}
+        .f-date{ font-size:12px; color:
