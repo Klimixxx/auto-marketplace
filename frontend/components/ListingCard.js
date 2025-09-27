@@ -670,8 +670,6 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   // prices
   const tradeTypeInfo = useMemo(() => resolveTradeType(l), [l]);
   const listingKind = tradeTypeInfo?.kind || null;
-  const periodPriceEntries = useMemo(() => extractPeriodPrices(l), [l]);
-  const minimalPeriodPrice = useMemo(() => findMinimalPeriodPrice(periodPriceEntries), [periodPriceEntries]);
 
   const currency = l.currency || 'RUB';
   const startPriceRaw = l.start_price ?? pickDetailValue(l, ['start_price', 'startPrice', 'initial_price']);
@@ -702,12 +700,16 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       secondaryLabel = 'Задаток';
     }
   } else if (listingKind === 'public_offer') {
-    primaryValue = numericCurrent ?? numericStart ?? null;
-    primaryLabel = numericCurrent != null ? 'Текущая цена' : 'Начальная цена';
-    const minimalOfferPrice = minimalPeriodPrice ?? numericMin;
-    if (minimalOfferPrice != null && (primaryValue == null || minimalOfferPrice < primaryValue)) {
-      secondaryValue = minimalOfferPrice;
-      secondaryLabel = 'Минимальная цена';
+    if (numericCurrent != null) {
+      primaryValue = numericCurrent;
+      primaryLabel = 'Текущая цена';
+      if (numericStart != null) {
+        secondaryValue = numericStart;
+        secondaryLabel = 'Стартовая цена';
+      }
+    } else {
+      primaryValue = numericStart ?? null;
+      primaryLabel = primaryValue != null ? 'Стартовая цена' : 'Цена уточняется';
     }
   } else {
     primaryValue = numericCurrent ?? numericStart ?? null;
@@ -719,9 +721,14 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   }
 
   const priceLabel = formatPrice(primaryValue, currency);
-  const secondaryPriceLabel = (secondaryValue != null && (primaryValue == null || Math.abs(secondaryValue - primaryValue) > 1))
-    ? formatPrice(secondaryValue, currency)
-    : null;
+  const shouldShowSecondaryPrice =
+    secondaryValue != null && (
+      primaryValue == null ||
+      Math.abs(secondaryValue - primaryValue) > 1 ||
+      (listingKind === 'public_offer' && secondaryLabel === 'Стартовая цена')
+    );
+
+  const secondaryPriceLabel = shouldShowSecondaryPrice ? formatPrice(secondaryValue, currency) : null;
 
   // eyebrow
 
