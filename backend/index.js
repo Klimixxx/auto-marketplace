@@ -582,7 +582,7 @@ app.get('/api/listings', async (req, res) => {
         )`;
       });
       const combinedClauses = equalityClauses.concat(likeClauses);
-      const exclusionPatterns = ['%аукцион%', '%auction%', '%открыт%', '%bidding%', '%торг%'];
+      const exclusionPatterns = ['%аукцион%', '%auction%', '%открыт%', '%bidding%'];
       const exclusionClauses = [];
       for (const pattern of exclusionPatterns) {
         params.push(pattern);
