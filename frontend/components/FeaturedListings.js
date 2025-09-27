@@ -7,8 +7,22 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
-const favKey = 'favorites_ids';
+const FAV_KEY = 'favorites_ids';
 const getId = (l) => String(l?.id || l?.guid || l?.slug || '');
+
+function readFavSet() {
+  try {
+    const raw = localStorage.getItem(FAV_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(arr);
+  } catch { return new Set(); }
+}
+
+function writeFavSet(set) {
+  try {
+    localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+}
 
 export default function FeaturedListings({ listings: initial }) {
   const [listings, setListings] = useState(initial || []);
@@ -29,25 +43,15 @@ export default function FeaturedListings({ listings: initial }) {
     return () => { ignore = true; };
   }, [initial]);
 
-  const favoritesSet = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(favKey);
-      const arr = raw ? JSON.parse(raw) : [];
-      return new Set(arr);
-    } catch { return new Set(); }
-  }, [favTick]);
+  const favoritesSet = useMemo(() => readFavSet(), [favTick]);
 
   function toggleFavorite(lot) {
     const id = getId(lot);
     if (!id) return;
-    try {
-      const raw = localStorage.getItem(favKey);
-      const arr = raw ? JSON.parse(raw) : [];
-      const set = new Set(arr);
-      if (set.has(id)) set.delete(id); else set.add(id);
-      localStorage.setItem(favKey, JSON.stringify(Array.from(set)));
-      setFavTick((x) => x + 1);
-    } catch {}
+    const set = readFavSet();
+    if (set.has(id)) set.delete(id); else set.add(id);
+    writeFavSet(set);
+    setFavTick((x) => x + 1);
   }
 
   if (!listings?.length) return null;
