@@ -618,7 +618,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   // eyebrow: Тип • Регион • Год
   const region = l.region || pickDetailValue(l, ['region']);
   const rawType = l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
-  const tradeType = tradeTypeLabel(rawType) || 'Лот';
+  const tradeType = tradeTypeInfo?.label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l) : null;
   const eyebrow = additionalEyebrow || [tradeType, region, fallbackYear ? `${fallbackYear} г.` : null].filter(Boolean).join(' • ');
