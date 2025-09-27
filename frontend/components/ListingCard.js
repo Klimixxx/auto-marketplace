@@ -209,6 +209,7 @@ function resolveTradeType(listing) {
   }
   if (!label && normalized.length) {
     label = tradeTypeLabel(normalized[0]);
+  }
 
   return { kind, label, candidates: normalized };
 }
@@ -632,7 +633,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const rawType = l.trade_type_resolved ?? l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
   const tradeType = tradeTypeInfo?.label || l.trade_type_label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
-  const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l) : null;
+  const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l, tradeTypeInfo) : null;
   const eyebrow = additionalEyebrow || [tradeType, region, fallbackYear ? `${fallbackYear} г.` : null].filter(Boolean).join(' • ');
   
 
