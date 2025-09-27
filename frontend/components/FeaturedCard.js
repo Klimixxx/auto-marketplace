@@ -187,4 +187,37 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         }
 
         .f-date-row{ display:flex; align-items:center; justify-content:space-between; }
-        .f-date{ font-size:12px; color:
+        .f-date{ font-size:12px; color:#0f172a; }
+        .f-date.muted{ color:#94a3b8; }
+
+        .f-footer{
+          padding:8px 12px 12px;
+          display:flex; align-items:center; justify-content:space-between; gap:10px;
+        }
+        .f-price{
+          color:#1d4ed8; font-weight:800; font-size:16px; line-height:1;
+        }
+
+        .btn{
+          height:36px; border-radius:10px; padding:0 12px; font-weight:700;
+          display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
+          border:none; cursor:pointer;
+          transition: none; /* убрана любая анимация */
+        }
+
+        /* ЖЁСТКО фиксируем поведение кнопки: текст НЕ пропадает */
+        .btn.primary{
+          background:#1E90FF !important; color:#fff !important;
+        }
+        .btn.primary:hover,
+        .btn.primary:focus,
+        .btn.primary:active{
+          background:#1E90FF !important; color:#fff !important;
+          transform:none !important; box-shadow:none !important; filter:none !important;
+        }
+
+        .btn.more{ margin-left:auto; }
+      `}</style>
+    </article>
+  );
+}
