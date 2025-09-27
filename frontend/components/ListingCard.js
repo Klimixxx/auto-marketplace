@@ -558,7 +558,8 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const photo = photos[activePhotoIndex] || photos[0] || null;
 
   // prices
-  const listingKind = useMemo(() => detectListingKind(l), [l]);
+  const tradeTypeInfo = useMemo(() => resolveTradeType(l), [l]);
+  const listingKind = tradeTypeInfo?.kind || null;
   const periodPriceEntries = useMemo(() => extractPeriodPrices(l), [l]);
   const minimalPeriodPrice = useMemo(() => findMinimalPeriodPrice(periodPriceEntries), [periodPriceEntries]);
 
