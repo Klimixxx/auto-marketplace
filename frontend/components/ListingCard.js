@@ -100,7 +100,25 @@ const TYPE_FIELD_KEYS = [
   'auctionType',
   'format',
   'kind',
+  'trade_stage',
+  'tradeStage',
+  'trade_format',
+  'tradeFormat',
+  'trading_type',
+  'tradingType',
+  'trade_offer',
+  'tradeOffer',
+  'trade_type_highlights',
+  'tradeTypeHighlights',
+  'trading_type_highlights',
+  'tradingTypeHighlights',
+  'trade_offer_highlights',
+  'tradeOfferHighlights',
+  'trade_stage_highlights',
+  'tradeStageHighlights',
 ];
+
+const TYPE_KEY_PATTERN = /(type|offer|trade|торг|процед)/i;
 
 function collectTypeStrings(source, out) {
   if (!source && source !== 0) return;
@@ -114,9 +132,9 @@ function collectTypeStrings(source, out) {
     return;
   }
   if (typeof source === 'object') {
-    for (const key of TYPE_FIELD_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
-        collectTypeStrings(source[key], out);
+    for (const [key, value] of Object.entries(source)) {
+      if (TYPE_FIELD_KEYS.includes(key) || TYPE_KEY_PATTERN.test(key)) {
+        collectTypeStrings(value, out);
       }
     }
   }
@@ -144,9 +162,15 @@ function resolveTradeType(listing) {
   push(details);
   push(details?.additional_data);
   push(details?.additionalData);
+  push(details?.fedresurs_meta);
+  push(details?.fedresurs_meta?.additional_data);
+  push(details?.fedresurs_meta?.additionalData);
   push(lot);
   push(lot?.additional_data);
   push(lot?.additionalData);
+  push(lot?.fedresurs_meta);
+  push(lot?.fedresurs_meta?.additional_data);
+  push(lot?.fedresurs_meta?.additionalData);
 
   const normalized = [];
   const seen = new Set();
