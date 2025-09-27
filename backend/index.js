@@ -657,19 +657,35 @@ app.get('/api/listings', async (req, res) => {
           )
         )`;
       });
-      const combinedClauses = equalityClauses.concat(likeClauses);
-      const exclusionPatterns = ['%публич%', '%предлож%', '%offer%', '%public%'];
-      const exclusionClauses = [];
-      for (const pattern of exclusionPatterns) {
-        params.push(pattern);
-        const tradePlaceholder = `$${params.length}`;
-        exclusionClauses.push(`${tradeField} NOT LIKE ${tradePlaceholder}`);
-        params.push(pattern);
-        const detailsPlaceholder = `$${params.length}`;
-        exclusionClauses.push(`(${hasTradeValue} OR ${detailsField} NOT LIKE ${detailsPlaceholder})`);
+      const openPatterns = ['%открыт%', '%open%', '%аукцион%', '%auction%', '%торг%', '%bidding%'];
+      const combinedOpenClauses = [];
+      const tradeOpenClauses = [];
+      for (const pattern of openPatterns) {
+        params.push(pattern.toLowerCase());
+        const placeholder = `$${params.length}`;
+        combinedOpenClauses.push(`(${tradeField} LIKE ${placeholder} OR ((NOT ${hasTradeValue}) AND ${detailsField} LIKE ${placeholder}))`);
+        tradeOpenClauses.push(`${tradeField} LIKE ${placeholder}`);
       }
-      const exclusion = exclusionClauses.length ? exclusionClauses.join(' AND ') : 'TRUE';
-      where.push(`((${combinedClauses.join(' OR ')}) AND ${exclusion})`);
+
+      const openClauses = equalityClauses.concat(combinedOpenClauses);
+      const openClause = openClauses.length ? `(${openClauses.join(' OR ')})` : null;
+      const strongTradeOpenClauses = equalityClauses.concat(tradeOpenClauses);
+      const strongTradeOpenClause = strongTradeOpenClauses.length ? `(${strongTradeOpenClauses.join(' OR ')})` : null;
+
+      const publicPatterns = ['%публич%', '%предлож%', '%offer%', '%public%'];
+      const publicClauses = [];
+      for (const pattern of publicPatterns) {
+        params.push(pattern.toLowerCase());
+        const placeholder = `$${params.length}`;
+        publicClauses.push(`(${tradeField} LIKE ${placeholder} OR ((NOT ${hasTradeValue}) AND ${detailsField} LIKE ${placeholder}))`);
+      }
+      const publicClause = publicClauses.length ? `(${publicClauses.join(' OR ')})` : null;
+
+      if (openClause && publicClause && strongTradeOpenClause) {
+        where.push(`(${openClause} AND NOT (${publicClause} AND NOT ${strongTradeOpenClause}))`);
+      } else if (openClause) {
+        where.push(openClause);
+      }
     } else if (normalizedParam) {
       const clauses = [];
       params.push(normalizedParam);
