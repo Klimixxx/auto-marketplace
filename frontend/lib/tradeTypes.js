@@ -13,7 +13,13 @@ export function normalizeTradeTypeCode(value) {
   if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
   if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
   if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) return 'public_offer';
-  if (lower === 'auction' || lower.includes('аукцион') || lower.includes('auction')) return 'open_auction';
+  if (
+    lower === 'auction'
+    || lower.includes('аукцион')
+    || lower.includes('auction')
+    || lower.includes('торг')
+    || lower.includes('bidding')
+  ) return 'open_auction';
   return lower;
 }
 
