@@ -587,6 +587,8 @@ app.get('/api/listings', async (req, res) => {
       for (const pattern of exclusionPatterns) {
         params.push(pattern);
         exclusionClauses.push(`lower(coalesce(trade_type, '')) NOT LIKE $${params.length}`);
+        params.push(pattern);
+        exclusionClauses.push(`lower(coalesce(details::text, '')) NOT LIKE $${params.length}`);
       }
       const exclusion = exclusionClauses.length ? exclusionClauses.join(' AND ') : 'TRUE';
       where.push(`((${combinedClauses.join(' OR ')}) AND ${exclusion})`);
