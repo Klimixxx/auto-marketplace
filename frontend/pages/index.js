@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import Hero from '../components/Hero';
 import About from '../components/About';
+import { formatTradeTypeLabel } from '../lib/tradeTypes';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
