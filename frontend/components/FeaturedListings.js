@@ -8,17 +8,7 @@ function api(path) {
 }
 
 const FAV_KEY = 'favorites_ids';
-
-/* Делаем id устойчивее: больше источников */
-const getId = (l) => String(
-  l?.id ??
-  l?.guid ??
-  l?.slug ??
-  l?.lot_id ??
-  l?.lotId ??
-  l?.number ??
-  ''
-);
+const getId = (l) => String(l?.id ?? l?.guid ?? l?.slug ?? l?.lot_id ?? l?.lotId ?? l?.number ?? '');
 
 function readFavSet() {
   try {
@@ -27,11 +17,8 @@ function readFavSet() {
     return new Set(arr);
   } catch { return new Set(); }
 }
-
 function writeFavSet(set) {
-  try {
-    localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set)));
-  } catch {}
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set))); } catch {}
 }
 
 export default function FeaturedListings({ listings: initial }) {
@@ -94,10 +81,7 @@ export default function FeaturedListings({ listings: initial }) {
           display:flex; align-items:center; justify-content:space-between; gap:12px;
           margin-bottom:12px;
         }
-        .title{
-          margin:0;
-          font-size:22px; font-weight:800; color:#0f172a; letter-spacing:.2px;
-        }
+        .title{ margin:0; font-size:22px; font-weight:800; color:#0f172a; letter-spacing:.2px; }
         .all-link{
           color:#1E90FF; font-weight:700; text-decoration:none;
           transition:opacity .15s ease, transform .15s ease;
@@ -109,12 +93,8 @@ export default function FeaturedListings({ listings: initial }) {
           grid-template-columns: repeat(3, minmax(0,1fr));
           gap:16px;
         }
-        @media (max-width: 1000px){
-          .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-        }
-        @media (max-width: 640px){
-          .grid{ grid-template-columns: 1fr; }
-        }
+        @media (max-width: 1000px){ .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+        @media (max-width: 640px){ .grid{ grid-template-columns: 1fr; } }
       `}</style>
     </section>
   );
