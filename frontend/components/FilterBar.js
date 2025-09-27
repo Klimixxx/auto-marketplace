@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 const TRADE_TYPE_LABELS = {
+  public_offer: 'Публичное предложение',
+  open_auction: 'Открытый аукцион',
   auction: 'Аукцион',
   offer: 'Торговое предложение',
 };
