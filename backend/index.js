@@ -627,64 +627,73 @@ app.get('/api/listings', async (req, res) => {
         where.push(positiveClause);
       }
     } else if (normalizedParam === 'open_auction') {
-      const trimmedTradeField = "btrim(coalesce(trade_type, ''))";
-      const tradeField = `lower(${trimmedTradeField})`;
+      const tradeField = "lower(coalesce(trade_type, ''))";
       const detailsField = "lower(coalesce(details::text, ''))";
-      const hasTradeValue = `${trimmedTradeField} <> ''`;
-      
-      const equalityClauses = [];
-      const synonyms = Array.from(new Set([
+      const equalityValues = Array.from(new Set([
         'open_auction',
         'auction',
         'open auction',
         'open-auction',
         'открытый аукцион',
         'аукцион',
-      ]));
-      for (const synonym of synonyms) {
-        params.push(synonym.toLowerCase());
-        equalityClauses.push(`${tradeField} = $${params.length}`);
-      }
-      const likePatterns = ['%аукцион%', '%auction%', '%открыт%'];
-      const likeClauses = likePatterns.map((pattern) => {
+      ].map((value) => value.toLowerCase())));
+      const equalityPlaceholders = equalityValues.map((value) => {
+        params.push(value);
+        return `$${params.length}`;
+      });
+      const equalityClause = equalityPlaceholders.length
+        ? `${tradeField} = ANY(ARRAY[${equalityPlaceholders.join(', ')}]::text[])`
+        : null;
+
+      const likePatterns = Array.from(new Set([
+        '%аукцион%',
+        '%auction%',
+        '%торг%',
+        '%bid%',
+        '%bidd%',
+        '%открыт%',
+        '%open%',
+      ].map((pattern) => pattern.toLowerCase())));
+      const likePlaceholders = likePatterns.map((pattern) => {
         params.push(pattern);
         const placeholder = `$${params.length}`;
-        return `(
-          ${tradeField} LIKE ${placeholder}
-          OR (
-            NOT (${hasTradeValue})
-            AND ${detailsField} LIKE ${placeholder}
-          )
-        )`;
+        return `$${params.length}`;
       });
-      const openPatterns = ['%открыт%', '%open%', '%аукцион%', '%auction%', '%торг%', '%bidding%'];
-      const combinedOpenClauses = [];
-      const tradeOpenClauses = [];
-      for (const pattern of openPatterns) {
-        params.push(pattern.toLowerCase());
-        const placeholder = `$${params.length}`;
-        combinedOpenClauses.push(`(${tradeField} LIKE ${placeholder} OR ((NOT ${hasTradeValue}) AND ${detailsField} LIKE ${placeholder}))`);
-        tradeOpenClauses.push(`${tradeField} LIKE ${placeholder}`);
-      }
+      const tradeLikeClause = likePlaceholders.length
+        ? `${tradeField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
+        : null;
+      const detailsLikeClause = likePlaceholders.length
+        ? `${detailsField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
+        : null;
 
-      const openClauses = equalityClauses.concat(combinedOpenClauses);
-      const openClause = openClauses.length ? `(${openClauses.join(' OR ')})` : null;
-      const strongTradeOpenClauses = equalityClauses.concat(tradeOpenClauses);
-      const strongTradeOpenClause = strongTradeOpenClauses.length ? `(${strongTradeOpenClauses.join(' OR ')})` : null;
+      const positiveParts = [equalityClause, tradeLikeClause, detailsLikeClause].filter(Boolean);
+      const positiveClause = positiveParts.length ? `(${positiveParts.join(' OR ')})` : null;
 
-      const publicPatterns = ['%публич%', '%предлож%', '%offer%', '%public%'];
-      const publicClauses = [];
-      for (const pattern of publicPatterns) {
-        params.push(pattern.toLowerCase());
-        const placeholder = `$${params.length}`;
-        publicClauses.push(`(${tradeField} LIKE ${placeholder} OR ((NOT ${hasTradeValue}) AND ${detailsField} LIKE ${placeholder}))`);
-      }
-      const publicClause = publicClauses.length ? `(${publicClauses.join(' OR ')})` : null;
+      const exclusionPatterns = Array.from(new Set([
+        '%публич%',
+        '%предлож%',
+        '%offer%',
+        '%public offer%',
+        '%public-offer%',
+        '%public_offer%',
+      ].map((pattern) => pattern.toLowerCase())));
+      const exclusionPlaceholders = exclusionPatterns.map((pattern) => {
+        params.push(pattern);
+        return `$${params.length}`;
+      });
+      const tradeExclusion = exclusionPlaceholders.length
+        ? `${tradeField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
+        : null;
+      const detailsExclusion = exclusionPlaceholders.length
+        ? `${detailsField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
+        : null;
+      const exclusionParts = [tradeExclusion, detailsExclusion].filter(Boolean);
+      const exclusionClause = exclusionParts.length ? `(${exclusionParts.join(' OR ')})` : null;
 
-      if (openClause && publicClause && strongTradeOpenClause) {
-        where.push(`(${openClause} AND NOT (${publicClause} AND NOT ${strongTradeOpenClause}))`);
-      } else if (openClause) {
-        where.push(openClause);
+      if (positiveClause && exclusionClause) {
+        where.push(`(${positiveClause} AND NOT ${exclusionClause})`);
+      } else if (positiveClause) {
+        where.push(positiveClause);
       }
     } else if (normalizedParam) {
       const clauses = [];
