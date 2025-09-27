@@ -59,6 +59,15 @@ function tradeTypeLabel(type) {
   return String(type);
 }
 
+function fmtPrice(v, cur='RUB') {
+  if (v == null || v === '') return null;
+  try {
+    return new Intl.NumberFormat('ru-RU', { style:'currency', currency: cur, maximumFractionDigits: 0 }).format(v);
+  } catch {
+    return `${v} ${cur}`;
+  }
+}
+
 /* ------------------ card ------------------ */
 export default function FeaturedCard({ l, detailHref, onFav, fav }) {
   const photos = useMemo(() => collectPhotos(l), [l]);
@@ -80,6 +89,12 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
   const rawType = l.trade_type ?? pick(l, ['trade_type', 'type']);
   const eyebrow = [tradeTypeLabel(rawType), region, year ? `${year} г.` : null].filter(Boolean).join(' • ');
 
+  // Цена
+  const currency = l.currency || 'RUB';
+  const currentPrice = l.current_price ?? l.start_price ?? pick(l, ['current_price','price','start_price']);
+  const priceLabel = fmtPrice(currentPrice, currency);
+
+  // Дата
   const dateFinish = pick(l, ['datefinish','dateFinish','date_end','dateEnd','end_date','date_to']);
   const dateFinishLabel = formatRuDateTime(dateFinish);
 
@@ -89,7 +104,7 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setLocalFav(v => !v);
-    onFav?.();
+    onFav?.();           // уведомим родителя (он обновит localStorage)
   };
 
   return (
@@ -120,16 +135,21 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
         {/* чёрный заголовок — как в "Торгах" */}
         <Link href={href} className="f-title" title={title}>{title}</Link>
 
-        {description ? (
-          <p className="f-desc">{description}</p>
-        ) : null}
+        {description ? <p className="f-desc">{description}</p> : null}
 
         <div className="f-meta">
+          {/* синяя цена справа (если есть) */}
+          {priceLabel ? (
+            <div className="f-price" title="Текущая цена">{priceLabel}</div>
+          ) : <span />}
+
           {dateFinishLabel ? (
             <div className="f-date">
               Окончание текущего периода: <b>{dateFinishLabel}</b>
             </div>
-          ) : <span className="f-date muted">Дата не указана</span>}
+          ) : (
+            <span className="f-date muted">Дата не указана</span>
+          )}
         </div>
       </div>
 
@@ -174,8 +194,20 @@ export default function FeaturedCard({ l, detailHref, onFav, fav }) {
           margin:0; color:#6b7280; font-size:13px; line-height:1.35;
           display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow:hidden;
         }
-        .f-meta{ display:flex; justify-content:space-between; align-items:center; }
-        .f-date{ font-size:12px; color:#0f172a; }
+
+        .f-meta{
+          display:grid;
+          grid-template-columns: auto 1fr;
+          gap: 8px 10px;
+          align-items:center;
+        }
+        .f-price{
+          color:#1d4ed8;          /* синий */
+          font-weight:800;
+          font-size:16px;
+          justify-self:start;
+        }
+        .f-date{ font-size:12px; color:#0f172a; justify-self:end; text-align:right; }
         .f-date.muted{ color:#94a3b8; }
 
         .f-actions{
