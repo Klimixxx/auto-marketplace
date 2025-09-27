@@ -337,6 +337,71 @@ app.post('/api/auth/verify-code', async (req, res) => {
 });
 
 // ===== Listings (каталог) =====
+
+const TRADE_TYPE_KEYS = ['type', 'Type', 'trade_type', 'tradeType', 'procedure_type', 'procedureType', 'auction_type', 'auctionType', 'format', 'kind'];
+
+function collectTradeTypeHints(source, out) {
+  if (!source && source !== 0) return;
+  if (typeof source === 'string' || typeof source === 'number') {
+    const text = String(source).trim();
+    if (text) out.push(text);
+    return;
+  }
+  if (Array.isArray(source)) {
+    source.forEach((item) => collectTradeTypeHints(item, out));
+    return;
+  }
+  if (typeof source === 'object') {
+    for (const key of TRADE_TYPE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        collectTradeTypeHints(source[key], out);
+      }
+    }
+  }
+}
+
+function resolveListingTradeType(record) {
+  const hints = [];
+  collectTradeTypeHints(record?.trade_type, hints);
+  collectTradeTypeHints(record?.type, hints);
+  collectTradeTypeHints(record?.additional_data, hints);
+  collectTradeTypeHints(record?.additionalData, hints);
+
+  const details = record?.details || {};
+  const lot = details?.lot_details || {};
+
+  collectTradeTypeHints(details, hints);
+  collectTradeTypeHints(details?.additional_data, hints);
+  collectTradeTypeHints(details?.additionalData, hints);
+  collectTradeTypeHints(lot, hints);
+  collectTradeTypeHints(lot?.additional_data, hints);
+  collectTradeTypeHints(lot?.additionalData, hints);
+
+  const normalized = [];
+  const seen = new Set();
+  for (const hint of hints) {
+    if (!hint && hint !== 0) continue;
+    const text = String(hint).replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(text);
+  }
+
+  const lowers = normalized.map((value) => value.toLowerCase());
+  const hasPublic = lowers.some((text) => text.includes('публич') || text.includes('public') || text.includes('предлож') || text.includes('offer'));
+  const hasAuction = lowers.some((text) => text.includes('аукцион') || text.includes('auction'));
+  const hasOpen = lowers.some((text) => text.includes('открыт') || text.includes('open'));
+
+  const base = String(record?.trade_type || '').trim().toLowerCase();
+
+  if (hasPublic || base === 'offer') return 'public_offer';
+  if (hasAuction || base === 'auction') return hasOpen ? 'open_auction' : 'open_auction';
+  if (base) return base;
+  return null;
+}
+
 app.get('/api/listings', async (req, res) => {
   const {
     q,
@@ -374,7 +439,37 @@ app.get('/api/listings', async (req, res) => {
   }
   if (trade_type) {
     const normalized = String(trade_type).trim().toLowerCase();
-    if (normalized) {
+    if (normalized === 'public_offer') {
+      params.push('offer');
+      const offerParam = params.length;
+      params.push('%публич%');
+      const publicRu = params.length;
+      params.push('%public%');
+      const publicEn = params.length;
+      params.push('%предлож%');
+      const proposalRu = params.length;
+      params.push('%offer%');
+      const offerWord = params.length;
+      where.push(`(
+        lower(coalesce(trade_type, '')) = $${offerParam}
+        OR lower(coalesce(details::text, '')) LIKE $${publicRu}
+        OR lower(coalesce(details::text, '')) LIKE $${publicEn}
+        OR lower(coalesce(details::text, '')) LIKE $${proposalRu}
+        OR lower(coalesce(details::text, '')) LIKE $${offerWord}
+      )`);
+    } else if (normalized === 'open_auction') {
+      params.push('auction');
+      const auctionParam = params.length;
+      params.push('%аукцион%');
+      const auctionRu = params.length;
+      params.push('%auction%');
+      const auctionEn = params.length;
+      where.push(`(
+        lower(coalesce(trade_type, '')) = $${auctionParam}
+        OR lower(coalesce(details::text, '')) LIKE $${auctionRu}
+        OR lower(coalesce(details::text, '')) LIKE $${auctionEn}
+      )`);
+    } else if (normalized) {
       params.push(normalized);
       where.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
     }
@@ -459,18 +554,33 @@ app.get('/api/listings/meta', async (_req, res) => {
          ORDER BY brand
       `),
       query(`
-        SELECT DISTINCT lower(coalesce(trade_type,'')) AS trade_type
+        SELECT trade_type, details
           FROM listings
-         WHERE published = TRUE AND trade_type IS NOT NULL AND btrim(trade_type) <> ''
-         ORDER BY trade_type
+         WHERE published = TRUE
       `),
     ]);
 
+    const tradeTypeSet = new Set();
+    for (const row of tradeTypes.rows) {
+      const normalized = resolveListingTradeType(row);
+      if (normalized) tradeTypeSet.add(normalized);
+    }
+    const preferredOrder = ['public_offer', 'open_auction', 'auction', 'offer'];
+    const tradeTypeList = Array.from(tradeTypeSet);
+    tradeTypeList.sort((a, b) => {
+      const ia = preferredOrder.indexOf(a);
+      const ib = preferredOrder.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    
     res.json({
       regions: regions.rows.map((r) => r.region),
       cities: cities.rows.map((r) => r.city),
       brands: brands.rows.map((r) => r.brand),
-      tradeTypes: tradeTypes.rows.map((r) => r.trade_type),
+      tradeTypes: tradeTypeList,
     });
   } catch (e) {
     console.error('listings meta error:', e);
