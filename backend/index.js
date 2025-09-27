@@ -390,7 +390,13 @@ function normalizeTradeTypeCode(value) {
   if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
   if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
   if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) return 'public_offer';
-  if (lower === 'auction' || lower.includes('аукцион') || lower.includes('auction')) return 'open_auction';
+  if (
+    lower === 'auction'
+    || lower.includes('аукцион')
+    || lower.includes('auction')
+    || lower.includes('торг')
+    || lower.includes('bidding')
+  ) return 'open_auction';
   return lower;
 }
 
@@ -575,7 +581,17 @@ app.get('/api/listings', async (req, res) => {
           )
         )`;
       });
-      where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
+      const combinedClauses = equalityClauses.concat(likeClauses);
+      const exclusionPatterns = ['%аукцион%', '%auction%', '%открыт%', '%bidding%', '%торг%'];
+      const exclusionClauses = [];
+      for (const pattern of exclusionPatterns) {
+        params.push(pattern);
+        exclusionClauses.push(`lower(coalesce(trade_type, '')) NOT LIKE $${params.length}`);
+        params.push(pattern);
+        exclusionClauses.push(`lower(coalesce(details::text, '')) NOT LIKE $${params.length}`);
+      }
+      const exclusion = exclusionClauses.length ? exclusionClauses.join(' AND ') : 'TRUE';
+      where.push(`((${combinedClauses.join(' OR ')}) AND ${exclusion})`);
     } else if (normalizedParam === 'open_auction') {
       const equalityClauses = [];
       const synonyms = Array.from(new Set([
@@ -602,7 +618,17 @@ app.get('/api/listings', async (req, res) => {
           )
         )`;
       });
-      where.push(`(${equalityClauses.concat(likeClauses).join(' OR ')})`);
+      const combinedClauses = equalityClauses.concat(likeClauses);
+      const exclusionPatterns = ['%публич%', '%предлож%', '%offer%', '%public%'];
+      const exclusionClauses = [];
+      for (const pattern of exclusionPatterns) {
+        params.push(pattern);
+        exclusionClauses.push(`lower(coalesce(trade_type, '')) NOT LIKE $${params.length}`);
+        params.push(pattern);
+        exclusionClauses.push(`lower(coalesce(details::text, '')) NOT LIKE $${params.length}`);
+      }
+      const exclusion = exclusionClauses.length ? exclusionClauses.join(' AND ') : 'TRUE';
+      where.push(`((${combinedClauses.join(' OR ')}) AND ${exclusion})`);
     } else if (normalizedParam) {
       const clauses = [];
       params.push(normalizedParam);
@@ -1356,11 +1382,16 @@ function normalizeTradeType(value) {
   const text = String(value).trim();
   if (!text) return null;
   const lower = text.toLowerCase();
+
+  const isPublicOffer = lower.includes('публич')
+    || lower.includes('offer')
+    || lower.includes('предлож');
+  if (isPublicOffer) {
+    return 'offer';
+  }
+
   if (lower.includes('аук') || lower.includes('auction') || lower.includes('торг') || lower.includes('bidding')) {
     return 'auction';
-  }
-  if (lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) {
-    return 'offer';
   }
   return text;
 }
