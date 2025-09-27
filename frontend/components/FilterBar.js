@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { TRADE_TYPE_LABELS, formatTradeTypeLabel } from '../lib/tradeTypes';
+import { useEffect, useMemo, useState } from 'react';
+import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 
 function api(path) {
   const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -12,10 +12,36 @@ export default function FilterBar({ onSearch, initial }) {
   const [region, setRegion] = useState(initial?.region || '');
   const [city, setCity] = useState(initial?.city || '');
   const [brand, setBrand] = useState(initial?.brand || '');
-  const [tradeType, setTradeType] = useState(initial?.trade_type || '');
+  const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
   const [minPrice, setMinPrice] = useState(initial?.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(initial?.maxPrice || '');
   const [meta, setMeta] = useState({ regions: [], cities: [], brands: [], tradeTypes: [] });
+
+  const tradeTypeOptions = useMemo(() => {
+    const normalized = new Set();
+    const preferredOrder = ['public_offer', 'open_auction'];
+
+    preferredOrder.forEach((code) => normalized.add(code));
+    (meta.tradeTypes || []).forEach((value) => {
+      const code = normalizeTradeTypeCode(value);
+      if (code) normalized.add(code);
+    });
+
+    const options = Array.from(normalized);
+    options.sort((a, b) => {
+      const ia = preferredOrder.indexOf(a);
+      const ib = preferredOrder.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+
+      const labelA = TRADE_TYPE_LABELS[a] || formatTradeTypeLabel(a) || a;
+      const labelB = TRADE_TYPE_LABELS[b] || formatTradeTypeLabel(b) || b;
+      return labelA.localeCompare(labelB, 'ru');
+    });
+
+    return options;
+  }, [meta.tradeTypes]);
 
   useEffect(() => {
     let ignore = false;
@@ -39,7 +65,7 @@ export default function FilterBar({ onSearch, initial }) {
     setRegion(initial?.region || '');
     setCity(initial?.city || '');
     setBrand(initial?.brand || '');
-    setTradeType(initial?.trade_type || '');
+    setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
     setMinPrice(initial?.minPrice || '');
     setMaxPrice(initial?.maxPrice || '');
   }, [initial]);
@@ -138,7 +164,7 @@ export default function FilterBar({ onSearch, initial }) {
           <div className="input-wrap">
             <select className="input pro select" value={tradeType} onChange={(e) => setTradeType(e.target.value)}>
               <option value="">Все типы</option>
-              {meta.tradeTypes?.map((value) => (
+              {tradeTypeOptions.map((value) => (
                 <option key={value} value={value}>{TRADE_TYPE_LABELS[value] || formatTradeTypeLabel(value) || value}</option>
               ))}
             </select>
