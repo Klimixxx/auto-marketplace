@@ -539,6 +539,171 @@ function CarIcon(){
   );
 }
 
+function timeLeftLabel(isoEnd) {
+  if (!isoEnd) return null;
+  try {
+    const end = new Date(isoEnd);
+    const now = new Date();
+    const ms = end - now;
+    if (ms <= 0) return 'завершено';
+    const mins = Math.floor(ms / 60000);
+    const days = Math.floor(mins / (60 * 24));
+    const hours = Math.floor((mins - days * 24 * 60) / 60);
+    const m = mins % 60;
+    if (days > 0) return `${days} дн`;
+    if (hours > 0) return `${hours} часов`;
+    return `${m} мин`;
+  } catch {
+    return null;
+  }
+}
+
+function getBadge(listing) {
+  // Пытаемся поймать разные варианты «рекомендовано/избранное»
+  const isReco =
+    listing?.featured ||
+    listing?.is_featured ||
+    listing?.recommended ||
+    listing?.isRecommended;
+  return isReco ? 'Рекомендуем' : null;
+}
+
+function RecentListingCard({ item }) {
+  const cover = resolveCover(item);
+  const priceValue = item?.current_price ?? item?.start_price;
+  const price = formatPrice(priceValue, item?.currency || 'RUB');
+  const priceCaption = item?.current_price != null ? 'Текущая цена' : 'Начальная цена';
+  const endsIn = timeLeftLabel(item?.end_date || item?.endDate || item?.auction_end);
+  const badge = getBadge(item);
+  const listingId = item?.id ?? item?.listing_id ?? item?._id;
+  const tradeType =
+    item?.trade_type_label ||
+    formatTradeTypeLabel(item?.trade_type_resolved ?? item?.trade_type) ||
+    'Лот';
+
+  return (
+    <article
+      style={{
+        borderRadius: 12,
+        background: '#fff',
+        border: '1px solid rgba(0,0,0,0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Фото */}
+      <div style={{ position: 'relative', paddingBottom: '60%', background: '#f1f5f9' }}>
+        {cover ? (
+          <img
+            src={cover}
+            alt={item?.title || 'Лот'}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#64748b' }}>
+            Нет фото
+          </div>
+        )}
+
+        {/* Бейдж «Рекомендуем» */}
+        {badge ? (
+          <span
+            style={{
+              position: 'absolute', left: 12, bottom: 12,
+              background: '#22c55e', color: '#0a0a0a',
+              borderRadius: 8, padding: '6px 10px',
+              fontWeight: 700, fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            }}
+          >
+            {badge}
+          </span>
+        ) : null}
+
+        {/* Кнопка-«сердце» (только визуально) */}
+        <div
+          style={{
+            position: 'absolute', right: 12, top: 12,
+            width: 34, height: 34, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.9)', display: 'grid', placeItems: 'center',
+            border: '1px solid rgba(0,0,0,0.08)'
+          }}
+          aria-hidden
+          title="Добавить в избранное"
+        >
+          ♡
+        </div>
+      </div>
+
+      {/* Контент */}
+      <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 8 }}>
+        {/* Заголовок */}
+        <a
+          href={`/trades/${listingId}`}
+          style={{
+            fontWeight: 700, color: '#0f172a', textDecoration: 'none',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+          }}
+        >
+          {item?.title || 'Лот'}
+        </a>
+
+        {/* Подзаголовок: тип + мелкие идентификаторы, если есть */}
+        <div style={{ fontSize: 12, color: '#64748b' }}>
+          {tradeType}
+          {item?.lot_number ? `, Лот №${item.lot_number}` : ''}
+          {item?.case_number ? ` • Дело ${item.case_number}` : ''}
+        </div>
+
+        {/* Цена + тренд/ставки (аккуратно, если есть поля) */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ color: '#1d4ed8', fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{price}</div>
+          {item?.bids_count != null ? (
+            <div style={{ fontSize: 12, color: '#64748b' }}>
+              · Ставок: <b style={{ color: '#0f172a' }}>{item.bids_count}</b>
+            </div>
+          ) : null}
+        </div>
+        <div style={{ fontSize: 12, color: '#64748b', marginTop: -4 }}>{priceCaption}</div>
+
+        {/* Осталось времени */}
+        {endsIn ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: '#64748b' }}>Осталось:</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{endsIn}</div>
+          </div>
+        ) : null}
+
+        {/* Кнопки */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <a
+            href={`/trades/${listingId}`}
+            style={{
+              flex: 1, textAlign: 'center', textDecoration: 'none',
+              background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '9px 10px', fontWeight: 700
+            }}
+          >
+            Подробнее
+          </a>
+          {item?.source_url ? (
+            <a
+              href={item.source_url}
+              target="_blank" rel="noreferrer"
+              style={{
+                flex: 1, textAlign: 'center', textDecoration: 'none',
+                border: '1px solid rgba(0,0,0,0.10)', color: '#0f172a', borderRadius: 10, padding: '9px 10px', fontWeight: 600
+              }}
+            >
+              Источник
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+
 export default function Home() {
   const [summary, setSummary] = useState(null);
   const [featured, setFeatured] = useState([]);
@@ -672,17 +837,12 @@ export default function Home() {
                     }}
                   >
                     {recent.map((l) => {
-                      const listingId = l.id ?? l.listing_id ?? l._id;
-                      return (
-                        <ListingCard
-                          key={listingId}
-                          l={l}
-                          fav={false}
-                          detailHref={`/trades/${listingId}`}
-                          sourceHref={l.source_url}
-                        />
-                      );
-                    })}
+  const listingId = l.id ?? l.listing_id ?? l._id;
+  return (
+    <RecentListingCard key={listingId} item={l} />
+  );
+})}
+
                   </div>
                 ) : (
                   <div className="panel" style={{ color: 'var(--text-700)' }}>
