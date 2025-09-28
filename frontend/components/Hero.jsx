@@ -1,5 +1,5 @@
 // frontend/components/Hero.jsx
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Router from 'next/router';
 
 const UI = {
@@ -12,16 +12,116 @@ const UI = {
   btnBg: 'var(--blue)',
   btnText: '#ffffff',
   btnHover: '#1e53d6',
-
 };
-
 
 const fmt = new Intl.NumberFormat('ru-RU');
 
 export default function Hero({ listingCount = 0 }) {
   const [q, setQ] = useState('');
+  const inputRef = useRef(null);
 
-  function onSubmit(e){
+  // Фразы для "магической" печати в placeholder
+  const demoQueries = useRef([
+    'Toyota Camry 2018, Москва',
+    'VIN: WDBUF56X48B123456',
+    'BMW X5 F15 до 2.5 млн',
+    'Пробег < 100 000, 4WD',
+    'Аукцион: Hyundai Solaris 2020',
+  ]);
+
+  // Анимация "печатающегося" placeholder — работает, пока юзер не начал ввод
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const idlePH = 'Марка, модель, или VIN…';
+    const typeSpeed = 55;                 // скорость печати (мс/символ)
+    const deleteSpeed = 25;               // скорость удаления (мс/символ)
+    const holdAfterTypeMs = 1400;         // пауза после печати
+    const delayBetweenQueriesMs = 30000;  // 30 сек до следующей фразы
+
+    let timers = [];
+    let stopped = false;
+    let idx = 0;
+    const initialPH = input.placeholder || idlePH;
+
+    const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+    const stopAll = () => { stopped = true; clearTimers(); input.placeholder = idlePH; };
+    const isUserBusy = () => document.activeElement === input || (input.value && input.value.length > 0);
+
+    const typeText = (text) => new Promise((resolve) => {
+      let i = 0;
+      const tick = () => {
+        if (stopped || isUserBusy()) return resolve('stopped');
+        input.placeholder = text.slice(0, i + 1);
+        i++;
+        if (i >= text.length) {
+          timers.push(setTimeout(() => resolve('done'), holdAfterTypeMs));
+        } else {
+          timers.push(setTimeout(tick, typeSpeed));
+        }
+      };
+      tick();
+    });
+
+    const deleteText = () => new Promise((resolve) => {
+      const run = () => {
+        if (stopped || isUserBusy()) return resolve('stopped');
+        const cur = input.placeholder || '';
+        if (cur.length === 0) return resolve('done');
+        input.placeholder = cur.slice(0, -1);
+        timers.push(setTimeout(run, deleteSpeed));
+      };
+      run();
+    });
+
+    const wait = (ms) => new Promise((r) => {
+      const t = setTimeout(r, ms);
+      timers.push(t);
+    });
+
+    const loop = async () => {
+      // стартовое состояние
+      input.placeholder = idlePH;
+      while (!stopped) {
+        const list = demoQueries.current && demoQueries.current.length ? demoQueries.current : [idlePH];
+        const phrase = list[idx % list.length];
+
+        const typed = await typeText(phrase);
+        if (typed === 'stopped') break;
+
+        const deleted = await deleteText();
+        if (deleted === 'stopped') break;
+
+        idx++;
+        // Пауза до следующей фразы (с проверкой «занятости» пользователя)
+        let waited = 0;
+        const step = 200;
+        while (waited < delayBetweenQueriesMs && !stopped && !isUserBusy()) {
+          await wait(step);
+          waited += step;
+        }
+      }
+    };
+
+    // Слушатели: если пользователь начал ввод/фокус — останавливаем «магию»
+    const onFocus = () => stopAll();
+    const onInput = () => stopAll();
+    input.addEventListener('focus', onFocus, { passive: true });
+    input.addEventListener('input', onInput, { passive: true });
+
+    loop();
+
+    return () => {
+      input.removeEventListener('focus', onFocus);
+      input.removeEventListener('input', onInput);
+      clearTimers();
+      stopped = true;
+      input.placeholder = initialPH;
+    };
+  }, []);
+
+  function onSubmit(e) {
     e.preventDefault();
     const query = q.trim();
     if (!query) return Router.push('/trades');
@@ -43,31 +143,29 @@ export default function Hero({ listingCount = 0 }) {
           <span style={styles.titleGradient}>прозрачно и удобно</span>
         </h1>
 
-        {/* подзаголовок убран ранее по задаче */}
-
         <form onSubmit={onSubmit} style={styles.form} className="hero-form">
           <input
+            ref={inputRef}
             value={q}
-            onChange={(e)=>setQ(e.target.value)}
-            placeholder="Марка, модель или VIN…"
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Марка, модель, или VIN…"
             aria-label="Поиск"
             style={styles.input}
           />
           <button
-  type="submit"
-  style={styles.button}
-  onMouseEnter={(e)=> (e.currentTarget.style.background = UI.btnHover)}
-  onMouseLeave={(e)=> (e.currentTarget.style.background = UI.btnBg)}
->
-  Найти
-</button>
-
+            type="submit"
+            style={styles.button}
+            onMouseEnter={(e) => (e.currentTarget.style.background = UI.btnHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = UI.btnBg)}
+          >
+            Найти
+          </button>
         </form>
 
         <div style={styles.features} className="features">
-          <Feature icon="🔎" title="Честные данные" text="Источники и история авто — в одном месте."/>
-          <Feature icon="⚡" title="Быстрый старт" text="Фильтры и поиск без лишних шагов."/>
-          <Feature icon="🛡️" title="Безопасность" text="Сопровождаем оформление сделки."/>
+          <Feature icon="🔎" title="Честные данные" text="Источники и история авто — в одном месте." />
+          <Feature icon="⚡" title="Быстрый старт" text="Фильтры и поиск без лишних шагов." />
+          <Feature icon="🛡️" title="Безопасность" text="Сопровождаем оформление сделки." />
         </div>
       </div>
 
@@ -87,7 +185,7 @@ export default function Hero({ listingCount = 0 }) {
   );
 }
 
-function Feature({ icon, title, text }){
+function Feature({ icon, title, text }) {
   return (
     <div style={styles.feature}>
       <div style={styles.featureIcon}>{icon}</div>
@@ -132,15 +230,15 @@ const styles = {
     animation: 'pulseKey 1.8s infinite',
   },
   badgeNum: {
-  fontWeight: 800,
-  fontSize: 15.5,
-  color: 'var(--blue)',             // СИНИЙ как «прозрачно и удобно»
-  letterSpacing: 0.3,
-  fontVariantNumeric: 'tabular-nums',
-},
-
+    fontWeight: 800,
+    fontSize: 15.5,
+    color: 'var(--blue)',             // СИНИЙ как «прозрачно и удобно»
+    letterSpacing: 0.3,
+    fontVariantNumeric: 'tabular-nums',
+  },
   badgeLabel: { color: 'var(--text-900)' },  // ЧЁРНЫЙ для "Объявлений"
-    title: {
+
+  title: {
     margin: '14px 0 8px',
     fontSize: '38px',
     lineHeight: 1.15,
@@ -152,26 +250,27 @@ const styles = {
   },
 
   form: { marginTop: 18, display: 'flex', gap: 10, alignItems: 'center' },
-input: {
-  flex: 1,
-  padding: '14px 14px',
-  borderRadius: 14,
-  background: '#FFFFFF',
-  border: `1px solid ${UI.border}`,
-  outline: 'none',
-  color: '#111827',
-  fontSize: 16,
-},
+  input: {
+    flex: 1,
+    padding: '14px 14px',
+    borderRadius: 14,
+    background: '#FFFFFF',
+    border: `1px solid ${UI.border}`,
+    outline: 'none',
+    color: '#111827',
+    fontSize: 16,
+  },
 
   button: {
-  padding: '14px 16px',
-  borderRadius: 14,
-  background: UI.btnBg,            // как в шапке
-  color: UI.btnText,               // белый текст
-  fontWeight: 600,
-  border: '1px solid ' + UI.btnBg, // рамка в тон
-  cursor: 'pointer',
+    padding: '14px 16px',
+    borderRadius: 14,
+    background: UI.btnBg,            // как в шапке
+    color: UI.btnText,               // белый текст
+    fontWeight: 600,
+    border: '1px solid ' + UI.btnBg, // рамка в тон
+    cursor: 'pointer',
   },
+
   features: {
     marginTop: 18,
     display: 'grid',
@@ -179,27 +278,22 @@ input: {
     gap: 10,
   },
   feature: {
-  display: 'flex',
-  gap: 10,
-  alignItems: 'flex-start',
-  padding: 14,
-  borderRadius: 14,
-  background: 'rgba(0,0,0,0.06)',     // серо-тёмный полупрозрачный фон
-border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
-  backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа
-},
-
-
+    display: 'flex',
+    gap: 10,
+    alignItems: 'flex-start',
+    padding: 14,
+    borderRadius: 14,
+    background: 'rgba(0,0,0,0.06)',     // серо-тёмный полупрозрачный фон
+    border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
+    backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа
+  },
   featureIcon: {
-  width: 48, height: 48, borderRadius: 12,
-  display: 'grid', placeItems: 'center',
-  background: 'rgba(0,0,0,0.08)',      // чуть более тёмный фон
-  border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
-
-  fontSize: 22,                              // чуть больше иконка
-},
-
-
+    width: 48, height: 48, borderRadius: 12,
+    display: 'grid', placeItems: 'center',
+    background: 'rgba(0,0,0,0.08)',      // чуть более тёмный фон
+    border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
+    fontSize: 22,
+  },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
 };
