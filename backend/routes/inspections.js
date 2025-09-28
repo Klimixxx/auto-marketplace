@@ -17,20 +17,21 @@ function normalizeListingId(value) {
   const str = String(value).trim();
   if (!str) return null;
 
-  const asNumber = Number(str);
-  if (Number.isFinite(asNumber) && asNumber > 0) {
-    return Math.trunc(asNumber);
-  }
+  const digits = str.replace(/[^0-9]/g, '');
+  if (!digits) return null;
 
-  const match = str.match(/\d+/);
-  if (match) {
-    const parsed = Number.parseInt(match[0], 10);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
+  if (typeof BigInt === 'function') {
+    try {
+      const big = BigInt(digits);
+      if (big > 0n) return big.toString();
+      return null;
+    } catch {
+      // fall through to the string-based normalization below
     }
   }
 
-  return null;
+  const normalized = digits.replace(/^0+/, '');
+  return normalized ? normalized : null;
 }
 
 
@@ -50,7 +51,7 @@ router.post('/', async (req, res) => {
 
   try {
     // Проверим, что объявление существует (отдельно от транзакции)
-    const l = await query('SELECT id, title FROM listings WHERE id=$1', [listingId]);
+    const l = await query('SELECT id, title FROM listings WHERE id::text=$1', [listingId]);
     if (!l.rows[0]) return res.status(404).json({ error: 'Listing not found' });
 
     client = await pool.connect();
