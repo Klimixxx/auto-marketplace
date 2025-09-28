@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Hero from '../components/Hero';
+import ListingCard from '../components/ListingCard';
 import About from '../components/About';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
 
