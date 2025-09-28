@@ -349,7 +349,8 @@ export default function Header() {
    
 
 {/* Нижняя шапка */}
-<div className="header--bottom" style={{ width:'100%', borderBottom:'none' }}>
+<div className="header--bottom" style={{ width:'100%', borderBottom:'none', background:'inherit' }}>
+
 
 
 
