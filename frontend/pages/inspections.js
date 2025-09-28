@@ -49,7 +49,7 @@ export default function Inspections() {
                 <td style={td}>{it.status}</td>
                 <td style={td}>{(it.final_amount || 0).toLocaleString('ru-RU')} ₽</td>
                 <td style={td}>
-                  {(it.status === 'Завершен' && it.report_pdf_url)
+                  {(it.status === 'Осмотр завершен' && it.report_pdf_url)
                     ? <a href={it.report_pdf_url} target="_blank" rel="noreferrer">Скачать PDF</a>
                     : <span style={{opacity:.6}}>Недоступно</span>}
                 </td>
