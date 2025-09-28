@@ -543,42 +543,8 @@ function CarIcon(){
   );
 }
 
-function timeLeftLabel(isoEnd) {
-  if (!isoEnd) return null;
-  try {
-    const end = new Date(isoEnd);
-    const now = new Date();
-    const ms = end - now;
-    if (ms <= 0) return 'завершено';
-    const mins = Math.floor(ms / 60000);
-    const days = Math.floor(mins / (60 * 24));
-    const hours = Math.floor((mins - days * 24 * 60) / 60);
-    const m = mins % 60;
-    if (days > 0) return `${days} дн`;
-    if (hours > 0) return `${hours} часов`;
-    return `${m} мин`;
-  } catch {
-    return null;
-  }
-}
-
-function getBadge(listing) {
-  // Пытаемся поймать разные варианты «рекомендовано/избранное»
-  const isReco =
-    listing?.featured ||
-    listing?.is_featured ||
-    listing?.recommended ||
-    listing?.isRecommended;
-  return isReco ? 'Рекомендуем' : null;
-}
-
 function RecentListingCard({ item, fav, onFav }) {
   const cover = resolveCover(item);
-  const priceValue = item?.current_price ?? item?.start_price;
-  const price = formatPrice(priceValue, item?.currency || 'RUB');
-  const priceCaption = item?.current_price != null ? 'Текущая цена' : 'Начальная цена';
-  const endsIn = timeLeftLabel(item?.end_date || item?.endDate || item?.auction_end);
-  const badge = getBadge(item);
   const listingId = item?.id ?? item?.listing_id ?? item?._id;
   const tradeType =
     item?.trade_type_label ||
@@ -610,50 +576,35 @@ function RecentListingCard({ item, fav, onFav }) {
           </div>
         )}
 
-        {/* Бейдж «Рекомендуем» */}
-        {badge ? (
-          <span
+        {/* Кнопка избранного как на /trades */}
+        {onFav ? (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
             style={{
-              position: 'absolute', left: 12, bottom: 12,
-              background: '#22c55e', color: '#0a0a0a',
-              borderRadius: 8, padding: '6px 10px',
-              fontWeight: 700, fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              position: 'absolute',
+              right: 12,
+              top: 12,
+              borderRadius: 8,
+              border: '1px solid #1d4ed8',
+              background: fav ? '#1d4ed8' : '#fff',
+              color: fav ? '#fff' : '#1d4ed8',
+              padding: '6px 12px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 13,
+              transition: 'all 0.2s ease',
             }}
           >
-            {badge}
-          </span>
+            {fav ? 'В избранном' : 'В избранное'}
+          </button>
         ) : null}
 
-        {/* Кнопка избранного как на /trades */}
-        {/* Кнопка избранного */}
-{onFav ? (
-  <button
-    type="button"
-    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
-    style={{
-      position: 'absolute',
-      right: 12,
-      top: 12,
-      borderRadius: 8,
-      border: '1px solid #1d4ed8',
-      background: fav ? '#1d4ed8' : '#fff',
-      color: fav ? '#fff' : '#1d4ed8',
-      padding: '6px 12px',
-      cursor: 'pointer',
-      fontWeight: 600,
-      fontSize: 13,
-      transition: 'all 0.2s ease',
-    }}
-  >
-    {fav ? 'В избранном' : 'В избранное'}
-  </button>
-) : null}
-
-
+       
       </div> {/* ← это закрытие контейнера фото */}
 
       {/* Контент */}
-      <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 8 }}>
+      <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 12 }}>
         {/* Заголовок */}
         <a
           href={`/trades/${listingId}`}
@@ -665,34 +616,23 @@ function RecentListingCard({ item, fav, onFav }) {
           {item?.title || 'Лот'}
         </a>
 
-        {/* Подзаголовок */}
-        <div style={{ fontSize: 12, color: '#64748b' }}>
-          {tradeType}
-          {item?.lot_number ? `, Лот №${item.lot_number}` : ''}
-          {item?.case_number ? ` • Дело ${item.case_number}` : ''}
+        {/* Тип торгов */}
+        <div
+          style={{
+            fontSize: 13,
+            color: '#1d4ed8',
+            fontWeight: 600,
+            background: 'rgba(29,78,216,0.06)',
+            borderRadius: 8,
+            padding: '6px 10px',
+            width: 'fit-content',
+          }}
+        >
+          Тип торгов: {tradeType}
         </div>
-
-        {/* Цена + ставки */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <div style={{ color: '#1d4ed8', fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{price}</div>
-          {item?.bids_count != null ? (
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              · Ставок: <b style={{ color: '#0f172a' }}>{item.bids_count}</b>
-            </div>
-          ) : null}
-        </div>
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: -4 }}>{priceCaption}</div>
-
-        {/* Осталось времени */}
-        {endsIn ? (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-            <div style={{ fontSize: 12, color: '#64748b' }}>Осталось:</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{endsIn}</div>
-          </div>
-        ) : null}
 
         {/* Кнопка Подробнее (Источник убрали) */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <a
             href={`/trades/${listingId}`}
             style={{
