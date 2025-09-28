@@ -29,7 +29,6 @@ export default function AdminInspectionDetail(){
       if (!res.ok) { alert('Не найдено или нет доступа'); router.push('/admin/inspections'); return; }
       const data = await res.json();
       setItem(data);
-      setStatus(data.status);
     })();
   }, [id]);
 
@@ -45,7 +44,7 @@ export default function AdminInspectionDetail(){
     setUpdatingStatus(false);
     if (!res.ok) { alert('Ошибка обновления статуса'); return; }
     const data = await res.json();
-    setItem(data);
+    setItem(prev => ({ ...(prev || {}), ...data }));
     alert('Статус обновлён');
   }
 
@@ -59,7 +58,9 @@ export default function AdminInspectionDetail(){
     });
     setUploading(false);
     if (!res.ok) { alert('Ошибка загрузки PDF'); return; }
-    const data = await res.json(); setItem(data.order); alert('PDF загружен');
+    const data = await res.json();
+    setItem(prev => ({ ...(prev || {}), ...data.order }));
+    alert('PDF загружен');
   }
 
   if (!item) return <div className="container" style={{maxWidth:900,padding:16}}>Загрузка…</div>;
