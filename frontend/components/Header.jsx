@@ -7,21 +7,18 @@ const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  /* Верхняя часть шапки */
-  topBg: 'var(--smoky-top)',     // ДЫМНЫЙ фон (градиент)
+  topBg: 'var(--smoky-top)',
   topText: '#E6EDF3',
   topMuted: 'rgba(17,24,39,0.70)',
   border: 'rgba(255,255,255,0.12)',
   baseBg: 'transparent',
 
-  /* Поля в шапке */
   inputBg: '#ffffff',
   inputBorder: 'rgba(17,24,39,0.14)',
   inputBorderFocus: 'rgba(42,101,247,0.45)',
   inputText: '#111827',
   inputPlaceholder: 'rgba(17,24,39,0.45)',
 
-  /* Кнопки */
   btnBg: 'var(--blue)',
   btnHover: '#1e53d6',
   btnText: '#ffffff',
@@ -29,49 +26,57 @@ const UI = {
   btnSoftText: '#1e53d6',
   btnSoftHoverBg: 'rgba(42,101,247,0.14)',
 
-  /* Ссылки/иконки/меню */
-  link: 'var(--blue)',           // ССЫЛКИ СИНИЕ как "прозрачно и удобно"
+  link: 'var(--blue)',
   linkHover: '#1e53d6',
   icon: '#111827',
   iconMuted: 'rgba(17,24,39,0.65)',
 
-  /* Фон меню и бордеры */
   menuBg: '#ffffff',
   menuBorder: 'rgba(17,24,39,0.10)',
 
-  /* Прочее */
-  heroBtn: 'var(--blue)',        // «Найти» – синий
+  heroBtn: 'var(--blue)',
   heroBtnHover: '#1e53d6',
   red: '#ef4444',
   yellow: '#facc15',
   chipBg: 'rgba(42,101,247,0.06)',
   chipBorder: 'rgba(42,101,247,0.18)',
-  notice: '#60A5FA',             // ЦВЕТ иконки уведомлений (подстрой при необходимости)
+  notice: '#60A5FA',
   pillBg: 'transparent',
 };
-
 
 function IconUser({ size = 20, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M12 12c2.761 0 5-2.686 5-6s-2.239-6-5-6-5 2.686-5 6 2.239 6 5 6Z"
-        transform="translate(0,4)" fill="none" stroke={color} strokeWidth="1.5"/>
-      <path d="M3 20c1.5-3.5 5-5 9-5s7.5 1.5 9 5" fill="none" stroke={color} strokeWidth="1.5"/>
+      <path
+        d="M12 12c2.761 0 5-2.686 5-6s-2.239-6-5-6-5 2.686-5 6 2.239 6 5 6Z"
+        transform="translate(0,4)"
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+      />
+      <path d="M3 20c1.5-3.5 5-5 9-5s7.5 1.5 9 5" fill="none" stroke={color} strokeWidth="1.5" />
     </svg>
   );
 }
 
 /* ===== utils ===== */
-function join(path){
+function join(path) {
   if (!path) return API_BASE || '';
   return API_BASE ? `${API_BASE}${path}` : path;
 }
-async function safeJson(url, opts){
-  try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
-  catch { return null; }
+async function safeJson(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
-function isFiniteNum(x){ return typeof x === 'number' && isFinite(x); }
-function parseBalance(value){
+function isFiniteNum(x) {
+  return typeof x === 'number' && isFinite(x);
+}
+function parseBalance(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
     const normalized = value.replace(/\u00a0/g, '').replace(/\s/g, '').replace(',', '.');
@@ -80,30 +85,30 @@ function parseBalance(value){
   }
   return 0;
 }
-function countUnreadInArray(arr){
+function countUnreadInArray(arr) {
   if (!Array.isArray(arr)) return null;
   let n = 0;
-  for (const it of arr){
+  for (const it of arr) {
     const read = it?.read ?? it?.is_read ?? it?.isRead ?? it?.seen ?? it?.is_seen;
     if (read === false || read === 0 || read === '0') n++;
     else if (read === undefined) n++;
   }
   return n;
 }
-function pickFiniteNumber(values){
-  for (const value of values){
+function pickFiniteNumber(values) {
+  for (const value of values) {
     if (isFiniteNum(value)) return value;
   }
   return null;
 }
-function pickFromCollections(collections){
-  for (const set of collections){
+function pickFromCollections(collections) {
+  for (const set of collections) {
     const count = countUnreadInArray(set);
     if (count != null) return count;
   }
   return null;
 }
-function parseUnreadCount(d){
+function parseUnreadCount(d) {
   let result = 0;
   let resolved = false;
 
@@ -138,12 +143,7 @@ function parseUnreadCount(d){
 
       if (!resolved) {
         if (candidate == null) {
-          candidate = pickFromCollections([
-            d.items,
-            d.rows,
-            d.results,
-            d.notifications,
-          ]);
+          candidate = pickFromCollections([d.items, d.rows, d.results, d.notifications]);
         }
         if (candidate != null) {
           result = candidate;
@@ -171,7 +171,6 @@ export default function Header({ user }) {
 
   // профиль
   useEffect(() => {
-    useEffect(() => {
     if (user && user.id) {
       setMe(user);
       setAuthed(true);
@@ -181,13 +180,15 @@ export default function Header({ user }) {
     setAuthed(Boolean(token));
     if (token) {
       fetch(join('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => (r.ok ? r.json() : null))
-        .then(d => { if (d) setMe(d); })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d) setMe(d);
+        })
         .catch(() => {});
     } else if (API_BASE) {
       fetch(join('/api/me'), { credentials: 'include' })
-        .then(r => (r.ok ? r.json() : null))
-        .then(d => {
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
           const fetchedUser = d?.user ?? d;
           if (fetchedUser?.id) {
             setMe(fetchedUser);
@@ -215,15 +216,27 @@ export default function Header({ user }) {
     async function fetchUnread() {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const headers = { 'Accept':'application/json', ...(token ? { Authorization:'Bearer '+token } : {}) };
+        const headers = {
+          Accept: 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        };
         const opts = { method: 'GET', credentials: 'include', headers };
-        const paths = ['/api/notifications/unread','/api/notifications/unread-count','/api/notifications/count','/api/notifications?status=unread','/api/notifications'];
+        const paths = [
+          '/api/notifications/unread',
+          '/api/notifications/unread-count',
+          '/api/notifications/count',
+          '/api/notifications?status=unread',
+          '/api/notifications',
+        ];
         let count = 0;
         for (const p of paths) {
           const res = await safeJson(join(p), opts);
           if (!res) continue;
           const c = parseUnreadCount(res);
-          if (typeof c === 'number') { count = c; break; }
+          if (typeof c === 'number') {
+            count = c;
+            break;
+          }
         }
         if (!aborted) setNotif(Number(count) || 0);
       } catch {
@@ -232,10 +245,16 @@ export default function Header({ user }) {
     }
 
     fetchUnread();
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchUnread(); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchUnread();
+    };
     document.addEventListener('visibilitychange', onVisible);
     const id = setInterval(fetchUnread, 60000);
-    return () => { aborted = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+    return () => {
+      aborted = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   // при заходе в /notifications обнуляем и помечаем прочитанными
@@ -245,10 +264,20 @@ export default function Header({ user }) {
       setNotif(0);
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const headers = { 'Accept':'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization:'Bearer '+token } : {}) };
+        const headers = {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        };
         const opts = { method: 'POST', credentials: 'include', headers };
-        const markPaths = ['/api/notifications/mark-all-read','/api/notifications/mark_read_all','/api/notifications/read-all'];
-        for (const p of markPaths) { await fetch(join(p), opts).catch(() => {}); }
+        const markPaths = [
+          '/api/notifications/mark-all-read',
+          '/api/notifications/mark_read_all',
+          '/api/notifications/read-all',
+        ];
+        for (const p of markPaths) {
+          await fetch(join(p), opts).catch(() => {});
+        }
       } catch {}
     };
     Router.events.on('routeChangeComplete', onRoute);
@@ -256,15 +285,21 @@ export default function Header({ user }) {
   }, []);
 
   function logout() {
-    localStorage.removeItem('token');
-    setMe(null);
-    setAuthed(false);
-    location.href = '/';
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      setMe(null);
+      setAuthed(false);
+      location.href = '/';
+    }
   }
 
   const username = me?.name || (authed ? 'Аккаунт' : 'Войти');
   const balance = parseBalance(me?.balance);
-  const fmtRub = new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 });
+  const fmtRub = new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  });
 
   const [q, setQ] = useState('');
   const submit = (e) => {
@@ -274,91 +309,141 @@ export default function Header({ user }) {
   };
 
   return (
-    // нижняя линия у общей шапки скрыта
-    <header className="header-solid" style={{ width:'100%', position:'sticky', top:0, zIndex:1000, borderBottom:'none' }}>
-      {/* Верхняя шапка: мягкий черный */}
-      <div style={{ width:'100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
-        <div style={{
-          maxWidth: MAXW, margin:'0 auto', height:44,
-          display:'grid', gridTemplateColumns:'1fr auto',
-          alignItems:'center', gap:12, padding:'0 12px'
-        }}>
-          <nav style={{ display:'flex', alignItems:'center', gap:18, fontSize:14 }}>
-  <a href="/trades"      className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Торги</a>
-  <a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Мои Осмотры</a>
-  <a href="/support"     className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Поддержка</a>
-  {me?.role === 'admin' && (
-    <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration:'none' }}>Админ Панель</a>
-  )}
-</nav>
+    <header
+      className="header-solid"
+      style={{ width: '100%', position: 'sticky', top: 0, zIndex: 1000, borderBottom: 'none' }}
+    >
+      {/* Верхняя шапка */}
+      <div style={{ width: '100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
+        <div
+          style={{
+            maxWidth: MAXW,
+            margin: '0 auto',
+            height: 44,
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            alignItems: 'center',
+            gap: 12,
+            padding: '0 12px',
+          }}
+        >
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
+            <a href="/trades" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
+              Торги
+            </a>
+            <a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
+              Мои Осмотры
+            </a>
+            <a href="/support" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
+              Поддержка
+            </a>
+            {me?.role === 'admin' && (
+              <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
+                Админ Панель
+              </a>
+            )}
+          </nav>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {me && (
+              <div
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 10,
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                }}
+              >
+                Баланс: {fmtRub.format(balance)}
+              </div>
+            )}
 
-
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-           {me && (
-  <div style={{
-  padding:'6px 10px', borderRadius:10,
-  background:'transparent',
-  border:'1px solid rgba(255,255,255,0.35)',
-  color:'#FFFFFF',
-  fontWeight:700
-}}>
-  Баланс: {fmtRub.format(balance)}
-</div>
-)}
-
-
-            {/* уведомления — компактнее контейнер */}
             <IconButton ariaLabel="Уведомления" onClick={() => router.push('/notifications')} badge={notif}>
               <BellIcon />
             </IconButton>
 
-            {/* Аккаунт */}
-            <div style={{ position:'relative' }} ref={menuRef}>
+            <div style={{ position: 'relative' }} ref={menuRef}>
               <button
-                onClick={() => (authed ? setMenuOpen(o => !o) : (location.href = '/login'))}
+                onClick={() => (authed ? setMenuOpen((o) => !o) : (location.href = '/login'))}
                 title={authed ? 'Открыть меню' : 'Войти'}
-                 style={{
-    display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-    background:'transparent',
-    border:'1px solid rgba(255,255,255,0.35)', borderRadius:10,
-    cursor:'pointer', color:'#FFFFFF'
-  }}
->
-  <span style={{
-    display:'inline-flex', width:24, height:24, borderRadius:'50%',
-    background:'transparent', alignItems:'center', justifyContent:'center',
-    border:'1px solid rgba(255,255,255,0.35)'
-  }}>
-    <IconUser size={16} color="#FFFFFF" />
-  </span>
-  <span style={{
-    fontWeight:700,
-    maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-    color:'#FFFFFF'
-  }}>
-    {username}
-  </span>
-</button>
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 10px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  color: '#FFFFFF',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid rgba(255,255,255,0.35)',
+                  }}
+                >
+                  <IconUser size={16} color="#FFFFFF" />
+                </span>
+                <span
+                  style={{
+                    fontWeight: 700,
+                    maxWidth: 160,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  {username}
+                </span>
+              </button>
 
               {authed && menuOpen && (
-                <div style={{
-                  position:'absolute', right:0, top:'calc(100% + 8px)',
-                  background: UI.menuBg, border:`1px solid ${UI.menuBorder}`, borderRadius:12,
-                  boxShadow:'0 12px 28px rgba(0,0,0,0.25)', minWidth:260, zIndex:60, overflow:'hidden'
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 'calc(100% + 8px)',
+                    background: UI.menuBg,
+                    border: `1px solid ${UI.menuBorder}`,
+                    borderRadius: 12,
+                    boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+                    minWidth: 260,
+                    zIndex: 60,
+                    overflow: 'hidden',
+                  }}
+                >
                   <MenuItem href="/my-trades" text="Мои Торги" />
                   <MenuItem href="/account" text="Личный Кабинет" />
                   <MenuItem href="/inspections" text="Мои Осмотры" />
                   <MenuItem href="/support" text="Поддержка" />
                   <MenuItem href="/favorites" text="Избранное" />
-                  <hr style={{ margin:0, border:'none', borderTop:`1px solid ${UI.menuBorder}` }} />
-                  <button onClick={logout}
-  style={{ width:'100%', textAlign:'left', background:'none', border:'none',
-    padding:'12px 14px', cursor:'pointer', color:'var(--text-900)', fontWeight:600 }}>
-  Выход
-</button>
-
+                  <hr style={{ margin: 0, border: 'none', borderTop: `1px solid ${UI.menuBorder}` }} />
+                  <button
+                    onClick={logout}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      background: 'none',
+                      border: 'none',
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      color: 'var(--text-900)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Выход
+                  </button>
                 </div>
               )}
             </div>
@@ -366,75 +451,87 @@ export default function Header({ user }) {
         </div>
       </div>
 
-   
-
-{/* Нижняя шапка */}
-<div className="header--bottom" style={{ width:'100%', borderBottom:'none', background:'inherit' }}>
-
-
-
-
-
-        <div style={{
-          maxWidth: MAXW, margin:'0 auto', height:64,
-          display:'grid', gridTemplateColumns:'auto 1fr',
-          alignItems:'center', gap:16, padding:'0 12px'
-        }}>
-          {/* ЛОГО: только текст, сделали чуть крупнее */}
+      {/* Нижняя шапка */}
+      <div className="header--bottom" style={{ width: '100%', borderBottom: 'none', background: 'inherit' }}>
+        <div
+          style={{
+            maxWidth: MAXW,
+            margin: '0 auto',
+            height: 64,
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            alignItems: 'center',
+            gap: 16,
+            padding: '0 12px',
+          }}
+        >
           <Logo onClick={() => router.push('/')} />
 
-          {/* Поисковая группа: input и «Найти» соединены */}
           <div style={{ padding: 0 }}>
-            <form onSubmit={submit} style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:10 }}>
-             <button
-  type="button" onClick={() => router.push('/trades')}
-  style={{
-    display:'inline-flex', alignItems:'center', gap:8,
-    height:44, padding:'0 12px', borderRadius:10,
-    background: UI.btnBg, color: UI.btnText,
-    border: '1px solid ' + UI.btnBg,
-    cursor:'pointer', whiteSpace:'nowrap',
-    fontWeight: 600
-  }}
-  onMouseEnter={(e)=>e.currentTarget.style.background = UI.btnHover}
-  onMouseLeave={(e)=>e.currentTarget.style.background = UI.btnBg}
->
-  Все категории
-</button>
+            <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => router.push('/trades')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 44,
+                  padding: '0 12px',
+                  borderRadius: 10,
+                  background: UI.btnBg,
+                  color: UI.btnText,
+                  border: '1px solid ' + UI.btnBg,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 600,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = UI.btnHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = UI.btnBg)}
+              >
+                Все категории
+              </button>
 
-
-              {/* обёртка для связки input + button без зазора */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 0 }}>
                 <input
-                  value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по объявлениям"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Поиск по объявлениям"
                   style={{
-                    height:44, padding:'0 12px',
-                    background:UI.inputBg, border:`1px solid ${UI.inputBorder}`,
-                    color:UI.inputText, minWidth:200,
-                    borderTopLeftRadius:10, borderBottomLeftRadius:10,
-                    borderTopRightRadius:0, borderBottomRightRadius:0,
-                    borderRight:'none' // чтобы рамка была общей с кнопкой
+                    height: 44,
+                    padding: '0 12px',
+                    background: UI.inputBg,
+                    border: `1px solid ${UI.inputBorder}`,
+                    color: UI.inputText,
+                    minWidth: 200,
+                    borderTopLeftRadius: 10,
+                    borderBottomLeftRadius: 10,
+                    borderTopRightRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderRight: 'none',
                   }}
                 />
-               <button
-  type="submit"
-  style={{
-    height:44, padding:'0 16px',
-    background: UI.btnBg,           // как у "Все категории"
-    color: UI.btnText,              // белый
-    cursor:'pointer',
-    border: '1px solid ' + UI.btnBg, // рамка в тон кнопки
-    borderLeft:'none',
-    borderTopRightRadius:10, borderBottomRightRadius:10,
-    borderTopLeftRadius:0, borderBottomLeftRadius:0,
-    fontWeight:600
-  }}
-  onMouseEnter={(e)=>e.currentTarget.style.background = UI.btnHover}
-  onMouseLeave={(e)=>e.currentTarget.style.background = UI.btnBg}
->
-  Найти
-</button>
-
+                <button
+                  type="submit"
+                  style={{
+                    height: 44,
+                    padding: '0 16px',
+                    background: UI.btnBg,
+                    color: UI.btnText,
+                    cursor: 'pointer',
+                    border: '1px solid ' + UI.btnBg,
+                    borderLeft: 'none',
+                    borderTopRightRadius: 10,
+                    borderBottomRightRadius: 10,
+                    borderTopLeftRadius: 0,
+                    borderBottomLeftRadius: 0,
+                    fontWeight: 600,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = UI.btnHover)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = UI.btnBg)}
+                >
+                  Найти
+                </button>
               </div>
             </form>
           </div>
@@ -451,30 +548,50 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
     <button
       aria-label={ariaLabel}
       onClick={onClick}
-      // компактный контейнер под иконку
       style={{
-        position:'relative', width:36, height:36, borderRadius:10,
-        background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.10)',
-        display:'flex', alignItems:'center', justifyContent:'center',
-        cursor:'pointer'
+        position: 'relative',
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        background: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
       }}
     >
       {children}
       {badge > 0 && (
-        <span style={{
-          position:'absolute', top:-6, right:-6,
-          minWidth:18, height:18, padding:'0 5px',
-          background:'#FF4D4F', color:'#fff', borderRadius:999,
-          fontSize:11, fontWeight:800, display:'grid', placeItems:'center',
-          border:'2px solid #1A1C20', lineHeight:'18px'
-        }}>{badgeText}</span>
+        <span
+          style={{
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            minWidth: 18,
+            height: 18,
+            padding: '0 5px',
+            background: '#FF4D4F',
+            color: '#fff',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 800,
+            display: 'grid',
+            placeItems: 'center',
+            border: '2px solid #1A1C20',
+            lineHeight: '18px',
+          }}
+        >
+          {badgeText}
+        </span>
       )}
     </button>
   );
 }
+
 function MenuItem({ href, text }) {
   return (
-    <a href={href} style={{ display:'block', padding:'12px 14px', color:'var(--blue)', textDecoration:'none' }}>
+    <a href={href} style={{ display: 'block', padding: '12px 14px', color: 'var(--blue)', textDecoration: 'none' }}>
       {text}
     </a>
   );
@@ -482,20 +599,25 @@ function MenuItem({ href, text }) {
 
 function Logo({ onClick }) {
   return (
-    <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
-<div style={{ color:'#111827', fontWeight:900, letterSpacing:.3, fontSize:18 }}>
-  AuctionA<span style={{ color:'#EF4444' }}>f</span>to
-</div>
-
+    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+      <div style={{ color: '#111827', fontWeight: 900, letterSpacing: 0.3, fontSize: 18 }}>
+        AuctionA<span style={{ color: '#EF4444' }}>f</span>to
+      </div>
     </div>
   );
 }
-function BellIcon(){
+
+function BellIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round"/>
+      <path
+        d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z"
+        stroke="#FFFFFF"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
-
