@@ -5,29 +5,31 @@ const INSPECTION_ENDPOINT = API_BASE ? `${API_BASE}/api/inspections` : '/api/ins
 
 function normalizeListingId(value) {
   if (value == null) return null;
+  
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null;
     const truncated = Math.trunc(value);
-    return truncated > 0 ? truncated : null;
+    return truncated > 0 ? String(truncated) : null;
   }
 
   const str = String(value).trim();
   if (!str) return null;
 
-  const asNumber = Number(str);
-  if (Number.isFinite(asNumber) && asNumber > 0) {
-    return Math.trunc(asNumber);
-  }
+  const digits = str.replace(/[^0-9]/g, '');
+  if (!digits) return null;
 
-  const match = str.match(/\d+/);
-  if (match) {
-    const parsed = Number.parseInt(match[0], 10);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
+  if (typeof BigInt === 'function') {
+    try {
+      const big = BigInt(digits);
+      if (big > 0n) return big.toString();
+      return null;
+    } catch {
+      // ignore and continue with the fallback logic below
     }
   }
 
-  return null;
+  const normalized = digits.replace(/^0+/, '');
+  return normalized ? normalized : null;
 }
 
 export default function InspectionModal({ listingId, isOpen, onClose }) {
