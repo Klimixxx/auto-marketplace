@@ -197,13 +197,6 @@ export default function Trades() {
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Торги</h1>
-        <Link
-          href="/favorites"
-          className="button button-outline"
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          Мои избранные{favoriteIds.length ? ` (${favoriteIds.length})` : ''}
-        </Link>
       </div>
 
       <FilterBar onSearch={handleSearch} initial={filters} />
