@@ -7,7 +7,7 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
-export default function FilterBar({ onSearch, initial }) {
+export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
   const [q, setQ] = useState(initial?.q || '');
   const [region, setRegion] = useState(initial?.region || '');
   const [city, setCity] = useState(initial?.city || '');
@@ -200,21 +200,26 @@ export default function FilterBar({ onSearch, initial }) {
           </div>
         </label>
 
+       
         {/* Кнопки */}
-        <div className="actions col-span-12">
-          <div className="left-actions">
-            <Link href="/collection" className="btn ghost">Мои избранные</Link>
-          </div>
-          <div className="right-actions">
-            <button type="button" className="btn secondary" onClick={resetFilters}>
-              Сбросить
-            </button>
-            <button type="submit" className="btn primary">
-              Показать
-            </button>
-          </div>
-        </div>
-      </div>
+<div className="actions col-span-12">
+  <div className="right-actions">
+    <button type="button" className="btn secondary" onClick={resetFilters}>
+      Сбросить
+    </button>
+    <button type="submit" className="btn primary">
+      Показать
+    </button>
+    <Link
+      href="/favorites"
+      className="btn ghost"
+      style={{ whiteSpace: 'nowrap' }}
+    >
+      Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
+    </Link>
+  </div>
+</div>
+
 
       {/* Стили: компактный размер и полупрозрачный голубой фон */}
       <style jsx>{`
@@ -299,13 +304,14 @@ export default function FilterBar({ onSearch, initial }) {
         /* иконку поиска и суффикс ₽ мы удалили, соответствующие стили не нужны */
 
         .actions {
-          display: flex;
-          justify-content: space-between; /* слева — "Мои избранные", справа — Сбросить/Показать */
-          gap: 8px;
-          align-items: center;
-          margin-top: 4px;
-        }
-        .right-actions { display: flex; gap: 8px; }
+  display: flex;
+  justify-content: flex-end; /* всё уводим вправо в одну линию */
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.right-actions { display: flex; gap: 8px; }
+
 
         .btn {
           height: 38px;
