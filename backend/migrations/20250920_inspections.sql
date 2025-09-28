@@ -3,7 +3,12 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_type WHERE typname = 'inspection_status'
   ) THEN
-    CREATE TYPE inspection_status AS ENUM ('Идет модерация','Выполняется осмотр машины','Завершен');
+    CREATE TYPE inspection_status AS ENUM (
+      'Оплачен/Ожидание модерации',
+      'Заказ принят, Приступаем к Осмотру',
+      'Производится осмотр',
+      'Осмотр завершен'
+    );
   END IF;
 END $$;
 
@@ -50,7 +55,7 @@ BEGIN
         id BIGSERIAL PRIMARY KEY,
         user_id %1$s NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         listing_id %2$s NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-        status inspection_status NOT NULL DEFAULT 'Идет модерация',
+        status inspection_status NOT NULL DEFAULT 'Оплачен/Ожидание модерации',
         base_price INTEGER NOT NULL DEFAULT 12000,
         discount_percent INTEGER NOT NULL DEFAULT 0,
         final_amount INTEGER NOT NULL,
