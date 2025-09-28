@@ -1,6 +1,8 @@
 // pages/account.js
 import { useEffect, useState } from 'react';
-const API = process.env.NEXT_PUBLIC_API_BASE;
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
+const API_ME = API_BASE ? `${API_BASE}/api/me` : '/api/me';
+const API_BALANCE_ADD = API_BASE ? `${API_BASE}/api/me/balance-add` : '/api/me/balance-add';
 
 export default function Account() {
   const [me, setMe] = useState(null);
@@ -10,7 +12,7 @@ export default function Account() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { location.href = '/login'; return; }
-    fetch(`${API}/api/me`, { headers: { Authorization: 'Bearer ' + token } })
+    fetch(API_ME, { headers: { Authorization: 'Bearer ' + token } })
       .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Не удалось загрузить профиль'); return d; })
       .then(setMe)
       .catch(e => setErr(e.message));
@@ -143,7 +145,7 @@ function EditRow({ label, field, value, type='text', addText='Изменить',
     setErr(''); setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API}/api/me`, {
+      const res = await fetch(API_ME, {
         method: 'PATCH',
         headers: { 'Content-Type':'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ [field]: val })
@@ -205,7 +207,7 @@ function BalanceRow({ balance, onChange }) {
       const val = parseFloat(String(amount).replace(',', '.'));
       if (!val || val <= 0) throw new Error('Введите сумму больше 0');
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API}/api/me/balance-add`, {
+      const res = await fetch(API_BALANCE_ADD, {
         method: 'POST',
         headers: { 'Content-Type':'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ amount: val })
