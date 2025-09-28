@@ -4,6 +4,7 @@ import { pool, query } from '../db.js';
 
 const router = express.Router();
 const BASE_PRICE = 12000;
+const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
 
 function normalizeListingId(value) {
   if (value == null) return null;
@@ -88,9 +89,9 @@ router.post('/', async (req, res) => {
 
     const ins = await client.query(
       `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
-         VALUES ($1,$2,'Идет модерация',$3,$4,$5)
+         VALUES ($1,$2,$3,$4,$5,$6)
          RETURNING *`,
-      [userId, listingId, BASE_PRICE, discountPercent, finalAmount]
+      [userId, listingId, INITIAL_STATUS, BASE_PRICE, discountPercent, finalAmount]
     );
 
     await client.query('COMMIT');
