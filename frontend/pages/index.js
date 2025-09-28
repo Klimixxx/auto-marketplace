@@ -5,6 +5,8 @@ import Hero from '../components/Hero';
 import ListingCard from '../components/ListingCard';
 import About from '../components/About';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
+import FavoriteButton from '../components/FavoriteButton';
+
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
@@ -620,20 +622,11 @@ function RecentListingCard({ item }) {
           </span>
         ) : null}
 
-        {/* Кнопка-«сердце» (только визуально) */}
-        <div
-          style={{
-            position: 'absolute', right: 12, top: 12,
-            width: 34, height: 34, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.9)', display: 'grid', placeItems: 'center',
-            border: '1px solid rgba(0,0,0,0.08)'
-          }}
-          aria-hidden
-          title="Добавить в избранное"
-        >
-          ♡
-        </div>
-      </div>
+        <FavoriteButton
+  listingId={listingId}
+  style={{ position: 'absolute', right: 12, top: 12 }}
+/>
+
 
       {/* Контент */}
       <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 8 }}>
@@ -676,26 +669,19 @@ function RecentListingCard({ item }) {
 
         {/* Кнопки */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <a
-            href={`/trades/${listingId}`}
-            style={{
-              flex: 1, textAlign: 'center', textDecoration: 'none',
-              background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '9px 10px', fontWeight: 700
-            }}
-          >
-            Подробнее
-          </a>
-          {item?.source_url ? (
-            <a
-              href={item.source_url}
-              target="_blank" rel="noreferrer"
-              style={{
-                flex: 1, textAlign: 'center', textDecoration: 'none',
-                border: '1px solid rgba(0,0,0,0.10)', color: '#0f172a', borderRadius: 10, padding: '9px 10px', fontWeight: 600
-              }}
-            >
-              Источник
-            </a>
+  <a
+    href={`/trades/${listingId}`}
+    style={{
+      flex: 1, textAlign: 'center', textDecoration: 'none',
+      background: '#1d4ed8', color: '#fff',
+      borderRadius: 10, padding: '9px 10px',
+      fontWeight: 700, textDecoration: 'none'
+    }}
+  >
+    Подробнее
+  </a>
+</div>
+
           ) : null}
         </div>
       </div>
