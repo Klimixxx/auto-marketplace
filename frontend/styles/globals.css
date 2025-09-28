@@ -882,7 +882,7 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 
 /* Нижняя полоса: фон как у всей страницы */
 .header--bottom {
-  background: transparent !important;
+  background: var(--page-bg) !important; /* тот же фон, что у body */
   color: var(--text);
   border-bottom: none !important;
   box-shadow: none;
