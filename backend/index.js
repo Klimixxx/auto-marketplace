@@ -30,7 +30,13 @@ function normalizePhone(p) {
 
 // 6-значный код пользователя
 function genUserCode() {
-  return String(Math.floor(100000 + Math.random()*900000)).padStart(6, '0');
+  return String(Math.floor(100000 + Math.random() * 900000)).padStart(6, '0');
+}
+
+function normalizeUserId(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
 }
 
 // Нативный fetch + таймаут через AbortController
@@ -110,12 +116,15 @@ console.log('Starting server with env:', {
 
 // JWT
 function signToken(user) {
+  const userId = normalizeUserId(user?.id);
+  if (!userId) throw new Error('Invalid user id for token');
   return jwt.sign(
-    { sub: user.id, phone: user.phone, role: user.role },
+    { sub: userId, phone: user.phone, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
+
 
 // ===== МИДЛВАРЫ АУТЕНТИФИКАЦИИ =====
 
@@ -126,10 +135,13 @@ async function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload; // { sub, phone, role }
+    const userId = normalizeUserId(payload?.sub);
+    if (!userId) throw new Error('Invalid token payload');
+    req.user = { ...payload, sub: userId }; // { sub, phone, role }
+    req.userId = userId;
 
     // мгновенная проверка блокировки
-    const { rows } = await query('SELECT is_blocked FROM users WHERE id = $1', [req.user.sub]);
+    const { rows } = await query('SELECT is_blocked FROM users WHERE id::text = $1', [userId]);
     if (rows[0]?.is_blocked) {
       return res.status(403).json({ error: 'blocked' });
     }
@@ -143,7 +155,7 @@ async function auth(req, res, next) {
 
 async function requireAdmin(req, res, next) {
   try {
-    const { rows } = await query('SELECT role FROM users WHERE id = $1', [req.user.sub]);
+    const { rows } = await query('SELECT role FROM users WHERE id::text = $1', [req.user.sub]);
     if (rows[0]?.role === 'admin') return next();
     return res.status(403).json({ error: 'admin only' });
   } catch (e) {
@@ -933,7 +945,7 @@ app.get('/api/stats/summary', async (_req, res) => {
 
 app.delete('/api/favorites/:id', auth, async (req, res) => {
   const userId = req.user.sub; const { id } = req.params;
-  await query('DELETE FROM favorites WHERE user_id=$1 AND listing_id=$2', [userId, id]);
+  await query('DELETE FROM favorites WHERE user_id::text=$1 AND listing_id=$2', [userId, id]);
   res.json({ ok: true });
 });
 
@@ -943,7 +955,7 @@ app.get('/api/me', auth, async (req, res) => {
   const { rows } = await query(
     `SELECT id, user_code, name, email, phone, role, balance
        FROM users
-      WHERE id=$1`,
+      WHERE id::text=$1`,
     [userId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -974,7 +986,7 @@ app.patch('/api/me', auth, async (req, res) => {
       return res.status(400).json({ error: 'Некорректный телефон' });
     }
     // уникальность телефона
-    const taken = await query(`SELECT 1 FROM users WHERE phone=$1 AND id<>$2`, [phone, userId]);
+    const taken = await query(`SELECT 1 FROM users WHERE phone=$1 AND id::text<>$2`, [phone, userId]);
     if (taken.rows[0]) {
       return res.status(409).json({ error: 'Этот телефон уже используется' });
     }
@@ -986,7 +998,7 @@ app.patch('/api/me', auth, async (req, res) => {
             email      = COALESCE($2, email),
             phone      = COALESCE($3, phone),
             updated_at = now()
-      WHERE id=$4
+      WHERE id::text=$4
       RETURNING id, user_code, name, email, phone, role`,
     [name ?? null, email ?? null, phone ?? null, userId]
   );
@@ -995,11 +1007,7 @@ app.patch('/api/me', auth, async (req, res) => {
   // если телефон изменился — выдадим новый токен
   let token;
   if (phone) {
-    token = jwt.sign(
-      { sub: u.id, phone: u.phone, role: u.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    token = signToken(u);
   }
   res.json({ ok: true, user: u, token });
 });
@@ -1131,7 +1139,7 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
       `UPDATE users
           SET balance = COALESCE(balance,0) + $1,
               updated_at = now()
-        WHERE id=$2
+        WHERE id::text=$2
         RETURNING balance`,
       [amount, userId]
     );
@@ -1146,7 +1154,7 @@ app.get('/api/me/favorites', auth, async (req, res) => {
   const userId = req.user.sub;
   const { rows } = await query(
     `SELECT l.* FROM favorites f JOIN listings l ON l.id=f.listing_id
-     WHERE f.user_id=$1 ORDER BY f.created_at DESC`, [userId]
+     WHERE f.user_id::text=$1 ORDER BY f.created_at DESC`, [userId]
   );
   res.json({ items: rows.map(withTradeTypeInfo) });
 });
@@ -1264,10 +1272,10 @@ app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
     const { rows: sessions } = await query(`
       SELECT ip, city, device, created_at
         FROM user_sessions
-       WHERE user_id = $1
+       WHERE user_id::text = $1
        ORDER BY created_at DESC
        LIMIT 30
-    `, [user.id]);
+    `, [String(user.id)]);
 
     res.json({ user, sessions });
   } catch (e) {
@@ -1324,7 +1332,7 @@ app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
 
     await query(
       `INSERT INTO user_notifications(user_id, title, body) VALUES ($1,$2,$3)`,
-      [u[0].id, title, body]
+      [String(u[0].id), title, body]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -1340,7 +1348,7 @@ app.get('/api/notifications', auth, async (req, res) => {
     const { rows } = await query(
       `SELECT id, title, body, created_at, read_at
          FROM user_notifications
-        WHERE user_id = $1
+        WHERE user_id::text = $1
         ORDER BY created_at DESC
         LIMIT $2`,
       [req.user.sub, lim]
@@ -1357,7 +1365,7 @@ app.get('/api/notifications/unread-count', auth, async (req, res) => {
     const { rows: [{ c }] } = await query(
       `SELECT count(*)::int c
          FROM user_notifications
-        WHERE user_id = $1 AND read_at IS NULL`,
+        WHERE user_id::text = $1 AND read_at IS NULL`,
       [req.user.sub]
     );
     res.json({ count: c });
@@ -1372,7 +1380,7 @@ app.post('/api/notifications/mark-read', auth, async (req, res) => {
     await query(
       `UPDATE user_notifications
           SET read_at = now()
-        WHERE user_id = $1 AND read_at IS NULL`,
+        WHERE user_id::text = $1 AND read_at IS NULL`,
       [req.user.sub]
     );
     res.json({ ok: true });
