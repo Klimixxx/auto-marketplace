@@ -58,7 +58,10 @@ router.post('/', async (req, res) => {
     transactionStarted = true;
 
     const u = await client.query(
-      `SELECT id, balance, COALESCE(subscription_status,'free') AS subscription_status
+      `SELECT id,
+              COALESCE(balance::numeric, 0)              AS balance,
+              COALESCE(subscription_status,'free')       AS subscription_status,
+              COALESCE(balance_frozen, false)            AS balance_frozen
          FROM users WHERE id=$1 FOR UPDATE`,
       [userId]
     );
@@ -67,6 +70,14 @@ router.post('/', async (req, res) => {
       await client.query('ROLLBACK');
       transactionStarted = false;
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.balance_frozen) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return res
+        .status(423)
+        .json({ error: 'BALANCE_FROZEN', message: 'Баланс пользователя заморожен' });
     }
 
     const isPro = String(user.subscription_status).toLowerCase() === 'pro';
@@ -83,7 +94,7 @@ router.post('/', async (req, res) => {
     }
 
     await client.query(
-      'UPDATE users SET balance = balance - $1, updated_at = now() WHERE id=$2',
+      'UPDATE users SET balance = (COALESCE(balance::numeric,0) - $1)::numeric, updated_at = now() WHERE id=$2',
       [finalAmount, userId]
     );
 
