@@ -19,14 +19,15 @@ export default function Account() {
   function setUser(u){ setMe(u); }
 
   const UI = {
-    pageBg: 'linear-gradient(90deg, #0B1220 0%, #0E1A2E 100%)', // фон страницы как в шапке
-    title: '#E6EDF3',
-    muted: 'var(--muted)',
-    cardBg: 'rgba(255,255,255,0.03)',
-    cardBorder: 'rgba(255,255,255,0.08)',
-    accent: '#22C55E',
-    inputBorder: 'rgba(255,255,255,0.12)',
-  };
+  pageBg: 'var(--bg)', // фон как на "Торги"
+  title: 'var(--text)',
+  muted: 'var(--muted)',
+  cardBg: 'var(--surface-1)',
+  cardBorder: 'var(--border)',
+  accent: 'var(--blue)',
+  inputBorder: 'var(--border)',
+};
+
 
   return (
     <div style={{ background: UI.pageBg, minHeight: '100vh', padding: '16px 0 40px' }}>
