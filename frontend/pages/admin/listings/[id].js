@@ -1,5 +1,5 @@
 // pages/admin/listings/[id].js
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
@@ -141,6 +141,19 @@ function getPhotoPreview(text) {
     return parsePhotosInput(text).map((photo) => photo.url);
   } catch {
     return [];
+  }
+}
+
+function ensureAbsolutePhotoUrl(url) {
+  if (!url) return '';
+  const trimmed = String(url).trim();
+  if (!trimmed) return '';
+  const base = API_BASE || (typeof window !== 'undefined' ? window.location.origin : undefined);
+  if (!base) return trimmed;
+  try {
+    return new URL(trimmed, base).toString();
+  } catch {
+    return trimmed;
   }
 }
 
@@ -329,6 +342,10 @@ export default function AdminParserTradeCard() {
   const [pricesText, setPricesText] = useState('[]');
   const [documentsText, setDocumentsText] = useState('[]');
   const [photosText, setPhotosText] = useState('');
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const singleFileInputRef = useRef(null);
+  const multipleFileInputRef = useRef(null);
 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -369,6 +386,8 @@ export default function AdminParserTradeCard() {
     } else {
       setPhotosText('');
     }
+    setUploadError(null);
+    setUploadingPhotos(false);
   }, []);
 
   // fetch trade
@@ -417,6 +436,121 @@ export default function AdminParserTradeCard() {
       aborted = true;
     };
   }, [id, applyTrade]);
+
+  const triggerSingleUpload = useCallback(() => {
+    setUploadError(null);
+    singleFileInputRef.current?.click();
+  }, []);
+
+  const triggerMultipleUpload = useCallback(() => {
+    setUploadError(null);
+    multipleFileInputRef.current?.click();
+  }, []);
+
+  const uploadPhotos = useCallback(
+    async (fileList) => {
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (!files.length) return;
+      if (!id) {
+        alert('Сначала сохраните объявление, чтобы добавить фотографии.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Требуется авторизация администратора.');
+        return;
+      }
+
+      setUploadingPhotos(true);
+      setUploadError(null);
+      try {
+        const formData = new FormData();
+        files.forEach((file) => {
+          if (file) formData.append('photos', file);
+        });
+
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/photos/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось загрузить файлы');
+        }
+
+        const uploaded = Array.isArray(data.photos) ? data.photos : [];
+        if (!uploaded.length) {
+          throw new Error('Файлы не загружены');
+        }
+
+        const urls = uploaded
+          .map((item) => ensureAbsolutePhotoUrl(item.url || item.path))
+          .filter(Boolean);
+
+        if (!urls.length) {
+          throw new Error('Не удалось получить ссылки на загруженные файлы');
+        }
+
+        setPhotosText((prev) => {
+          const lines = (prev || '')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+          const seen = new Set(lines);
+          const next = [...lines];
+          urls.forEach((url) => {
+            if (!seen.has(url)) {
+              seen.add(url);
+              next.push(url);
+            }
+          });
+          return next.join('\n');
+        });
+      } catch (uploadErrorInstance) {
+        console.error('upload photos error:', uploadErrorInstance);
+        const message =
+          uploadErrorInstance instanceof Error
+            ? uploadErrorInstance.message
+            : 'Не удалось загрузить файлы';
+        setUploadError(message);
+        alert(message);
+      } finally {
+        setUploadingPhotos(false);
+      }
+    },
+    [id, setPhotosText],
+  );
+
+  const handleSingleFileChange = useCallback(
+    (event) => {
+      const files = event.target?.files;
+      if (files && files.length) {
+        uploadPhotos(files);
+      }
+      if (event.target) {
+        event.target.value = '';
+      }
+    },
+    [uploadPhotos],
+  );
+
+  const handleMultipleFileChange = useCallback(
+    (event) => {
+      const files = event.target?.files;
+      if (files && files.length) {
+        uploadPhotos(files);
+      }
+      if (event.target) {
+        event.target.value = '';
+      }
+    },
+    [uploadPhotos],
+  );
 
   const updateFormField = useCallback(
     (key) => (e) => {
@@ -718,8 +852,55 @@ export default function AdminParserTradeCard() {
           />
         </label>
 
+        <div className="admin-upload">
+          <div className="admin-upload__row">
+            <div className="admin-upload__text">
+              <div className="admin-upload__title">Добавить фотографии</div>
+              <p className="admin-upload__description">
+                Поддерживаются изображения до 10&nbsp;МБ. Можно выбрать один файл или загрузить несколько сразу.
+              </p>
+            </div>
+            <div className="admin-upload__actions">
+              <button
+                type="button"
+                className="button button-small button-outline"
+                onClick={triggerSingleUpload}
+                disabled={uploadingPhotos}
+              >
+                Загрузить файл
+              </button>
+              <button
+                type="button"
+                className="button button-small"
+                onClick={triggerMultipleUpload}
+                disabled={uploadingPhotos}
+              >
+                Загрузить несколько
+              </button>
+            </div>
+          </div>
+          {uploadingPhotos ? <div className="admin-upload__status">Загрузка фотографий…</div> : null}
+          {uploadError ? <div className="admin-upload__error">{uploadError}</div> : null}
+          <div className="admin-upload__hint">Ссылки на загруженные файлы автоматически появятся в поле ниже.</div>
+          <input
+            ref={singleFileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleSingleFileChange}
+          />
+          <input
+            ref={multipleFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleMultipleFileChange}
+          />
+        </div>
+
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Фотографии (каждый URL с новой строки или JSON-массив)</span>
+          <span className="muted">Фотографии (URL по одному в строке или JSON-массив)</span>
           <textarea
             className="textarea"
             rows={4}
