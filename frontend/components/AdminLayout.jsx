@@ -6,7 +6,7 @@ export default function AdminLayout({ me, title, children }) {
 
   // Используем токены из globals.css
   const UI = {
-    pageBg: 'var(--bg)',                 // молочный фон страницы
+    pageBg: 'var(--bg-alt)',                 // молочный фон страницы
     cardBg: 'var(--surface-1)',         // фон карточек/контента
     text: 'var(--text)',                // основной текст
     muted: 'var(--text-muted)',         // вторичный текст
