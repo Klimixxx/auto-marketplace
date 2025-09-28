@@ -37,8 +37,8 @@ export default function Hero({ listingCount = 0 }) {
     const idlePH = 'Марка, модель, или VIN…';
     const typeSpeed = 55;                 // скорость печати (мс/символ)
     const deleteSpeed = 25;               // скорость удаления (мс/символ)
-    const holdAfterTypeMs = 1400;         // пауза после печати
-    const delayBetweenQueriesMs = 30000;  // 30 сек до следующей фразы
+    const holdAfterTypeMs = 10000;         // пауза после печати
+    const delayBetweenQueriesMs = 15000;  // 30 сек до следующей фразы
 
     let timers = [];
     let stopped = false;
