@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import AdminLayout from '../../../components/AdminLayout';
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
+const rub = new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 export default function AdminUsers() {
   const [me, setMe] = useState(null);
   const [list, setList] = useState([]);
@@ -73,6 +80,12 @@ export default function AdminUsers() {
     return <div style={{ display:'flex', gap:8, marginTop:12 }}>{items}</div>;
   }
 
+  const formatBalance = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '—';
+    return rub.format(numeric);
+  };
+
   return (
     <AdminLayout me={me} title="Пользователи">
       <form onSubmit={submit} style={{ display:'flex', gap:8, marginBottom:12 }}>
@@ -89,7 +102,7 @@ export default function AdminUsers() {
           {/* заголовки колонок */}
           <div style={{
             display:'grid',
-            gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+            gridTemplateColumns:'240px 90px 160px 220px 170px 160px 140px 120px',
             gap:12,
             padding:'10px 0',
             borderTop:'1px solid var(--line)',
@@ -103,6 +116,7 @@ export default function AdminUsers() {
             <div>Почта</div>
             <div>Дата регистрации</div>
             <div>Статус подписки</div>
+            <div>Баланс</div>
             <div></div>
           </div>
 
@@ -111,7 +125,7 @@ export default function AdminUsers() {
             <div key={u.user_code}
               style={{
                 display:'grid',
-                gridTemplateColumns:'240px 90px 160px 220px 170px 160px 120px',
+                gridTemplateColumns:'240px 90px 160px 220px 170px 160px 140px 120px',
                 gap:12, padding:'10px 0',
                 borderBottom:'1px solid var(--line)'
               }}>
@@ -124,6 +138,9 @@ export default function AdminUsers() {
               </div>
               <div style={{ fontSize:12 }}>
                 {u.subscription_status || 'free'}
+              </div>
+              <div style={{ fontSize:12 }}>
+                {formatBalance(u.balance)}
               </div>
               <div>
                 <a className="button" href={`/admin/users/${u.user_code}`}>Профиль</a>
