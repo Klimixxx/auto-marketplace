@@ -15,51 +15,6 @@ function normalizeBase(value) {
   return result;
 }
 
-const API_BASE = normalizeBase(RAW_API_BASE);
-const PAGE_SIZE = 20;
-const PARSER_PAGE_SIZE = 15;
-const DASH = '\u2014';
-const ARROW_LEFT = '\u2190';
-const ARROW_RIGHT = '\u2192';
-const DEFAULT_SEARCH_TERM = 'vin';
-
-const ACTION_BUTTON_STYLE = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '10px 12px',
-  borderRadius: 12,
-  border: '1px solid #253041',
-  background: '#1e293b',
-  color: 'inherit',
-  fontWeight: 600,
-  textDecoration: 'none',
-  cursor: 'pointer',
-};
-
-const PRIMARY_BUTTON_STYLE = {
-  ...ACTION_BUTTON_STYLE,
-  background: '#2563eb',
-  borderColor: '#2563eb',
-  color: '#fff',
-};
-
-const TABLE_HEADER_STYLE = {
-  textAlign: 'left',
-  padding: '12px 8px',
-  fontWeight: 600,
-  fontSize: 13,
-  color: '#9aa6b2',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
-  whiteSpace: 'nowrap',
-};
-
-const TABLE_CELL_STYLE = {
-  padding: '12px 8px',
-  borderBottom: '1px solid rgba(255,255,255,0.05)',
-  verticalAlign: 'top',
-};
-
 function readToken() {
   if (typeof window === 'undefined') return null;
   try {
@@ -494,248 +449,270 @@ export default function AdminParserTradesPage() {
   const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const searchButtonStyle = listLoading ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' } : ACTION_BUTTON_STYLE;
-  const ingestButtonStyle = ingesting ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' } : PRIMARY_BUTTON_STYLE;
-  const linkButtonStyle = listLoading ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, pointerEvents: 'none' } : ACTION_BUTTON_STYLE;
-  const resolveTabStyle = (tabKey) => (tabKey === view ? { ...PRIMARY_BUTTON_STYLE, cursor: 'default' } : ACTION_BUTTON_STYLE);
+  const searchButtonLabel = listLoading ? 'Поиск…' : 'Найти';
+  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые';
+  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё';
+  const searchDisabled = listLoading;
+  const ingestDisabled = ingesting;
 
   return (
-    <div className="container" style={{ paddingTop: 16, paddingBottom: 32 }}>
-      <h1>{pageTitle}</h1>
-
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className="button"
-          onClick={() => changeView('drafts')}
-          disabled={view === 'drafts'}
-          style={resolveTabStyle('drafts')}
-        >
-          Неопубликованные
-        </button>
-        <button
-          type="button"
-          className="button"
-          onClick={() => changeView('published')}
-          disabled={view === 'published'}
-          style={resolveTabStyle('published')}
-        >
-          Опубликованные
-        </button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
-        <input
-          className="input"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              handleSearch();
-            }
-          }}
-          placeholder="Поиск (название/регион/марка/модель/VIN)"
-          style={{ flex: '1 1 240px' }}
-        />
-        <button className="button" onClick={handleSearch} disabled={listLoading} style={searchButtonStyle}>
-          Найти
-        </button>
-        {isPublishedView ? null : (
-          <>
-            <button
-              className="button primary"
-              onClick={() => runIngest({ reset: true })}
-              disabled={ingesting}
-              style={ingestButtonStyle}
-            >
-              Получить новые
-            </button>
-            <button
-              className="button primary"
-              onClick={() => runIngest({ reset: false })}
-              disabled={ingesting}
-              style={ingestButtonStyle}
-            >
-              ПОЛУЧИТЬ ЕЩЁ
-            </button>
-          </>
-        )}
-      </div>
-
-      {isPublishedView ? (
-        <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-          Здесь отображаются объявления, которые уже опубликованы на сайте. Откройте карточку, чтобы отредактировать данные
-          или переопубликовать их при необходимости.
+    <div className="container">
+      <div className="admin-page">
+        <div className="admin-page__header">
+          <h1 className="admin-page__title">{pageTitle}</h1>
+          <p className="admin-page__subtitle">
+            {isPublishedView
+              ? 'Редактируйте объявления, которые уже опубликованы на сайте.'
+              : 'Отслеживайте свежие объявления из парсера и публикуйте лучшие предложения.'}
+          </p>
         </div>
-      ) : (
-        <>
-          <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-            Запрос к парсеру выполняется блоками по {PARSER_PAGE_SIZE}. Текущий поисковый запрос:{' '}
-            <span style={{ fontWeight: 600 }}>{progressSearchTerm}</span>. Следующий offset: {nextOffset}.{' '}
-            {lastIngest?.totalFound ? `Всего найдено: ${lastIngest.totalFound}.` : null}
+
+      <div className="admin-tabs">
+          <button
+            type="button"
+            className={`admin-segment ${isPublishedView ? '' : 'is-active'}`}
+            onClick={() => changeView('drafts')}
+            disabled={!router.isReady || view === 'drafts'}
+          >
+            Неопубликованные
+          </button>
+          <button
+            type="button"
+            className={`admin-segment ${isPublishedView ? 'is-active' : ''}`}
+            onClick={() => changeView('published')}
+            disabled={!router.isReady || view === 'published'}
+          >
+            Опубликованные
+          </button>
+        </div>
+
+        <div className="admin-filters">
+          <div className="admin-filters__search">
+            <label className="admin-label" htmlFor="admin-trades-search">
+              Поиск по объявлениям
+            </label>
+            <input
+              id="admin-trades-search"
+              className="input admin-filters__input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSearch();
+                }
+              }}
+              placeholder="Название, регион, марка, модель или VIN"
+            />
           </div>
+          <div className="admin-filters__actions">
+            <button
+              type="button"
+              className="button button-small"
+              onClick={handleSearch}
+              disabled={searchDisabled}
+            >
+              {searchButtonLabel}
+            </button>
+          {!isPublishedView && (
+              <>
+                <button
+                  type="button"
+                  className="button button-small button-outline"
+                  onClick={() => runIngest({ reset: true })}
+                  disabled={ingestDisabled}
+                >
+                  {ingestPrimaryLabel}
+                </button>
+                <button
+                  type="button"
+                  className="button button-small button-outline"
+                  onClick={() => runIngest({ reset: false })}
+                  disabled={ingestDisabled}
+                >
+                  {ingestMoreLabel}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
-          {lastIngest && (
-            <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-              Последний парсинг ({lastIngest.searchTerm || progressSearchTerm}): offset {lastIngest.offset}, получено{' '}
-              {lastIngest.received}, обновлено {lastIngest.upserted}. Следующий offset: {lastIngest.nextOffset}.
-            </div>
-          )}
-
-          {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Новых объявлений в текущей выборке больше нет. Нажмите «Получить новые», чтобы начать загрузку сначала.
-            </div>
-          )}
-        </>
-      )}
-
-      <div
-        className="table-wrapper"
-        style={{
-          marginTop: 16,
-          overflowX: 'auto',
-          borderRadius: 12,
-          border: '1px solid #253041',
-          background: '#0f1522',
-        }}
-      >
-        <table className="table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-          <thead>
-            <tr>
-              <th style={TABLE_HEADER_STYLE}>Заголовок</th>
-              <th style={TABLE_HEADER_STYLE}>Регион</th>
-              <th style={TABLE_HEADER_STYLE}>ТС</th>
-              <th style={TABLE_HEADER_STYLE}>Стартовая</th>
-              <th style={TABLE_HEADER_STYLE}>Окончание</th>
-              <th style={TABLE_HEADER_STYLE}>Лучшее</th>
-              <th style={TABLE_HEADER_STYLE}>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ ...TABLE_CELL_STYLE, textAlign: 'center', color: '#9aa6b2' }}>
-                  {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
-                </td>
-              </tr>
+          {isPublishedView ? (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Опубликованные объявления</div>
+            <p className="admin-hint-card__text">
+              Здесь собраны объявления, которые уже видят пользователи сайта. Вы можете обновить данные или снять лот при необходимости.
+            </p>
+          </div>
+        ) : (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Статус загрузки парсера</div>
+            <p className="admin-hint-card__text">
+              Парсер обрабатывает данные блоками по {PARSER_PAGE_SIZE}. Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset:{' '}
+              <strong>{nextOffset}</strong>.
+              {lastIngest?.totalFound != null ? (
+                <>
+                  {' '}
+                  Всего найдено: <strong>{lastIngest.totalFound}</strong>.
+                </>
+              ) : null}
+            </p>
+            {lastIngest ? (
+              <>
+                <div className="admin-hint-card__meta">
+                  <span>Получено: <strong>{lastIngest.received}</strong></span>
+                  <span>Обновлено: <strong>{lastIngest.upserted}</strong></span>
+                  <span>Последний offset: <strong>{lastIngest.offset}</strong></span>
+                  <span>Следующий offset: <strong>{lastIngest.nextOffset}</strong></span>
+                </div>
+                {lastIngest.updatedAt ? (
+                  <div className="admin-hint-card__note">
+                    Обновлено: {formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt}
+                  </div>
+                ) : null}
+              </>
             ) : (
-              items.map((item) => {
-                const createdAt = formatCreatedAt(item.created_at);
-                const publishedAt = formatCreatedAt(item.published_at);
-                const isPublishing = publishingId === item.id;
-                const isFeatured = Boolean(item.is_featured);
-                const isFeaturing = featuringId === item.id;
-                const publishButtonStyle =
-                  isPublishing || listLoading
-                    ? { ...PRIMARY_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
-                    : PRIMARY_BUTTON_STYLE;
-                const featureButtonStyle = (isFeaturing || listLoading)
-                  ? { ...ACTION_BUTTON_STYLE, opacity: 0.6, cursor: 'not-allowed' }
-                  : {
-                      ...ACTION_BUTTON_STYLE,
-                      background: isFeatured ? '#0f766e' : '#1e293b',
-                      borderColor: isFeatured ? '#0f766e' : '#253041',
-                      color: '#fff',
+              <div className="admin-hint-card__note">
+                Используйте кнопки «Получить новые» или «Получить ещё», чтобы загрузить свежие объявления по текущему запросу.
+              </div>
+            )}
+            {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
+              <div className="admin-hint-card__footer">
+                Новых объявлений в текущей выборке больше нет. Запустите «Получить новые», чтобы начать заново или измените запрос.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="admin-table-card">
+          <div className="admin-table-card__scroll">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Заголовок</th>
+                  <th>Регион</th>
+                  <th>ТС</th>
+                  <th>Стартовая цена</th>
+                  <th>Окончание</th>
+                  <th>Лучшее</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td className="admin-table__empty" colSpan={7}>
+                      {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
+                    </td>
+                    /tr>
+                ) : (
+                  items.map((item) => {
+                    const createdAt = formatCreatedAt(item.created_at);
+                    const publishedAt = formatCreatedAt(item.published_at);
+                    const isPublishing = publishingId === item.id;
+                    const isFeatured = Boolean(item.is_featured);
+                    const isFeaturing = featuringId === item.id;
+                    const detailHref = {
+                      pathname: '/admin/listings/[id]',
+                      query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
                     };
-                const detailHref = {
-                  pathname: '/admin/listings/[id]',
-                  query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
-                };
-                return (
-                  <tr key={item.id}>
-                    <td style={TABLE_CELL_STYLE}>
-                      <div style={{ fontWeight: 600 }}>{item.title || 'Лот'}</div>
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        {item.source_url ? (
-                          <a href={item.source_url} target="_blank" rel="noreferrer" className="link">
-                            Источник
-                          </a>
-                        ) : (
-                          DASH
-                        )}
-                        {createdAt ? ` • Создано: ${createdAt}` : null}
-                      </div>
-                      {publishedAt ? (
-                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                          Опубликовано: {publishedAt}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td style={TABLE_CELL_STYLE}>{item.region || DASH}</td>
-                    <td style={TABLE_CELL_STYLE}>
-                      <div>{formatVehicle(item)}</div>
-                      {item.vin ? (
-                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                          VIN: {item.vin}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td style={TABLE_CELL_STYLE}>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
-                    <td style={TABLE_CELL_STYLE}>
-                      <div>{formatDate(item.date_finish)}</div>
-                      {item.trade_place ? (
-                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{item.trade_place}</div>
-                      ) : null}
-                    </td>
-                    <td style={TABLE_CELL_STYLE}>
-                      <button
-                        type="button"
-                        style={featureButtonStyle}
-                        onClick={() => toggleFeatured(item.id, !isFeatured)}
-                        disabled={isFeaturing || listLoading}
-                      >
-                        {isFeatured ? 'В лучших' : 'Добавить'}
-                      </button>
-                    </td>
-                    <td style={TABLE_CELL_STYLE}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <Link href={detailHref} className="button" style={linkButtonStyle}>
-                          Редактировать
-                        </Link>
-                        {isPublishedView ? null : (
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="admin-table__title">{item.title || 'Лот'}</div>
+                          <div className="admin-table__meta">
+                            {item.source_url ? (
+                              <a href={item.source_url} target="_blank" rel="noreferrer" className="link">
+                                Источник
+                              </a>
+                            ) : (
+                              <span>{DASH}</span>
+                            )}
+                            {createdAt ? <span>Создано: {createdAt}</span> : null}
+                          </div>
+                          {publishedAt ? (
+                            <div className="admin-table__meta">Опубликовано: {publishedAt}</div>
+                          ) : null}
+                        </td>
+                        <td>{item.region || DASH}</td>
+                        <td>
+                          <div className="admin-table__value">{formatVehicle(item)}</div>
+                          {item.vin ? <div className="admin-table__meta">VIN: {item.vin}</div> : null}
+                        </td>
+                        <td>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
+                        <td>
+                          <div className="admin-table__value">{formatDate(item.date_finish)}</div>
+                          {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
+                        </td>
+                        <td>
                           <button
                             type="button"
-                            className="button primary"
-                            style={publishButtonStyle}
-                            onClick={() => publish(item.id)}
-                            disabled={isPublishing || listLoading}
+                            className={isFeatured ? 'button button-small' : 'button button-small button-outline'}
+                            style={isFeatured ? { background: '#0f766e', borderColor: '#0f766e' } : undefined}
+                            onClick={() => toggleFeatured(item.id, !isFeatured)}
+                            disabled={isFeaturing || listLoading}
                           >
-                            Опубликовать
+                            {isFeatured ? 'В лучших' : 'Добавить'}
                           </button>
                         )}
-                        {item.source_url ? (
-                          <a
-                            href={item.source_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="button"
-                            style={linkButtonStyle}
-                          >
-                            Источник
-                          </a>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
-        <button className="button" onClick={() => loadPage(page - 1)} disabled={!canGoPrev || listLoading} style={linkButtonStyle}>
-          {ARROW_LEFT} Назад
-        </button>
-        <div style={{ color: '#9aa6b2' }}>
-          Страница {page} из {pageCount}
+                        </td>
+                        <td>
+                          <div className="admin-table__actions">
+                            <Link href={detailHref} className="button button-small button-outline">
+                              Редактировать
+                            </Link>
+                            {!isPublishedView && (
+                              <button
+                                type="button"
+                                className="button button-small"
+                                onClick={() => publish(item.id)}
+                                disabled={isPublishing || listLoading}
+                              >
+                                {isPublishing ? 'Публикуем…' : 'Опубликовать'}
+                              </button>
+                            )}
+                            {item.source_url ? (
+                              <a
+                                href={item.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="button button-small button-outline"
+                              >
+                                Источник
+                              </a>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <button className="button" onClick={() => loadPage(page + 1)} disabled={!canGoNext || listLoading} style={linkButtonStyle}>
-          Вперёд {ARROW_RIGHT}
-        </button>
+
+      <div className="admin-pagination">
+          <button
+            type="button"
+            className="button button-small button-outline"
+            onClick={() => loadPage(page - 1)}
+            disabled={!canGoPrev || listLoading}
+          >
+            {ARROW_LEFT} Назад
+          </button>
+          <div className="admin-pagination__info">
+            Страница {page} из {pageCount}
+          </div>
+          <button
+            type="button"
+            className="button button-small button-outline"
+            onClick={() => loadPage(page + 1)}
+            disabled={!canGoNext || listLoading}
+          >
+            Вперёд {ARROW_RIGHT}
+          </button>
+        </div>
       </div>
     </div>
   );
