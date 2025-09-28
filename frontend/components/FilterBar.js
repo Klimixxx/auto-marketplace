@@ -379,6 +379,27 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
           .right-actions { justify-content: stretch; }
         }
       `}</style>
+        <style jsx>{`
+  /* Контейнер действий: всё вправо — для надёжности (если снимешь inline-стили) */
+  .actions {
+    justify-content: flex-end;
+  }
+
+  /* Серая версия кнопки "Мои избранные" поверх глобальных .btn правил */
+  :global(.fav-btn) {
+    background: #ffffff !important;
+    color: #374151 !important;
+    border: 1px solid #D1D5DB !important;
+  }
+  :global(.fav-btn:hover) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(17,24,39,.08);
+    background: #F9FAFB !important;
+    border-color: #CBD5E1 !important;
+    color: #111827 !important;
+  }
+`}</style>
+
     </form>
   );
 }
