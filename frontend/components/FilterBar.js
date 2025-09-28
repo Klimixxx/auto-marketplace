@@ -202,22 +202,38 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
 
        
         {/* Кнопки */}
-<div className="actions col-span-12">
-  <div className="right-actions">
-    <button type="button" className="btn secondary" onClick={resetFilters}>
-      Сбросить
-    </button>
-    <button type="submit" className="btn primary">
-      Показать
-    </button>
-    <Link
-      href="/favorites"
-      className="btn ghost"
-      style={{ whiteSpace: 'nowrap' }}
-    >
-      Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
-    </Link>
-  </div>
+<div
+  className="actions col-span-12"
+  style={{
+    display: 'flex',
+    justifyContent: 'flex-end', // ← всё вправо в одну линию
+    gap: 8,
+    alignItems: 'center',
+    marginTop: 4,
+  }}
+>
+  <button type="button" className="btn secondary" onClick={resetFilters}>
+    Сбросить
+  </button>
+  <button type="submit" className="btn primary">
+    Показать
+  </button>
+
+  {/* Кнопка "Мои избранные" — вправо и с нейтральным стилем */}
+  <Link
+    href="/favorites"
+    className="btn ghost fav-btn"
+    style={{
+      background: '#ffffff',          // принудительно белая
+      color: '#374151',               // серо-графитовый текст
+      border: '1px solid #D1D5DB',    // светло-серый бордер
+      whiteSpace: 'nowrap',
+    }}
+  >
+    Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
+  </Link>
+</div>
+
 </div>
 </div>
 
