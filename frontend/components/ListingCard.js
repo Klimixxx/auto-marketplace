@@ -477,8 +477,31 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
   useEffect(() => { setActivePhotoIndex(0); }, [l?.id]);
+  useEffect(() => {
+    setActivePhotoIndex((index) => {
+      if (!photos.length) return 0;
+      if (index < 0) return 0;
+      if (index >= photos.length) return photos.length - 1;
+      return index;
+    });
+  }, [photos.length]);
 
+  const hasMultiplePhotos = photos.length > 1;
   const photo = photos[activePhotoIndex] || photos[0] || null;
+
+  const showPreviousPhoto = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex((index) => (index - 1 + photos.length) % photos.length);
+  };
+
+  const showNextPhoto = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex((index) => (index + 1) % photos.length);
+  };
 
   // prices
   const tradeTypeInfo = useMemo(() => resolveTradeType(l), [l]);
@@ -599,6 +622,15 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       router.push(detailHref);
+      return;
+    }
+    if (e.key === 'ArrowLeft' && hasMultiplePhotos) {
+      e.preventDefault();
+      showPreviousPhoto();
+    }
+    if (e.key === 'ArrowRight' && hasMultiplePhotos) {
+      e.preventDefault();
+      showNextPhoto();
     }
   };
 
@@ -640,8 +672,9 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             overflow: 'hidden',
             background: '#e6eef8',
             position: 'relative',
-            aspectRatio: '4 / 3',
             minHeight: 160,
+            paddingTop: '75%',
+            aspectRatio: '4 / 3',
           }}
         >
           {photo ? (
@@ -655,6 +688,83 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
               Нет фото
             </div>
           )}
+
+          {hasMultiplePhotos ? (
+            <>
+              <button
+                type="button"
+                onClick={showPreviousPhoto}
+                aria-label="Предыдущее фото"
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: 10,
+                  transform: 'translateY(-50%)',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  display: 'grid',
+                  placeItems: 'center',
+                  boxShadow: '0 6px 16px rgba(15,23,42,0.25)',
+                }}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={showNextPhoto}
+                aria-label="Следующее фото"
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  right: 10,
+                  transform: 'translateY(-50%)',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  display: 'grid',
+                  placeItems: 'center',
+                  boxShadow: '0 6px 16px rgba(15,23,42,0.25)',
+                }}
+              >
+                ›
+              </button>
+
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 16,
+                  right: 16,
+                  bottom: 12,
+                  display: 'flex',
+                  gap: 6,
+                }}
+              >
+                {photos.map((_, index) => (
+                  <div
+                    key={`indicator-${index}`}
+                    aria-hidden="true"
+                    style={{
+                      flex: 1,
+                      height: 3,
+                      borderRadius: 999,
+                      background: index === activePhotoIndex ? '#2563eb' : 'rgba(255,255,255,0.55)',
+                      opacity: index === activePhotoIndex ? 1 : 0.65,
+                      transition: 'background 0.2s ease, opacity 0.2s ease',
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
 
           {/* Избранное — не даём клику всплыть к карточке */}
           {onFav ? (
