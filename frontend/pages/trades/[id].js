@@ -321,7 +321,9 @@ function pickLotValue(source, keys = []) {
 
 export default function ListingPage({ item }) {
   const details = item?.details && typeof item.details === 'object' ? item.details : {};
-  const listingIdRaw = item?.id != null ? String(item.id).trim() : '';
+  const listingIdentifier =
+    item?.id ?? item?.source_id ?? item?.listing_id ?? item?._id ?? null;
+  const listingIdRaw = listingIdentifier != null ? String(listingIdentifier).trim() : '';
   const timing = computeTradeTiming(item || {});
   const statusInfo = timing?.status || null;
   const periods = Array.isArray(timing?.periods) ? timing.periods : [];
@@ -509,7 +511,7 @@ export default function ListingPage({ item }) {
             </div>
 
           <div className="muted" style={{ fontSize: 13 }}>
-              ID объявления: {item?.id}
+              ID объявления: {listingIdRaw || '—'}
             </div>
           </div>
         </div>
