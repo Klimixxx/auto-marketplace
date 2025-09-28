@@ -233,6 +233,7 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
     Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
   </Link>
 </div>
+</div> 
 
 
 
