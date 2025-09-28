@@ -882,9 +882,31 @@ export default function Home() {
               <h2 style={{ color: 'var(--text-1000)', fontSize: 22, fontWeight: 800, margin: 0 }}>
                 Новые предложения
               </h2>
-              <a href="/trades" className="button" style={{ textDecoration:'none' }}>
-                Смотреть все →
-              </a>
+              <a
+  href="/trades"
+  className="button"
+  style={{
+    textDecoration: 'none',
+    background: '#1d4ed8',
+    color: '#fff',
+    borderRadius: 10,
+    padding: '9px 14px',
+    fontWeight: 700,
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    display: 'inline-block'
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.transform = 'translateY(-2px)';
+    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = 'translateY(0)';
+    e.currentTarget.style.boxShadow = 'none';
+  }}
+>
+  Смотреть все →
+</a>
+
             </div>
 
             {errorRecent ? (
