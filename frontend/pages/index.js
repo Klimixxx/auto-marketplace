@@ -1,8 +1,10 @@
 // frontend/pages/index.js
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 import Hero from '../components/Hero';
 import About from '../components/About';
+import ListingCard from '../components/ListingCard';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -544,6 +546,9 @@ export default function Home() {
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
   const [activeRegion, setActiveRegion] = useState(null);
+  const [latestListings, setLatestListings] = useState([]);
+  const [loadingLatest, setLoadingLatest] = useState(true);
+  const [latestError, setLatestError] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -590,6 +595,35 @@ export default function Home() {
     return () => { ignore = true; };
   }, []);
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadLatest() {
+      try {
+        setLoadingLatest(true);
+        setLatestError(null);
+        const params = new URLSearchParams({ limit: '6', published: 'true' });
+        const response = await fetch(`${api('/api/listings')}?${params.toString()}`);
+        if (!response.ok) throw new Error(`latest:${response.status}`);
+        const data = await response.json();
+        if (!ignore) {
+          setLatestListings(Array.isArray(data?.items) ? data.items : []);
+        }
+      } catch (error) {
+        console.error('Failed to load latest listings', error);
+        if (!ignore) {
+          setLatestListings([]);
+          setLatestError('Не удалось загрузить новые предложения. Попробуйте позже.');
+        }
+      } finally {
+        if (!ignore) setLoadingLatest(false);
+      }
+    }
+    loadLatest();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const statsCards = useMemo(() => ([
     { title: 'Пользователей', value: summary?.totalUsers ?? 0, Icon: UsersIcon, isCurrency: false },
     { title: 'Публичные предложения', value: summary?.offersCount ?? 0, Icon: DocumentIcon, isCurrency: false },
@@ -602,8 +636,89 @@ export default function Home() {
   return (
     <>
       <Hero listingCount={summary?.totalListings ?? 0} />
-      {/* Интересные предложения — 6 карточек-витрина */}
-     
+      <section className="container" style={{ paddingTop: 0, paddingBottom: 24 }}>
+        <div
+          style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--card-border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)',
+            padding: '28px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 24,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              gap: 16,
+            }}
+          >
+            <div>
+              <div className="eyebrow" style={{ color: 'var(--blue)', marginBottom: 6 }}>Новые предложения</div>
+              <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: 'var(--text-900)' }}>
+                Свежие лоты из раздела «Торги»
+              </h2>
+              <p style={{ margin: '8px 0 0', color: 'var(--text-600)', maxWidth: 540, lineHeight: 1.55 }}>
+                Мы подобрали последние шесть опубликованных объявлений. Перейдите на страницу «Торги», чтобы посмотреть
+                все доступные предложения и настроить фильтры.
+              </p>
+            </div>
+            <Link
+              href="/trades"
+              className="button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '12px 18px',
+                borderRadius: 12,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              Смотреть все торги
+            </Link>
+          </div>
+
+          {loadingLatest ? (
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div className="big" style={{ marginBottom: 6 }}>Загружаем новые предложения…</div>
+              <div className="muted">Это займёт всего пару секунд.</div>
+            </div>
+          ) : latestError ? (
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div className="big" style={{ marginBottom: 6 }}>Не удалось загрузить лоты</div>
+              <div className="muted">{latestError}</div>
+            </div>
+          ) : latestListings.length ? (
+            <div style={{ display: 'grid', gap: 18 }}>
+              {latestListings.slice(0, 6).map((listing, index) => {
+                const hasId = listing?.id != null;
+                const listingId = hasId ? String(listing.id) : `latest-${index}`;
+                return (
+                  <ListingCard
+                    key={listingId}
+                    l={listing}
+                    detailHref={hasId ? `/trades/${listingId}` : undefined}
+                    sourceHref={listing?.source_url}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div className="big" style={{ marginBottom: 6 }}>Пока нет свежих предложений</div>
+              <div className="muted">Загляните позже или перейдите в раздел «Торги», чтобы найти другие варианты.</div>
+            </div>
+          )}
+        </div>
+      </section>
+
 
       <About />
 
