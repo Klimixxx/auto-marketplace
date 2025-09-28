@@ -199,7 +199,8 @@ export default function Trades() {
         <h1 style={{ margin: 0 }}>Торги</h1>
       </div>
 
-      <FilterBar onSearch={handleSearch} initial={filters} />
+      <FilterBar onSearch={handleSearch} initial={filters} favoritesCount={favoriteIds.length} />
+
 
       <div style={{ marginTop: 16 }}>
         {loading ? (
