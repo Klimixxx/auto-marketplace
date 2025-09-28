@@ -883,11 +883,12 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
 
 /* Нижняя полоса: всегда тот же фон, что у страницы под ней */
 .header--bottom {
-  background: var(--page-bg) !important; /* тот же фон, что и у body */
+  background: #f5f5f5 !important; /* мягкий серо-молочный фон */
   color: var(--text);
   border-bottom: none !important;
   box-shadow: none;
 }
+
 
 
 
