@@ -5,7 +5,9 @@ import Hero from '../components/Hero';
 import ListingCard from '../components/ListingCard';
 import About from '../components/About';
 import { formatTradeTypeLabel } from '../lib/tradeTypes';
-import FavoriteButton from '../components/FavoriteButton';
+
+import { useRouter } from 'next/router';
+
 
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -699,6 +701,63 @@ export default function Home() {
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [errorRecent, setErrorRecent] = useState(null);
 
+    const router = useRouter();
+
+  // токен авторизации и локальное состояние избранного
+  const [authToken, setAuthToken] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  // читаем токен из localStorage и следим за изменением
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('token');
+    if (stored) setAuthToken(stored);
+
+    const handler = (event) => {
+      if (event.key === 'token') {
+        setAuthToken(event.newValue);
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  // переключение избранного (как в /trades)
+  async function toggleFav(listing) {
+    const listingId = String(listing.id ?? listing.listing_id ?? listing._id);
+
+    if (!authToken) {
+      const next = `/login?next=${encodeURIComponent(router.asPath || '/')}`;
+      router.push(next);
+      return;
+    }
+
+    const isFav = favoriteSet.has(listingId);
+    try {
+      const res = await fetch(api(`/api/favorites/${listingId}`), {
+        method: isFav ? 'DELETE' : 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.status === 401) {
+        if (typeof window !== 'undefined') localStorage.removeItem('token');
+        setAuthToken(null);
+        return;
+      }
+      if (!res.ok) throw new Error('failed');
+
+      setFavoriteIds((prev) => {
+        if (isFav) return prev.filter((id) => id !== listingId);
+        if (prev.includes(listingId)) return prev;
+        return [...prev, listingId];
+      });
+    } catch (err) {
+      console.error('Failed to toggle favorite', err);
+      alert('Не удалось обновить избранное. Попробуйте позже.');
+    }
+  }
+
+
 
   useEffect(() => {
     let ignore = false;
@@ -821,9 +880,14 @@ export default function Home() {
                     }}
                   >
                     {recent.map((l) => {
-  const listingId = l.id ?? l.listing_id ?? l._id;
+  const listingId = String(l.id ?? l.listing_id ?? l._id);
   return (
-    <RecentListingCard key={listingId} item={l} />
+    <RecentListingCard
+      key={listingId}
+      item={l}
+      fav={favoriteSet.has(listingId)}
+      onFav={() => toggleFav(l)}
+    />
   );
 })}
 
