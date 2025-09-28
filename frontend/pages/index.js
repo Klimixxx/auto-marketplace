@@ -622,11 +622,12 @@ function RecentListingCard({ item }) {
           </span>
         ) : null}
 
+        {/* Кнопка избранного как на /trades */}
         <FavoriteButton
-  listingId={listingId}
-  style={{ position: 'absolute', right: 12, top: 12 }}
-/>
-
+          listingId={listingId}
+          style={{ position: 'absolute', right: 12, top: 12 }}
+        />
+      </div> {/* ← это закрытие контейнера фото */}
 
       {/* Контент */}
       <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 8 }}>
@@ -641,14 +642,14 @@ function RecentListingCard({ item }) {
           {item?.title || 'Лот'}
         </a>
 
-        {/* Подзаголовок: тип + мелкие идентификаторы, если есть */}
+        {/* Подзаголовок */}
         <div style={{ fontSize: 12, color: '#64748b' }}>
           {tradeType}
           {item?.lot_number ? `, Лот №${item.lot_number}` : ''}
           {item?.case_number ? ` • Дело ${item.case_number}` : ''}
         </div>
 
-        {/* Цена + тренд/ставки (аккуратно, если есть поля) */}
+        {/* Цена + ставки */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <div style={{ color: '#1d4ed8', fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{price}</div>
           {item?.bids_count != null ? (
@@ -667,22 +668,19 @@ function RecentListingCard({ item }) {
           </div>
         ) : null}
 
-        {/* Кнопки */}
+        {/* Кнопка Подробнее (Источник убрали) */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-  <a
-    href={`/trades/${listingId}`}
-    style={{
-      flex: 1, textAlign: 'center', textDecoration: 'none',
-      background: '#1d4ed8', color: '#fff',
-      borderRadius: 10, padding: '9px 10px',
-      fontWeight: 700, textDecoration: 'none'
-    }}
-  >
-    Подробнее
-  </a>
-</div>
-
-          ) : null}
+          <a
+            href={`/trades/${listingId}`}
+            style={{
+              flex: 1, textAlign: 'center', textDecoration: 'none',
+              background: '#1d4ed8', color: '#fff',
+              borderRadius: 10, padding: '9px 10px',
+              fontWeight: 700
+            }}
+          >
+            Подробнее
+          </a>
         </div>
       </div>
     </article>
