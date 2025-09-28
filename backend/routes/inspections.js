@@ -62,8 +62,8 @@ router.post('/', async (req, res) => {
               COALESCE(balance::numeric, 0)              AS balance,
               COALESCE(subscription_status,'free')       AS subscription_status,
               COALESCE(balance_frozen, false)            AS balance_frozen
-         FROM users WHERE id=$1 FOR UPDATE`,
-      [userId]
+         FROM users WHERE id::text=$1 FOR UPDATE`,
+      [String(userId)]
     );
     const user = u.rows[0];
     if (!user) {
@@ -94,15 +94,15 @@ router.post('/', async (req, res) => {
     }
 
     await client.query(
-      'UPDATE users SET balance = (COALESCE(balance::numeric,0) - $1)::numeric, updated_at = now() WHERE id=$2',
-      [finalAmount, userId]
+      'UPDATE users SET balance = (COALESCE(balance::numeric,0) - $1)::numeric, updated_at = now() WHERE id::text=$2',
+      [finalAmount, String(userId)]
     );
 
     const ins = await client.query(
       `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
          VALUES ($1,$2,$3,$4,$5,$6)
          RETURNING *`,
-      [userId, listingId, INITIAL_STATUS, BASE_PRICE, discountPercent, finalAmount]
+      [String(userId), listingId, INITIAL_STATUS, BASE_PRICE, discountPercent, finalAmount]
     );
 
     await client.query('COMMIT');
@@ -134,9 +134,9 @@ router.get('/me', async (req, res) => {
       `SELECT i.*, l.title AS listing_title
          FROM inspections i
          JOIN listings l ON l.id = i.listing_id
-        WHERE i.user_id = $1
+        WHERE i.user_id::text = $1
         ORDER BY i.created_at DESC`,
-      [userId]
+      [String(userId)]
     );
     res.json({ items: q.rows });
   } catch (e) {
