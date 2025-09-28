@@ -7,6 +7,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const router = express.Router();
+const STATUS_FLOW = [
+  'Оплачен/Ожидание модерации',
+  'Заказ принят, Приступаем к Осмотру',
+  'Производится осмотр',
+  'Осмотр завершен'
+];
 
 // Настраиваем папку для отчётов
 const __filename = fileURLToPath(import.meta.url);
@@ -70,8 +76,7 @@ router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
     const status = String(req.body?.status || '');
-    const allowed = ['Идет модерация','Выполняется осмотр машины','Завершен'];
-    if (!allowed.includes(status)) return res.status(400).json({ error: 'BAD_STATUS' });
+    if (!STATUS_FLOW.includes(status)) return res.status(400).json({ error: 'BAD_STATUS' });
 
     const r = await query(
       'UPDATE inspections SET status=$1, updated_at=now() WHERE id=$2 RETURNING *',
