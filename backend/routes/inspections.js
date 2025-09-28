@@ -6,32 +6,44 @@ const router = express.Router();
 const BASE_PRICE = 12000;
 const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
 
+const MAX_LISTING_ID_LENGTH = 160;
+
 function normalizeListingId(value) {
   if (value == null) return null;
+
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null;
     const truncated = Math.trunc(value);
-    return truncated > 0 ? truncated : null;
+    return truncated > 0 ? String(truncated) : null;
   }
 
-  const str = String(value).trim();
-  if (!str) return null;
+   const raw = String(value).trim();
+  if (!raw) return null;
 
-  const digits = str.replace(/[^0-9]/g, '');
-  if (!digits) return null;
+  const compact = raw.replace(/\s+/g, '');
+  if (!compact) return null;
 
-  if (typeof BigInt === 'function') {
-    try {
-      const big = BigInt(digits);
-      if (big > 0n) return big.toString();
-      return null;
-    } catch {
-      // fall through to the string-based normalization below
+  const clean = compact.replace(/[\u0000-\u001f\u007f]/g, '');
+  if (!clean) return null;
+
+  if (/^[0-9]+$/.test(clean)) {
+    const digits = clean.replace(/^0+/, '');
+    if (!digits) return null;
+    if (typeof BigInt === 'function') {
+      try {
+        const big = BigInt(digits);
+        if (big > 0n) return big.toString();
+      } catch {
+        // fall through to returning the plain digit string below
+      }
     }
+    return digits;
   }
 
-  const normalized = digits.replace(/^0+/, '');
-  return normalized ? normalized : null;
+
+  return clean.length > MAX_LISTING_ID_LENGTH
+    ? clean.slice(0, MAX_LISTING_ID_LENGTH)
+    : clean;
 }
 
 
@@ -51,8 +63,13 @@ router.post('/', async (req, res) => {
 
   try {
     // Проверим, что объявление существует (отдельно от транзакции)
-    const l = await query('SELECT id, title FROM listings WHERE id::text=$1', [listingId]);
-    if (!l.rows[0]) return res.status(404).json({ error: 'Listing not found' });
+    const l = await query(
+      'SELECT id, source_id, title FROM listings WHERE id::text = $1 OR source_id = $1 LIMIT 1',
+      [listingId]
+    );
+    const listing = l.rows[0];
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    const listingDbId = listing.id;
 
     client = await pool.connect();
     await client.query('BEGIN');
@@ -103,7 +120,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount)
          VALUES ($1,$2,$3,$4,$5,$6)
          RETURNING *`,
-      [String(userId), listingId, INITIAL_STATUS, BASE_PRICE, discountPercent, finalAmount]
+      [String(userId), String(listingDbId), INITIAL_STATUS, BASE_PRICE, discountPercent, finalAmount]
     );
 
     await client.query('COMMIT');
