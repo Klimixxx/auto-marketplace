@@ -342,16 +342,20 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
           box-shadow: 0 6px 14px rgba(17,24,39,.08);
           background: #fff;
         }
-        .btn.ghost {
-          background: transparent;
-          color: #1E90FF;
-          border: 1px solid rgba(30,144,255,.35);
-        }
-        .btn.ghost:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 14px rgba(30,144,255,.25);
-          background: rgba(255,255,255,.65);
-        }
+        /* Менее синий, нейтрально-серый стиль для "Мои избранные" */
+.btn.ghost {
+  background: #ffffff;
+  color: #374151;              /* slate-700 */
+  border: 1px solid #D1D5DB;   /* gray-300 */
+}
+.btn.ghost:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(17,24,39,.08); /* мягкая тень */
+  background: #F9FAFB;         /* gray-50 */
+  border-color: #CBD5E1;       /* slate-300 */
+  color: #111827;              /* slate-900 */
+}
+
 
         @media (max-width: 719.98px) {
           .filters-panel-pro { padding: 10px; }
