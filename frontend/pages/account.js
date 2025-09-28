@@ -19,7 +19,7 @@ export default function Account() {
   function setUser(u){ setMe(u); }
 
   const UI = {
-  pageBg: 'var(--bg)', // фон как на "Торги"
+  pageBg: 'var(--bg-trades)',
   title: 'var(--text)',
   muted: 'var(--muted)',
   cardBg: 'var(--surface-1)',
