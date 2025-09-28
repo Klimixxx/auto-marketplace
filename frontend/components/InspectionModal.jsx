@@ -2,34 +2,43 @@ import { useState, useEffect } from 'react';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 const INSPECTION_ENDPOINT = API_BASE ? `${API_BASE}/api/inspections` : '/api/inspections';
+const MAX_LISTING_ID_LENGTH = 160;
 
 function normalizeListingId(value) {
   if (value == null) return null;
-  
+
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null;
     const truncated = Math.trunc(value);
     return truncated > 0 ? String(truncated) : null;
   }
 
-  const str = String(value).trim();
-  if (!str) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
 
-  const digits = str.replace(/[^0-9]/g, '');
-  if (!digits) return null;
+  const compact = raw.replace(/\s+/g, '');
+  if (!compact) return null;
 
-  if (typeof BigInt === 'function') {
-    try {
-      const big = BigInt(digits);
-      if (big > 0n) return big.toString();
-      return null;
-    } catch {
-      // ignore and continue with the fallback logic below
+  const clean = compact.replace(/[\u0000-\u001f\u007f]/g, '');
+  if (!clean) return null;
+
+  if (/^[0-9]+$/.test(clean)) {
+    const digits = clean.replace(/^0+/, '');
+    if (!digits) return null;
+    if (typeof BigInt === 'function') {
+      try {
+        const big = BigInt(digits);
+        if (big > 0n) return big.toString();
+      } catch {
+        // ignore and fall through to returning the digit string
+      }
     }
+    return digits;
   }
 
-  const normalized = digits.replace(/^0+/, '');
-  return normalized ? normalized : null;
+  return clean.length > MAX_LISTING_ID_LENGTH
+    ? clean.slice(0, MAX_LISTING_ID_LENGTH)
+    : clean;
 }
 
 export default function InspectionModal({ listingId, isOpen, onClose }) {
