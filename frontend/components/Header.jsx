@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import Router from 'next/router';
 
 const MAXW = 1100;
-const API = process.env.NEXT_PUBLIC_API_BASE || ''; // если пусто — относительные пути
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
   /* Верхняя часть шапки */
@@ -62,12 +62,24 @@ function IconUser({ size = 20, color = 'currentColor' }) {
 }
 
 /* ===== utils ===== */
-function join(path){ return (API ? API.replace(/\/+$/,'') : '') + path; }
+function join(path){
+  if (!path) return API_BASE || '';
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
 async function safeJson(url, opts){
   try { const r = await fetch(url, opts); if (!r.ok) return null; return await r.json(); }
   catch { return null; }
 }
 function isFiniteNum(x){ return typeof x === 'number' && isFinite(x); }
+function parseBalance(value){
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/\u00a0/g, '').replace(/\s/g, '').replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
 function countUnreadInArray(arr){
   if (!Array.isArray(arr)) return null;
   let n = 0;
@@ -149,7 +161,7 @@ function parseUnreadCount(d){
 }
 
 /* ===== Header ===== */
-export default function Header() {
+export default function Header({ user }) {
   const router = useRouter();
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
@@ -159,6 +171,12 @@ export default function Header() {
 
   // профиль
   useEffect(() => {
+    useEffect(() => {
+    if (user && user.id) {
+      setMe(user);
+      setAuthed(true);
+      return;
+    }
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     setAuthed(Boolean(token));
     if (token) {
@@ -166,19 +184,19 @@ export default function Header() {
         .then(r => (r.ok ? r.json() : null))
         .then(d => { if (d) setMe(d); })
         .catch(() => {});
-    } else if (API) {
+    } else if (API_BASE) {
       fetch(join('/api/me'), { credentials: 'include' })
         .then(r => (r.ok ? r.json() : null))
         .then(d => {
-          const user = d?.user ?? d;
-          if (user?.id) {
-            setMe(user);
+          const fetchedUser = d?.user ?? d;
+          if (fetchedUser?.id) {
+            setMe(fetchedUser);
             setAuthed(true);
           }
         })
         .catch(() => {});
     }
-  }, []);
+  }, [user]);
 
   // клик вне меню
   useEffect(() => {
@@ -239,11 +257,13 @@ export default function Header() {
 
   function logout() {
     localStorage.removeItem('token');
+    setMe(null);
+    setAuthed(false);
     location.href = '/';
   }
 
   const username = me?.name || (authed ? 'Аккаунт' : 'Войти');
-  const balance = typeof me?.balance === 'number' ? me.balance : 0;
+  const balance = parseBalance(me?.balance);
   const fmtRub = new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 });
 
   const [q, setQ] = useState('');
