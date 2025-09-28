@@ -560,8 +560,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const tradeType = tradeTypeInfo?.label || l.trade_type_label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l, tradeTypeInfo) : null;
-  const eyebrowParts = [tradeType, additionalEyebrow].filter(Boolean);
-  const eyebrow = eyebrowParts.length ? eyebrowParts.join(' • ') : null;
+  const eyebrow = tradeType || additionalEyebrow || null;
 
   // description (короткий)
   const description =
