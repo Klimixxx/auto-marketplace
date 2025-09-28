@@ -15,7 +15,12 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
   const [minPrice, setMinPrice] = useState(initial?.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(initial?.maxPrice || '');
-  const [meta, setMeta] = useState({ regions: [], cities: [], brands: [], tradeTypes: [] });
+  const EMPTY_META = useMemo(
+    () => ({ regions: [], cities: [], brands: [], tradeTypes: [] }),
+    []
+  );
+
+  const [meta, setMeta] = useState(EMPTY_META);
 
   const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
@@ -50,15 +55,26 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
         const res = await fetch(api('/api/listings/meta'));
         if (!res.ok) throw new Error('meta');
         const data = await res.json();
-        if (!ignore) setMeta(data);
+        if (!ignore) {
+          const next =
+            data && typeof data === 'object' && !Array.isArray(data)
+              ? {
+                  regions: Array.isArray(data.regions) ? data.regions : [],
+                  cities: Array.isArray(data.cities) ? data.cities : [],
+                  brands: Array.isArray(data.brands) ? data.brands : [],
+                  tradeTypes: Array.isArray(data.tradeTypes) ? data.tradeTypes : [],
+                }
+              : EMPTY_META;
+          setMeta(next);
+        }
       } catch (e) {
         console.error('Failed to load filter options', e);
-        if (!ignore) setMeta({ regions: [], cities: [], brands: [], tradeTypes: [] });
+        if (!ignore) setMeta(EMPTY_META);
       }
     }
     loadMeta();
     return () => { ignore = true; };
-  }, []);
+  }, [EMPTY_META]);
 
   useEffect(() => {
     setQ(initial?.q || '');
