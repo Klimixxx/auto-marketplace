@@ -545,6 +545,11 @@ export default function Home() {
   const [loadingFeatured, setLoadingFeatured] = useState(true);
   const [activeRegion, setActiveRegion] = useState(null);
 
+  const [recent, setRecent] = useState([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
+  const [errorRecent, setErrorRecent] = useState(null);
+
+
   useEffect(() => {
     let ignore = false;
     async function loadSummary() {
@@ -589,6 +594,41 @@ export default function Home() {
     loadFeatured();
     return () => { ignore = true; };
   }, []);
+    // Загружаем ПЕРВЫЕ 6 объявлений как на /trades (published=true, сортировка как в API)
+  useEffect(() => {
+    let ignore = false;
+    async function loadRecent() {
+      try {
+        setLoadingRecent(true);
+        setErrorRecent(null);
+
+        const params = new URLSearchParams();
+        params.set('page', '1');
+        params.set('limit', '6');
+        params.set('published', 'true');
+
+        const url = api(`/api/listings?${params.toString()}`);
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`recent ${res.status}`);
+        const data = await res.json();
+
+        if (!ignore) {
+          setRecent(Array.isArray(data?.items) ? data.items : []);
+        }
+      } catch (e) {
+        console.error('Failed to load recent listings', e);
+        if (!ignore) {
+          setRecent([]);
+          setErrorRecent('Не удалось загрузить новые предложения.');
+        }
+      } finally {
+        if (!ignore) setLoadingRecent(false);
+      }
+    }
+    loadRecent();
+    return () => { ignore = true; };
+  }, []);
+
 
   const statsCards = useMemo(() => ([
     { title: 'Пользователей', value: summary?.totalUsers ?? 0, Icon: UsersIcon, isCurrency: false },
@@ -602,7 +642,57 @@ export default function Home() {
   return (
     <>
       <Hero listingCount={summary?.totalListings ?? 0} />
-      {/* Интересные предложения — 6 карточек-витрина */}
+      {/* === НОВЫЕ ПРЕДЛОЖЕНИЯ (первые 6 как на /trades) === */}
+      {(recent.length || loadingRecent) && (
+        <section style={{ margin: '32px 0' }}>
+          <div className="container">
+            <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:12, marginBottom: 12 }}>
+              <h2 style={{ color: 'var(--text-1000)', fontSize: 22, fontWeight: 800, margin: 0 }}>
+                Новые предложения
+              </h2>
+              <a href="/trades" className="button" style={{ textDecoration:'none' }}>
+                Смотреть все →
+              </a>
+            </div>
+
+            {errorRecent ? (
+              <div className="panel" style={{ color: 'var(--text-700)' }}>{errorRecent}</div>
+            ) : (
+              <>
+                {loadingRecent ? (
+                  <div className="panel" style={{ color: 'var(--text-700)' }}>Загружаем…</div>
+                ) : recent.length ? (
+                  <div
+                    className="grid"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                      gap: 12
+                    }}
+                  >
+                    {recent.map((l) => {
+                      const listingId = l.id ?? l.listing_id ?? l._id;
+                      return (
+                        <ListingCard
+                          key={listingId}
+                          l={l}
+                          fav={false}
+                          detailHref={`/trades/${listingId}`}
+                          sourceHref={l.source_url}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="panel" style={{ color: 'var(--text-700)' }}>
+                    Предложения скоро появятся
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
      
 
       <About />
