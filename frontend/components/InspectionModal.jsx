@@ -69,6 +69,11 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
           setErr(data?.message || 'Недостаточно средств, пополните счет');
           return;
         }
+        if (res.status === 423) {
+          const data = await res.json().catch(() => ({}));
+          setErr(data?.message || 'Баланс заморожен. Свяжитесь с поддержкой.');
+          return;
+        }
         if (res.status === 400) { setErr('Неверные данные запроса'); return; }
         if (res.status === 404) { setErr('Объявление не найдено'); return; }
         if (res.status === 401) {
