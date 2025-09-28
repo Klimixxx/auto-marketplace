@@ -50,6 +50,54 @@ function pickDetailValue(listing, keys = []) {
   return null;
 }
 
+function buildAdditionalEyebrow(listing, tradeTypeInfo = null) {
+  if (!listing) return null;
+
+  const parts = [];
+
+  const assetType = pickDetailValue(listing, [
+    'asset_type',
+    'assetType',
+    'category',
+    'category_name',
+    'categoryName',
+    'object_type',
+    'objectType',
+  ]);
+  if (assetType && typeof assetType === 'string') {
+    const normalized = assetType.trim();
+    if (normalized && normalized !== tradeTypeInfo?.label) parts.push(normalized);
+  }
+
+  const region = listing.region || pickDetailValue(listing, ['region']);
+  if (region && typeof region === 'string') {
+    const normalized = region.trim();
+    if (normalized) parts.push(normalized);
+  }
+
+  const rawYear = pickDetailValue(listing, [
+    'year',
+    'production_year',
+    'manufacture_year',
+    'year_of_issue',
+    'productionYear',
+    'yearOfIssue',
+  ]);
+  if (rawYear != null && rawYear !== '') {
+    let normalized = null;
+    if (typeof rawYear === 'number' && Number.isFinite(rawYear)) {
+      normalized = rawYear;
+    } else if (typeof rawYear === 'string') {
+      const match = rawYear.match(/\d{4}/);
+      if (match) normalized = match[0];
+    }
+    if (normalized) parts.push(String(normalized));
+  }
+
+  return parts.length ? parts.join(' • ') : null;
+}
+
+
 function normalizeNumber(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -512,7 +560,8 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const tradeType = tradeTypeInfo?.label || l.trade_type_label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
   const additionalEyebrow = listingKind ? buildAdditionalEyebrow(l, tradeTypeInfo) : null;
-  const eyebrow = tradeType || null;
+  const eyebrowParts = [tradeType, additionalEyebrow].filter(Boolean);
+  const eyebrow = eyebrowParts.length ? eyebrowParts.join(' • ') : null;
 
   // description (короткий)
   const description =
