@@ -625,10 +625,33 @@ function RecentListingCard({ item }) {
         ) : null}
 
         {/* Кнопка избранного как на /trades */}
-        <FavoriteButton
-          listingId={listingId}
-          style={{ position: 'absolute', right: 12, top: 12 }}
-        />
+        {/* Кнопка избранного */}
+{onFav ? (
+  <button
+    type="button"
+    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
+    style={{
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      borderRadius: 10,
+      border: '1px solid #e5e7eb',
+      background: '#fff',
+      color: fav ? '#f59e0b' : '#64748b',
+      padding: '6px 10px',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      fontSize: 14,
+      boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+    }}
+    aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
+  >
+    <span aria-hidden="true">{fav ? '★' : '☆'}</span>
+  </button>
+) : null}
+
       </div> {/* ← это закрытие контейнера фото */}
 
       {/* Контент */}
