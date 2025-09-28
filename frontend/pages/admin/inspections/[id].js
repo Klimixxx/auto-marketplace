@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 const API = process.env.NEXT_PUBLIC_API_BASE || '';
+const STATUS_FLOW = [
+  'Оплачен/Ожидание модерации',
+  'Заказ принят, Приступаем к Осмотру',
+  'Производится осмотр',
+  'Осмотр завершен'
+];
 
 export default function AdminInspectionDetail(){
   const router = useRouter();
   const { id } = router.query;
   const [item, setItem] = useState(null);
-  const [status, setStatus] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -27,15 +33,20 @@ export default function AdminInspectionDetail(){
     })();
   }, [id]);
 
-  async function updateStatus(){
+  async function updateOrderStatus(nextStatus){
+    if (!item || item.status === nextStatus) return;
     const token = localStorage.getItem('token');
+    setUpdatingStatus(true);
     const res = await fetch(`${API}/api/admin/inspections/${id}/status`, {
       method:'PUT',
       headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status: nextStatus })
     });
+    setUpdatingStatus(false);
     if (!res.ok) { alert('Ошибка обновления статуса'); return; }
-    const data = await res.json(); setItem(data); alert('Статус обновлён');
+    const data = await res.json();
+    setItem(data);
+    alert('Статус обновлён');
   }
 
   async function uploadPdf(e){
@@ -60,14 +71,29 @@ export default function AdminInspectionDetail(){
         <div><b>Пользователь:</b> {item.user_name || item.user_phone}</div>
         <div><b>Подписка:</b> {item.subscription_status}</div>
         <div><b>Объявление:</b> <a href={`/trades/${item.listing_id}`} target="_blank" rel="noreferrer">{item.listing_title || item.listing_id}</a></div>
-        <div style={{marginTop:12}}><b>Статус:</b></div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <select value={status} onChange={e=>setStatus(e.target.value)}>
-            <option>Идет модерация</option>
-            <option>Выполняется осмотр машины</option>
-            <option>Завершен</option>
-          </select>
-          <button onClick={updateStatus}>Сохранить</button>
+        <div style={{marginTop:12}}><b>Текущий статус:</b> {item.status}</div>
+        <div style={{marginTop:8}}><b>Управление статусами:</b></div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          {STATUS_FLOW.map(st => {
+            const isActive = item.status === st;
+            return (
+              <button
+                key={st}
+                onClick={() => updateOrderStatus(st)}
+                disabled={isActive || updatingStatus}
+                style={{
+                  padding:'8px 12px',
+                  borderRadius:8,
+                  border:isActive ? '1px solid #1E90FF' : '1px solid #d0d0d0',
+                  background:isActive ? '#1E90FF' : '#fff',
+                  color:isActive ? '#fff' : '#111',
+                  cursor:(isActive || updatingStatus) ? 'default' : 'pointer'
+                }}
+              >
+                {st}
+              </button>
+            );
+          })}
         </div>
         <div style={{marginTop:16}}>
           <div><b>Отчёт (PDF):</b> {item.report_pdf_url ? <a href={item.report_pdf_url} target="_blank" rel="noreferrer">Открыть</a> : <span>не загружен</span>}</div>
