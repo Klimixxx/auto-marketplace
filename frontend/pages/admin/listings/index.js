@@ -15,6 +15,14 @@ function normalizeBase(value) {
   return result;
 }
 
+const API_BASE = normalizeBase(RAW_API_BASE);
+const PAGE_SIZE = 20;
+const PARSER_PAGE_SIZE = 50;
+const DEFAULT_SEARCH_TERM = 'vin';
+const DASH = '—';
+const ARROW_LEFT = '←';
+const ARROW_RIGHT = '→';
+
 function readToken() {
   if (typeof window === 'undefined') return null;
   try {
@@ -401,6 +409,7 @@ export default function AdminParserTradesPage() {
     },
     [page, loadPage, view],
   );
+
   const toggleFeatured = useCallback(
     async (id, nextState) => {
       if (!API_BASE) {
@@ -430,9 +439,9 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        setItems((prev) => prev.map((item) => (
-          item.id === id ? { ...item, is_featured: nextState } : item
-        )));
+        setItems((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, is_featured: nextState } : item)),
+        );
       } catch (error) {
         console.error('feature toggle error:', error);
         alert('Не удалось обновить статус «Лучшее предложение».');
@@ -440,10 +449,8 @@ export default function AdminParserTradesPage() {
         setFeaturingId(null);
       }
     },
-    [setFeaturingId, setItems],
+    [],
   );
-
-  
 
   const isPublishedView = view === 'published';
   const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
@@ -467,7 +474,7 @@ export default function AdminParserTradesPage() {
           </p>
         </div>
 
-      <div className="admin-tabs">
+        <div className="admin-tabs">
           <button
             type="button"
             className={`admin-segment ${isPublishedView ? '' : 'is-active'}`}
@@ -514,7 +521,7 @@ export default function AdminParserTradesPage() {
             >
               {searchButtonLabel}
             </button>
-          {!isPublishedView && (
+            {!isPublishedView && (
               <>
                 <button
                   type="button"
@@ -537,7 +544,7 @@ export default function AdminParserTradesPage() {
           </div>
         </div>
 
-          {isPublishedView ? (
+        {isPublishedView ? (
           <div className="admin-hint-card">
             <div className="admin-hint-card__title">Опубликованные объявления</div>
             <p className="admin-hint-card__text">
@@ -548,7 +555,7 @@ export default function AdminParserTradesPage() {
           <div className="admin-hint-card">
             <div className="admin-hint-card__title">Статус загрузки парсера</div>
             <p className="admin-hint-card__text">
-              Парсер обрабатывает данные блоками по {PARSER_PAGE_SIZE}. Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset:{' '}
+              Парсер обрабатывает данные блоками по {PARSER_PAGE_SIZE}. Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset{' '}
               <strong>{nextOffset}</strong>.
               {lastIngest?.totalFound != null ? (
                 <>
@@ -604,7 +611,7 @@ export default function AdminParserTradesPage() {
                     <td className="admin-table__empty" colSpan={7}>
                       {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
                     </td>
-                    /tr>
+                  </tr>
                 ) : (
                   items.map((item) => {
                     const createdAt = formatCreatedAt(item.created_at);
@@ -654,7 +661,6 @@ export default function AdminParserTradesPage() {
                           >
                             {isFeatured ? 'В лучших' : 'Добавить'}
                           </button>
-                        )}
                         </td>
                         <td>
                           <div className="admin-table__actions">
@@ -692,7 +698,7 @@ export default function AdminParserTradesPage() {
           </div>
         </div>
 
-      <div className="admin-pagination">
+        <div className="admin-pagination">
           <button
             type="button"
             className="button button-small button-outline"
