@@ -234,8 +234,6 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
   </Link>
 </div>
 
-</div>
-</div>
 
 
       {/* Стили: компактный размер и полупрозрачный голубой фон */}
