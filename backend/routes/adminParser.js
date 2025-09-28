@@ -1,7 +1,38 @@
 import express from 'express';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { query } from '../db.js';
 
 const router = express.Router();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const listingPhotosDir = path.join(__dirname, '..', 'uploads', 'listing-photos');
+fs.mkdirSync(listingPhotosDir, { recursive: true });
+
+const listingPhotoStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, listingPhotosDir),
+  filename: (req, file, cb) => {
+    const ext = (path.extname(file.originalname || '').toLowerCase()) || '.jpg';
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}${ext}`);
+  },
+});
+
+const listingPhotoUpload = multer({
+  storage: listingPhotoStorage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 12 },
+  fileFilter: (req, file, cb) => {
+    if (file?.mimetype && file.mimetype.startsWith('image/')) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('ONLY_IMAGES'));
+  },
+});
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 15;
@@ -449,6 +480,41 @@ router.post('/actions/ingest', async (req, res) => {
     console.error('ingest call error:', error);
     res.status(500).json({ error: 'failed' });
   }
+});
+
+const handlePhotoUpload = listingPhotoUpload.array('photos', 12);
+
+router.post('/parser-trades/:id/photos/upload', (req, res) => {
+  handlePhotoUpload(req, res, async (err) => {
+    if (err) {
+      console.error('parser-trades photos upload error:', err);
+      let message = 'Не удалось загрузить файлы';
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        message = 'Размер файла не должен превышать 10 МБ';
+      } else if (err.message === 'ONLY_IMAGES') {
+        message = 'Можно загружать только изображения';
+      }
+      return res.status(400).json({ error: message });
+    }
+
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'Файлы не получены' });
+      }
+
+      const photos = req.files.map((file) => ({
+        url: `/uploads/listing-photos/${file.filename}`,
+        originalName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      }));
+
+      return res.json({ ok: true, photos });
+    } catch (error) {
+      console.error('parser-trades photos upload error:', error);
+      return res.status(500).json({ error: 'failed' });
+    }
+  });
 });
 
 router.patch('/parser-trades/:id', async (req, res) => {
