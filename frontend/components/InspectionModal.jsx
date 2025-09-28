@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
-const API = process.env.NEXT_PUBLIC_API_BASE || '';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
+const INSPECTION_ENDPOINT = API_BASE ? `${API_BASE}/api/inspections` : '/api/inspections';
 
 function normalizeListingId(value) {
   if (value == null) return null;
@@ -58,31 +59,30 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
         setErr('Не удалось определить объявление. Обновите страницу и попробуйте ещё раз.');
         return;
       }
-      const res = await fetch(`${API}/api/inspections`, {
+      const res = await fetch(INSPECTION_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ listingId: normalizedId })
       });
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (res.status === 402) {
-          const data = await res.json().catch(() => ({}));
           setErr(data?.message || 'Недостаточно средств, пополните счет');
           return;
         }
         if (res.status === 423) {
-          const data = await res.json().catch(() => ({}));
           setErr(data?.message || 'Баланс заморожен. Свяжитесь с поддержкой.');
           return;
         }
-        if (res.status === 400) { setErr('Неверные данные запроса'); return; }
-        if (res.status === 404) { setErr('Объявление не найдено'); return; }
+        if (res.status === 400) { setErr(data?.message || 'Неверные данные запроса'); return; }
+        if (res.status === 404) { setErr(data?.message || 'Объявление не найдено'); return; }
         if (res.status === 401) {
           const nextId = listingId != null ? String(listingId).trim() : '';
           const next = `/trades/${nextId || ''}`;
           window.location.href = `/login?next=${encodeURIComponent(next)}`;
           return;
         }
-        setErr('Ошибка. Попробуйте позже.');
+        setErr(data?.message || 'Не удалось оформить заказ на осмотр. Попробуйте позже.');
         return;
       }
       window.location.href = '/inspections';
