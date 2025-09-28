@@ -9,6 +9,7 @@ import {
 import { formatTradeTypeLabel } from '../../lib/tradeTypes';
 import computeTradeTiming from '../../lib/tradeTiming';
 
+
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '';
 
 function parseNumberValue(value) {
