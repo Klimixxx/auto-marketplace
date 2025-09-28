@@ -572,7 +572,7 @@ function getBadge(listing) {
   return isReco ? 'Рекомендуем' : null;
 }
 
-function RecentListingCard({ item }) {
+function RecentListingCard({ item, fav, onFav }) {
   const cover = resolveCover(item);
   const priceValue = item?.current_price ?? item?.start_price;
   const price = formatPrice(priceValue, item?.currency || 'RUB');
