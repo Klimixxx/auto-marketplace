@@ -470,7 +470,7 @@ function classifyStatus(name) {
 
 /* ---- component --------------------------------------------------------- */
 
-export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, favoriteContext }) {
+export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, favoriteContext, variant = 'default' }) {
   const router = useRouter();
   const [isHovered, setHovered] = useState(false);
   const photos = useMemo(() => collectPhotos(l), [l]);
@@ -489,6 +489,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
   const hasMultiplePhotos = photos.length > 1;
   const photo = photos[activePhotoIndex] || photos[0] || null;
+  const isCompact = variant === 'compact';
 
   const updatePhotoFromPointer = (clientX) => {
     if (!hasMultiplePhotos) return;
@@ -611,6 +612,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
 
   // eyebrow: Тип • Регион • Год
   const region = l.region || pickDetailValue(l, ['region']);
+  const locationLabel = [l.city, region]
+    .map((value) => (value == null ? '' : String(value).trim()))
+    .filter(Boolean)
+    .join(', ');
   const rawType = l.trade_type_resolved ?? l.trade_type ?? pickDetailValue(l, ['trade_type', 'type']);
   const tradeType = tradeTypeInfo?.label || l.trade_type_label || tradeTypeLabel(rawType) || 'Лот';
   const fallbackYear = pickDetailValue(l, ['year', 'production_year', 'manufacture_year', 'year_of_issue', 'productionYear']);
@@ -645,6 +650,35 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   // общий сброс «таблеток»
   const resetPill = { background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none', padding: 0 };
 
+  const baseStyles = `
+    .listing-card * { box-sizing: border-box; }
+
+    /* Удаляем любые "таблетки" у цены */
+    .listing-card .listing-card__price,
+    .listing-card .listing-card__price * {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      outline: none !important;
+    }
+
+    /* Ховер-эффект для кнопки "Подробнее" */
+    .btn-more {
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+    }
+    .btn-more:hover {
+      transform: scale(1.03);
+      box-shadow: 0 8px 20px rgba(30, 144, 255, .35);
+      filter: brightness(1.03);
+    }
+
+    @media (max-width: 900px) {
+      .listing-card:not(.listing-card--compact) > div { grid-template-columns: 1fr; }
+    }
+  `;
+
   // Навигация по клику на всю карточку
   const handleCardClick = () => {
     if (detailHref) router.push(detailHref);
@@ -666,6 +700,222 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     }
   };
 
+  const articleHoverStyle = {
+    background: '#fff',
+    borderRadius: 16,
+    boxShadow: isHovered ? '0 10px 26px rgba(15,23,42,0.15)' : '0 1px 2px rgba(15,23,42,0.06)',
+    transition: 'box-shadow .2s ease, transform .2s ease',
+    transform: isHovered ? 'translateY(-2px)' : 'none',
+    overflow: 'hidden',
+    width: '100%',
+    cursor: detailHref ? 'pointer' : 'default',
+  };
+
+  const compactArticleStyle = {
+    ...articleHoverStyle,
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+  };
+
+  const defaultArticleStyle = {
+    ...articleHoverStyle,
+    gridColumn: '1 / -1',
+  };
+
+  if (isCompact) {
+    return (
+      <article
+        className="listing-card listing-card--compact"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKey}
+        role={detailHref ? 'link' : undefined}
+        tabIndex={detailHref ? 0 : -1}
+        style={compactArticleStyle}
+      >
+        <div
+          ref={photoContainerRef}
+          style={{
+            position: 'relative',
+            overflow: 'hidden',
+            background: '#0f172a',
+            paddingTop: '66%',
+          }}
+          onMouseMove={handlePhotoMouseMove}
+          onMouseLeave={handlePhotoMouseLeave}
+          onTouchMove={handlePhotoTouchMove}
+          onTouchEnd={handlePhotoTouchEnd}
+        >
+          {photo ? (
+            <img
+              src={photo}
+              alt={l.title || 'Фото лота'}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              draggable={false}
+            />
+          ) : (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#9aa7b8', fontWeight: 600 }}>
+              Нет фото
+            </div>
+          )}
+
+          {tradeType ? (
+            <span
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: 12,
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: 'rgba(15,23,42,0.85)',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: 0.2,
+                textTransform: 'uppercase',
+              }}
+            >
+              {tradeType}
+            </span>
+          ) : null}
+
+          {hasMultiplePhotos ? (
+            <div
+              style={{
+                position: 'absolute',
+                left: 12,
+                right: 12,
+                bottom: 12,
+                display: 'flex',
+                gap: 6,
+                pointerEvents: 'none',
+              }}
+            >
+              {photos.map((_, index) => (
+                <div
+                  key={`indicator-${index}`}
+                  aria-hidden="true"
+                  style={{
+                    flex: 1,
+                    height: 3,
+                    borderRadius: 999,
+                    background: index === activePhotoIndex ? '#2563eb' : 'rgba(255,255,255,0.55)',
+                    opacity: index === activePhotoIndex ? 1 : 0.65,
+                    transition: 'background 0.2s ease, opacity 0.2s ease',
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {onFav ? (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: 12,
+                borderRadius: 999,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: fav ? '#f59e0b' : '#64748b',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 14,
+                boxShadow: '0 6px 16px rgba(0,0,0,0.1)',
+              }}
+              aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
+            >
+              <span aria-hidden="true">{fav ? '★' : '☆'}</span>
+              <span>{fav ? 'В избранном' : 'В избранное'}</span>
+            </button>
+          ) : null}
+        </div>
+
+        <div style={{ display: 'grid', gap: 12, padding: '16px 16px 18px', flex: '1 1 auto' }}>
+          {eyebrow ? (
+            <div style={{ ...resetPill, color: '#1E90FF', fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>
+              {eyebrow}
+            </div>
+          ) : null}
+
+          <h3 style={{ ...resetPill, margin: 0, fontSize: 18, lineHeight: 1.35, color: '#0f172a' }}>
+            {l.title || 'Лот'}
+          </h3>
+
+          {shortDescription ? (
+            <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, maxHeight: '3.9em', overflow: 'hidden' }}>
+              {shortDescription}
+            </div>
+          ) : null}
+
+          {locationLabel ? (
+            <div style={{ fontSize: 13, color: '#475569' }}>{locationLabel}</div>
+          ) : null}
+
+          {(statusInfo || stageLabel || dateFinishLabel) ? (
+            <div style={{ display: 'grid', gap: 6, fontSize: 13, color: '#475569' }}>
+              {statusInfo ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, color: '#0f172a' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: statusInfo.color || '#64748b', display: 'inline-block' }} />
+                  <span>{statusInfo.label}</span>
+                </div>
+              ) : null}
+              {stageLabel ? (
+                <div>
+                  Этап: <b>{stageLabel}</b>
+                </div>
+              ) : null}
+              {dateFinishLabel ? (
+                <div>
+                  До: <b>{dateFinishLabel}</b>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div style={{ fontSize: 12, color: '#6b7280' }}>{primaryLabel}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#1d4ed8' }}>{priceLabel}</div>
+            </div>
+            {secondaryPriceLabel && secondaryLabel ? (
+              <div style={{ display: 'grid', gap: 4 }}>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{secondaryLabel}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#e11d48' }}>{secondaryPriceLabel}</div>
+              </div>
+            ) : null}
+          </div>
+
+          {sourceHref ? (
+            <a
+              href={sourceHref}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                marginTop: 'auto',
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#1d4ed8',
+                textDecoration: 'none',
+              }}
+            >
+              Перейти к источнику →
+            </a>
+          ) : null}
+        </div>
+        <style jsx>{baseStyles}</style>
+      </article>
+    );
+  }
+
   return (
     <article
       className="listing-card"
@@ -675,17 +925,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       onKeyDown={handleCardKey}
       role={detailHref ? 'link' : undefined}
       tabIndex={detailHref ? 0 : -1}
-      style={{
-        background: '#fff',
-        borderRadius: 16,
-        boxShadow: isHovered ? '0 10px 26px rgba(15,23,42,0.15)' : '0 1px 2px rgba(15,23,42,0.06)',
-        transition: 'box-shadow .2s ease, transform .2s ease',
-        transform: isHovered ? 'translateY(-2px)' : 'none',
-        overflow: 'hidden',
-        gridColumn: '1 / -1',
-        width: '100%',
-        cursor: detailHref ? 'pointer' : 'default',
-      }}
+      style={defaultArticleStyle}
     >
       {/* GRID: фото | контент | правая колонка */}
       <div
@@ -699,6 +939,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
       >
         {/* фото слева */}
         <div
+          ref={photoContainerRef}
           style={{
             borderRadius: 12,
             overflow: 'hidden',
@@ -718,6 +959,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
               src={photo}
               alt={l.title || 'Фото лота'}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              draggable={false}
             />
           ) : (
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#9aa7b8', fontWeight: 600 }}>
@@ -900,36 +1142,9 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           </div>
         </div>
       </div>
-
-      {/* локальные стили */}
-      <style jsx>{`
-        .listing-card * { box-sizing: border-box; }
-
-        /* Удаляем любые "таблетки" у цены */
-        .listing-card .listing-card__price,
-        .listing-card .listing-card__price * {
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-          border-radius: 0 !important;
-          padding: 0 !important;
-          outline: none !important;
-        }
-
-        /* Ховер-эффект для кнопки "Подробнее" */
-        .btn-more {
-          transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-        }
-        .btn-more:hover {
-          transform: scale(1.03);
-          box-shadow: 0 8px 20px rgba(30, 144, 255, .35);
-          filter: brightness(1.03);
-        }
-
-        @media (max-width: 900px) {
-          .listing-card > div { grid-template-columns: 1fr; }
-        }
-      `}</style>
+              
+      <style jsx>{baseStyles}</style>
+      
     </article>
   );
 }
