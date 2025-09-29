@@ -17,7 +17,7 @@ function normalizeListingId(value) {
     return truncated > 0 ? String(truncated) : null;
   }
 
-   const raw = String(value).trim();
+  const raw = String(value).trim();
   if (!raw) return null;
 
   const compact = raw.replace(/\s+/g, '');
@@ -46,6 +46,31 @@ function normalizeListingId(value) {
     : clean;
 }
 
+function parseMoneyLike(value) {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'bigint') return Number(value);
+
+  const cleaned = String(value)
+    .trim()
+    .replace(/[\s\u00a0]/g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.+-]/g, '');
+
+  if (!cleaned) return 0;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseBooleanLike(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'bigint') return value !== 0n;
+  if (value === null || value === undefined) return false;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return false;
+  return ['1', 'true', 't', 'yes', 'y', 'on'].includes(normalized);
+}
 
 // Создать заказ на осмотр
 router.post('/', async (req, res) => {
@@ -76,10 +101,7 @@ router.post('/', async (req, res) => {
     transactionStarted = true;
 
     const u = await client.query(
-      `SELECT id,
-              COALESCE(balance::numeric, 0)              AS balance,
-              COALESCE(subscription_status,'free')       AS subscription_status,
-              COALESCE(balance_frozen, false)            AS balance_frozen
+      `SELECT id, balance, subscription_status, balance_frozen
          FROM users WHERE id::text=$1 FOR UPDATE`,
       [String(userId)]
     );
@@ -98,11 +120,12 @@ router.post('/', async (req, res) => {
         .json({ error: 'BALANCE_FROZEN', message: 'Баланс пользователя заморожен' });
     }
 
-    const isPro = String(user.subscription_status).toLowerCase() === 'pro';
+    const subscriptionStatus = String(user.subscription_status || 'free').trim().toLowerCase() || 'free';
+    const isPro = subscriptionStatus === 'pro';
     const discountPercent = isPro ? 50 : 0;
     const finalAmount = Math.round((BASE_PRICE * (100 - discountPercent)) / 100);
 
-    const currentBalance = Number(user.balance ?? 0);
+    const currentBalance = parseMoneyLike(user.balance);
     if (!Number.isFinite(currentBalance) || currentBalance < finalAmount) {
       await client.query('ROLLBACK');
       transactionStarted = false;
@@ -111,9 +134,11 @@ router.post('/', async (req, res) => {
         .json({ error: 'INSUFFICIENT_FUNDS', message: 'Недостаточно средств, пополните счет' });
     }
 
+    const nextBalance = Number((currentBalance - finalAmount).toFixed(2));
+
     await client.query(
-      'UPDATE users SET balance = (COALESCE(balance::numeric,0) - $1)::numeric, updated_at = now() WHERE id::text=$2',
-      [finalAmount, String(userId)]
+      'UPDATE users SET balance = $1, updated_at = now() WHERE id::text=$2',
+      [nextBalance, String(userId)]
     );
 
     const ins = await client.query(
