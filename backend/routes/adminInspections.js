@@ -8,30 +8,48 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-/* ===== UI последовательность статусов (для справки) ===== */
-const STATUS_FLOW = [
-  'Оплачен/Ожидание модерации',
-  'Заказ принят, Приступаем к Осмотру',
-  'Производится осмотр',
-  'Осмотр завершен'
-];
-
-/* ===== Маппинг входа -> значение в БД =====
- * Приходит либо человекочитаемый лейбл, либо машинный код.
- * Значение справа — то, что пишем в колонку `status`.
- */
-const STATUS_DB_MAP = {
-  'Оплачен/Ожидание модерации': 'Оплачен/Ожидание модерации',
-  'Заказ принят, Приступаем к Осмотру': 'Заказ принят, Приступаем к Осмотру',
-  'Производится осмотр': 'Производится осмотр',
-  'Осмотр завершен': 'Осмотр завершен',
-
-  // машинные статусы
-  paid_pending: 'Оплачен/Ожидание модерации',
-  accepted: 'Заказ принят, Приступаем к Осмотру',
-  in_progress: 'Производится осмотр',
-  done: 'Осмотр завершен'
+/* Канонические статусы: ключ — машинный enum код в БД */
+const STATUS_CANON = {
+  paid_pending: {
+    label: 'Оплачен/Ожидание модерации',
+    aliases: ['Оплачен/Ожидание модерации', 'paid_pending', 'оплачен', 'ожидание модерации']
+  },
+  accepted: {
+    label: 'Заказ принят, Приступаем к Осмотру',
+    aliases: ['Заказ принят, Приступаем к Осмотру', 'accepted', 'принят', 'приступаем к осмотру']
+  },
+  in_progress: {
+    label: 'Производится осмотр',
+    aliases: ['Производится осмотр', 'in_progress', 'в процессе', 'идёт осмотр', 'осмотр']
+  },
+  done: {
+    label: 'Осмотр завершен',
+    aliases: ['Осмотр завершен', 'done', 'завершен', 'готово']
+  }
 };
+
+function resolveStatus(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+
+  // прямое совпадение по ключу
+  if (STATUS_CANON[s]) return { code: s, label: STATUS_CANON[s].label };
+
+  // по регистронезависимым алиасам
+  const sl = s.toLowerCase();
+  for (const [code, def] of Object.entries(STATUS_CANON)) {
+    if (def.aliases.some(a => String(a).toLowerCase() === sl)) {
+      return { code, label: def.label };
+    }
+  }
+  // попытка по вхождению
+  for (const [code, def] of Object.entries(STATUS_CANON)) {
+    if (def.aliases.some(a => sl.includes(String(a).toLowerCase()))) {
+      return { code, label: def.label };
+    }
+  }
+  return null;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,7 +65,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/* ===== Список осмотров ===== */
 router.get('/', async (_req, res) => {
   try {
     const q = await query(
@@ -66,7 +83,6 @@ router.get('/', async (_req, res) => {
   }
 });
 
-/* ===== Детали осмотра ===== */
 router.get('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -90,43 +106,47 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/* ===== Обновление статуса ===== */
+/* Обновление статуса */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
 
     const raw = req.body?.status;
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
-      return res.status(400).json({ error: 'BAD_STATUS' });
+    const resolved = resolveStatus(raw);
+    if (!resolved) {
+      return res.status(400).json({
+        error: 'BAD_STATUS',
+        allowed: Object.keys(STATUS_CANON)
+      });
     }
 
-    const uiLabel = raw.trim();
-    // Пробуем прямой ключ, иначе — в нижнем регистре для машинных
-    const normalizedKey = Object.prototype.hasOwnProperty.call(STATUS_DB_MAP, uiLabel)
-      ? uiLabel
-      : uiLabel.toLowerCase();
+    const { code: enumCode, label: humanLabel } = resolved;
 
-    const enumValue = STATUS_DB_MAP[normalizedKey];
-    if (!enumValue) return res.status(400).json({ error: 'BAD_STATUS' });
-
-    // 1) Обновление с кастом к enum, если в БД тип enum inspection_status
+    // 1) Пытаемся записать как enum inspection_status (машинный код)
     try {
       const r1 = await query(
         'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
-        [enumValue, id]
+        [enumCode, id]
       );
       if (!r1.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
       return res.json(r1.rows[0]);
-    } catch (err) {
-      // 2) Фоллбек на TEXT/VARCHAR
-      console.warn('enum cast failed, fallback to TEXT update:', err?.code, err?.message);
-      const r2 = await query(
-        'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
-        [enumValue, id]
-      );
-      if (!r2.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
-      return res.json(r2.rows[0]);
+    } catch (err1) {
+      console.warn('[inspections] enum cast failed:', err1?.code, err1?.message);
+
+      // 2) Если тип не enum или нет такого enum-значения — пробуем текстовую колонку
+      try {
+        const r2 = await query(
+          'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
+          [humanLabel, id]
+        );
+        if (!r2.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+        return res.json(r2.rows[0]);
+      } catch (err2) {
+        console.error('[inspections] text update failed:', err2?.code, err2?.message);
+        // Если и это упало, вернём 400, чтобы фронт видел проблему маппинга/схемы
+        return res.status(400).json({ error: 'STATUS_UPDATE_FAILED' });
+      }
     }
   } catch (e) {
     console.error('admin update status error:', e);
@@ -134,7 +154,7 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
-/* ===== Загрузка PDF-отчёта ===== */
+/* Загрузка PDF-отчёта */
 router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
   try {
     const id = Number(req.params.id);
