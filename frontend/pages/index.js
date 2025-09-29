@@ -788,7 +788,7 @@ export default function Home() {
                 {loadingRecent ? (
                   <div className="panel" style={{ color: 'var(--text-700)' }}>Загружаем…</div>
                 ) : recent.length ? (
-                  <div className="grid" style={{ gap: 16 }}>
+                  <div className="recent-grid">
                     {recent.map((l) => {
                       const listingId = String(l.id ?? l.listing_id ?? l._id);
                       return (
@@ -799,6 +799,7 @@ export default function Home() {
                           onFav={() => toggleFav(l)}
                           detailHref={`/trades/${listingId}`}
                           sourceHref={l.source_url}
+                          variant="compact"
                         />
                       );
                     })}
@@ -808,6 +809,25 @@ export default function Home() {
                     Предложения скоро появятся
                   </div>
                 )}
+                <style jsx>{`
+                  .recent-grid {
+                    display: grid;
+                    gap: 16px;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                  }
+
+                  @media (max-width: 1100px) {
+                    .recent-grid {
+                      grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                  }
+
+                  @media (max-width: 720px) {
+                    .recent-grid {
+                      grid-template-columns: minmax(0, 1fr);
+                    }
+                  }
+                `}</style>
               </>
             )}
           </div>
