@@ -79,7 +79,7 @@ router.put('/:id/status', async (req, res) => {
     if (!STATUS_FLOW.includes(status)) return res.status(400).json({ error: 'BAD_STATUS' });
 
     const r = await query(
-      'UPDATE inspections SET status=$1, updated_at=now() WHERE id=$2 RETURNING *',
+      'UPDATE inspections SET status=$1::inspection_status, updated_at=now() WHERE id=$2 RETURNING *',
       [status, id]
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
