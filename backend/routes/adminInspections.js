@@ -1,4 +1,3 @@
-// backend/routes/adminInspections.js
 import express from 'express';
 import { query } from '../db.js';
 import multer from 'multer';
@@ -7,6 +6,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const router = express.Router();
+
+// Витрина для UI
 const STATUS_FLOW = [
   'Оплачен/Ожидание модерации',
   'Заказ принят, Приступаем к Осмотру',
@@ -14,28 +15,40 @@ const STATUS_FLOW = [
   'Осмотр завершен'
 ];
 
-// Настраиваем папку для отчётов
+// Маппинг в значения enum БД (подставь реальные, если отличаются)
+const STATUS_MAP = {
+  'Оплачен/Ожидание модерации': 'paid_pending',
+  'Заказ принят, Приступаем к Осмотру': 'accepted',
+  'Производится осмотр': 'in_progress',
+  'Осмотр завершен': 'done',
+
+  // на случай если фронт уже шлет машинные
+  paid_pending: 'paid_pending',
+  accepted: 'accepted',
+  in_progress: 'in_progress',
+  done: 'done'
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportsDir = path.join(__dirname, '..', 'uploads', 'reports');
 fs.mkdirSync(reportsDir, { recursive: true });
 
-// Multer: сохраняем PDF-файл
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, reportsDir),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname) || '.pdf';
-    cb(null, Date.now() + '-' + Math.round(Math.random()*1e9) + ext);
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
   }
 });
 const upload = multer({ storage });
 
-// Список всех заказов
+// Список
 router.get('/', async (req, res) => {
   try {
     const q = await query(
       `SELECT i.*,
-              u.name AS user_name, u.phone AS user_phone, u.subscription_status,
+              u.name  AS user_name, u.phone AS user_phone, u.subscription_status,
               l.title AS listing_title
          FROM inspections i
          JOIN users u ON u.id = i.user_id
@@ -49,13 +62,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Детали одного заказа
+// Детали
 router.get('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
     const q = await query(
       `SELECT i.*,
-              u.name AS user_name, u.phone AS user_phone, u.subscription_status,
+              u.name  AS user_name, u.phone AS user_phone, u.subscription_status,
               l.title AS listing_title
          FROM inspections i
          JOIN users u ON u.id = i.user_id
@@ -75,15 +88,35 @@ router.get('/:id', async (req, res) => {
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const status = String(req.body?.status || '');
-    if (!STATUS_FLOW.includes(status)) return res.status(400).json({ error: 'BAD_STATUS' });
+    const raw = req.body?.status;
+    const hasRaw = typeof raw === 'string' && raw.trim().length > 0;
 
-    const r = await query(
-      'UPDATE inspections SET status=$1::inspection_status, updated_at=now() WHERE id=$2 RETURNING *',
-      [status, id]
-    );
-    if (!r.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json(r.rows[0]);
+    if (!hasRaw) return res.status(400).json({ error: 'BAD_STATUS' });
+
+    const uiLabel = raw.trim();
+    if (!STATUS_FLOW.includes(uiLabel) && !(uiLabel in STATUS_MAP)) {
+      return res.status(400).json({ error: 'BAD_STATUS' });
+    }
+
+    const enumValue = STATUS_MAP[uiLabel] ?? STATUS_MAP[uiLabel]; // оставлено намеренно для читабельности
+    // 1) пробуем как enum (если колонка enum inspection_status)
+    try {
+      const r1 = await query(
+        'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
+        [enumValue, id]
+      );
+      if (!r1.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json(r1.rows[0]);
+    } catch (err) {
+      // 2) если enum не совпал или тип другой — повторяем без каста (для TEXT/VARCHAR)
+      console.warn('enum cast failed, fallback to TEXT update:', err?.code, err?.message);
+      const r2 = await query(
+        'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
+        [uiLabel, id]
+      );
+      if (!r2.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json(r2.rows[0]);
+    }
   } catch (e) {
     console.error('admin update status error:', e);
     res.status(500).json({ error: 'SERVER_ERROR' });
