@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   localizeListingBadge,
   translateValueByKey,
@@ -475,6 +475,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const [isHovered, setHovered] = useState(false);
   const photos = useMemo(() => collectPhotos(l), [l]);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const photoContainerRef = useRef(null);
 
   useEffect(() => { setActivePhotoIndex(0); }, [l?.id]);
   useEffect(() => {
@@ -489,6 +490,18 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
   const hasMultiplePhotos = photos.length > 1;
   const photo = photos[activePhotoIndex] || photos[0] || null;
 
+  const updatePhotoFromPointer = (clientX) => {
+    if (!hasMultiplePhotos) return;
+    const rect = photoContainerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    const relativeX = clientX - rect.left;
+    const normalized = Math.max(0, Math.min(1, relativeX / rect.width));
+    let nextIndex = Math.floor(normalized * photos.length);
+    if (nextIndex >= photos.length) nextIndex = photos.length - 1;
+    if (nextIndex < 0) nextIndex = 0;
+    setActivePhotoIndex((prev) => (prev === nextIndex ? prev : nextIndex));
+  };
+
   const showPreviousPhoto = (event) => {
     event?.preventDefault();
     event?.stopPropagation();
@@ -501,6 +514,25 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     event?.stopPropagation();
     if (!hasMultiplePhotos) return;
     setActivePhotoIndex((index) => (index + 1) % photos.length);
+  };
+
+  const handlePhotoMouseMove = (event) => {
+    updatePhotoFromPointer(event.clientX);
+  };
+
+  const handlePhotoMouseLeave = () => {
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex(0);
+  };
+
+  const handlePhotoTouchMove = (event) => {
+    if (!event.touches?.length) return;
+    updatePhotoFromPointer(event.touches[0].clientX);
+  };
+
+  const handlePhotoTouchEnd = () => {
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex(0);
   };
 
   // prices
@@ -676,6 +708,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             paddingTop: '75%',
             aspectRatio: '4 / 3',
           }}
+          onMouseMove={handlePhotoMouseMove}
+          onMouseLeave={handlePhotoMouseLeave}
+          onTouchMove={handlePhotoTouchMove}
+          onTouchEnd={handlePhotoTouchEnd}
         >
           {photo ? (
             <img
@@ -690,80 +726,32 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
           )}
 
           {hasMultiplePhotos ? (
-            <>
-              <button
-                type="button"
-                onClick={showPreviousPhoto}
-                aria-label="Предыдущее фото"
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: 10,
-                  transform: 'translateY(-50%)',
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: 'rgba(15, 23, 42, 0.55)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  display: 'grid',
-                  placeItems: 'center',
-                  boxShadow: '0 6px 16px rgba(15,23,42,0.25)',
-                }}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={showNextPhoto}
-                aria-label="Следующее фото"
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  right: 10,
-                  transform: 'translateY(-50%)',
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: 'rgba(15, 23, 42, 0.55)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  display: 'grid',
-                  placeItems: 'center',
-                  boxShadow: '0 6px 16px rgba(15,23,42,0.25)',
-                }}
-              >
-                ›
-              </button>
-
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 16,
-                  right: 16,
-                  bottom: 12,
-                  display: 'flex',
-                  gap: 6,
-                }}
-              >
-                {photos.map((_, index) => (
-                  <div
-                    key={`indicator-${index}`}
-                    aria-hidden="true"
-                    style={{
-                      flex: 1,
-                      height: 3,
-                      borderRadius: 999,
-                      background: index === activePhotoIndex ? '#2563eb' : 'rgba(255,255,255,0.55)',
-                      opacity: index === activePhotoIndex ? 1 : 0.65,
-                      transition: 'background 0.2s ease, opacity 0.2s ease',
-                    }}
-                  />
-                ))}
-              </div>
-            </>
+            <div
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                bottom: 12,
+                display: 'flex',
+                gap: 6,
+                pointerEvents: 'none',
+              }}
+            >
+              {photos.map((_, index) => (
+                <div
+                  key={`indicator-${index}`}
+                  aria-hidden="true"
+                  style={{
+                    flex: 1,
+                    height: 3,
+                    borderRadius: 999,
+                    background: index === activePhotoIndex ? '#2563eb' : 'rgba(255,255,255,0.55)',
+                    opacity: index === activePhotoIndex ? 1 : 0.65,
+                    transition: 'background 0.2s ease, opacity 0.2s ease',
+                  }}
+                />
+              ))}
+            </div>
           ) : null}
 
           {/* Избранное — не даём клику всплыть к карточке */}
