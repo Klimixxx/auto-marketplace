@@ -8,60 +8,120 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-/* === ключевые слова === */
-const STATUS_KEYWORDS = {
-  paid_pending: ['модерац', 'ожидан', 'оплач'],
-  accepted: ['заказ принят', 'принят', 'приступ', 'приступаем'],
-  in_progress: ['осмотр', 'производ', 'выполня', 'идет осмотр', 'идёт осмотр'],
-  done: ['заверш', 'готово', 'завершен', 'завершён']
+/* ===== нормализация ===== */
+function norm(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[.,;:!?()"']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ===== канонические теги и маркеры ===== */
+const TAGS = /** @type const */ (['paid_pending', 'accepted', 'in_progress', 'done']);
+
+const MARKERS = {
+  done: [
+    'заверш', 'готово', 'закончено', 'выполнен', 'выполнена', 'отчет готов', 'отчёт готов'
+  ],
+  accepted: [
+    'заказ принят', 'принят', 'подтвержден', 'подтверждено', 'приступ', 'приступаем', 'стартуем'
+  ],
+  in_progress: [
+    'идет осмотр', 'идёт осмотр', 'в процессе', 'процесс', 'осмотр',
+    'выполняется', 'производится', 'работают', 'работа начата'
+  ],
+  paid_pending: [
+    'модерац', 'ожидан', 'оплач', 'ожидает проверки', 'ждет проверки', 'ждёт проверки'
+  ],
 };
 
-/* прямые UI фразы -> тег (сырые ключи) */
 const UI_TO_TAG_RAW = {
+  // paid_pending
   'оплачен/ожидание модерации': 'paid_pending',
   'идет модерация': 'paid_pending',
   'идёт модерация': 'paid_pending',
+  'ожидает проверки': 'paid_pending',
+  'ждет проверки': 'paid_pending',
+  'ждёт проверки': 'paid_pending',
 
+  // accepted
   'заказ принят, приступаем к осмотру': 'accepted',
   'заказ принят': 'accepted',
   'приступаем к осмотру': 'accepted',
+  'приступаем': 'accepted',
+  'подтвержден': 'accepted',
+  'подтверждено': 'accepted',
 
+  // in_progress
   'производится осмотр': 'in_progress',
   'выполняется осмотр': 'in_progress',
   'выполняется осмотр машины': 'in_progress',
   'идет осмотр': 'in_progress',
   'идёт осмотр': 'in_progress',
+  'осмотр начат': 'in_progress',
+  'в процессе': 'in_progress',
 
+  // done
   'осмотр завершен': 'done',
   'осмотр завершён': 'done',
   'завершен': 'done',
-  'завершён': 'done'
+  'завершён': 'done',
+  'отчет готов': 'done',
+  'отчёт готов': 'done'
 };
 
-function normalize(s) {
-  return String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .replace(/[.,;:!?()"']/g, '')
-    .replace(/\s+/g, ' ');
-}
-
-/* нормализованный словарь UI -> тег */
 const UI_TO_TAG = (() => {
   const out = {};
-  for (const [k, v] of Object.entries(UI_TO_TAG_RAW)) out[normalize(k)] = v;
+  for (const [k, v] of Object.entries(UI_TO_TAG_RAW)) out[norm(k)] = v;
   return out;
 })();
 
-/* “сильные” ключи для точного подбора enum-метки */
-const STRONG_KW = {
-  paid_pending: ['модерац', 'ожидан', 'оплач'],
-  accepted: ['заказ принят', 'принят', 'приступ', 'приступаем'],
-  in_progress: ['осмотр', 'выполня', 'производ'],
-  done: ['заверш', 'готово', 'завершен', 'завершен']
-};
+/* ===== распознавание тега по произвольной фразе =====
+   Жесткий порядок: done → accepted → in_progress → paid_pending.
+   Это устраняет коллизию "принят + осмотр". */
+function detectTagFromText(sRaw) {
+  const s = norm(sRaw);
 
+  // полное совпадение с известной UI-фразой
+  if (UI_TO_TAG[s]) return UI_TO_TAG[s];
+  for (const [k, tag] of Object.entries(UI_TO_TAG)) {
+    if (s.includes(k)) return tag;
+  }
+
+  const hasAny = (arr) => arr.some((kw) => s.includes(norm(kw)));
+
+  if (hasAny(MARKERS.done)) return 'done';
+  if (hasAny(MARKERS.accepted)) return 'accepted';
+  if (hasAny(MARKERS.in_progress)) return 'in_progress';
+  if (hasAny(MARKERS.paid_pending)) return 'paid_pending';
+
+  return null;
+}
+
+/* ===== классификация enum-лейбла в БД в один из тегов =====
+   Те же правила и порядок приоритета. */
+function classifyEnumLabel(labelRaw) {
+  const l = norm(labelRaw);
+
+  // точная UI-фраза
+  if (UI_TO_TAG[l]) return UI_TO_TAG[l];
+  for (const [k, tag] of Object.entries(UI_TO_TAG)) {
+    if (l.includes(k)) return tag;
+  }
+
+  const hasAny = (arr) => arr.some((kw) => l.includes(norm(kw)));
+
+  if (hasAny(MARKERS.done)) return 'done';
+  if (hasAny(MARKERS.accepted)) return 'accepted';
+  if (hasAny(MARKERS.in_progress)) return 'in_progress';
+  if (hasAny(MARKERS.paid_pending)) return 'paid_pending';
+
+  return null; // неизвестный лейбл
+}
+
+/* ===== получение и подготовка enum-лейблов из БД ===== */
 async function getEnumLabels() {
   const sql = `
     SELECT e.enumlabel
@@ -71,84 +131,58 @@ async function getEnumLabels() {
     ORDER BY e.enumsortorder
   `;
   const r = await query(sql);
-  return r.rows.map(x => x.enumlabel);
+  return r.rows.map((x) => x.enumlabel);
 }
 
-/* детерминированный выбор тега по входной строке с приоритетами */
-function chooseTagDeterministic(sNorm) {
-  const has = (kw) => sNorm.includes(kw);
-
-  // 1) accepted
-  if (['заказ принят', 'принят', 'приступ', 'приступаем'].some(has)) return 'accepted';
-  // 2) in_progress
-  if (['идет осмотр', 'идет  осмотр', 'идёт осмотр', 'осмотр', 'выполня', 'производ'].some(has)) return 'in_progress';
-  // 3) paid_pending
-  if (['модерац', 'ожидан', 'оплач'].some(has)) return 'paid_pending';
-  // 4) done — только если явно есть маркеры завершения
-  if (['заверш', 'готово'].some(has)) return 'done';
-
-  return null;
-}
-
-/* скоринг входной строки -> тег (резерв) */
-function scoreTagForInput(input, tag) {
-  const kws = STATUS_KEYWORDS[tag] || [];
-  let score = 0;
-  for (const kw of kws) {
-    const k = normalize(kw);
-    if (k && input.includes(k)) score += 1;
+/* Разворачиваем список лейблов в словарь {tag: [labels...]} */
+function bucketizeLabels(enumLabels) {
+  /** @type {Record<string, string[]>} */
+  const buckets = { paid_pending: [], accepted: [], in_progress: [], done: [] };
+  for (const lbl of enumLabels) {
+    const tag = classifyEnumLabel(lbl);
+    if (tag && buckets[tag]) buckets[tag].push(lbl);
   }
-  if (tag === 'in_progress' && (input.includes('принят') || input.includes('приступ'))) score -= 3;
-  for (const kw of STRONG_KW[tag] || []) {
-    const k = normalize(kw);
-    if (k && input.includes(k)) score += 2;
-  }
-  return score;
+  return buckets;
 }
 
-/* выбираем enum-метку под конкретный тег */
-function pickEnumForTag(enumLabels, tag) {
-  const labels = enumLabels.map(l => ({ raw: l, low: normalize(l) }));
+/* Выбор лейбла для заданного тега:
+   1) Если есть несколько, используем стабильную эвристику для читаемости.
+   2) Если нет подходящих, НЕ меняем тег. Возвращаем null для корректного 400. */
+function pickLabelForTag(buckets, tag) {
+  const list = buckets[tag] || [];
+  if (!list.length) return null;
 
-  const includesAny = (low, arr) => arr.some(k => low.includes(normalize(k)));
-
-  // Первый проход: строгие признаки для каждого тега
-  const strict = labels.filter(l => {
-    if (tag === 'accepted') return includesAny(l.low, ['заказ принят', 'принят', 'приступ', 'приступаем']);
-    if (tag === 'in_progress') return includesAny(l.low, ['осмотр', 'выполня', 'производ']);
-    if (tag === 'paid_pending') return includesAny(l.low, ['модерац', 'ожидан', 'оплач']);
-    if (tag === 'done') return includesAny(l.low, ['заверш', 'готово']);
-    return false;
-  });
-
-  const scoreList = (arr) => {
-    let best = null, bestScore = -1;
-    for (const l of arr) {
-      let s = 0;
-      for (const kw of STATUS_KEYWORDS[tag] || []) if (l.low.includes(normalize(kw))) s += 1;
-      for (const kw of STRONG_KW[tag] || []) if (l.low.includes(normalize(kw))) s += 2;
-      if (s > bestScore) { bestScore = s; best = l.raw; }
-    }
-    return best;
+  // эвристика выбора самого "типичного" текста
+  const prefByTag = {
+    paid_pending: [
+      'оплачен/ожидание модерации', 'ожидает проверки', 'идет модерация', 'идёт модерация'
+    ],
+    accepted: [
+      'заказ принят, приступаем к осмотру', 'заказ принят', 'приступаем к осмотру', 'подтвержден', 'подтверждено'
+    ],
+    in_progress: [
+      'выполняется осмотр машины', 'выполняется осмотр', 'производится осмотр', 'идет осмотр', 'идёт осмотр'
+    ],
+    done: [
+      'осмотр завершен', 'осмотр завершён', 'отчет готов', 'отчёт готов', 'завершен', 'завершён'
+    ]
   };
 
-  let picked = scoreList(strict);
-  if (picked) return picked;
+  const listNorm = list.map((x) => ({ raw: x, n: norm(x) }));
 
-  // Второй проход: мягкий — по заранее известных UI-вариантам этого тега
-  const TAG_TO_UI = {
-    accepted: ['заказ принят, приступаем к осмотру', 'заказ принят', 'приступаем к осмотру'],
-    in_progress: ['выполняется осмотр машины', 'производится осмотр', 'выполняется осмотр', 'идет осмотр', 'идёт осмотр'],
-    paid_pending: ['оплачен/ожидание модерации', 'идет модерация', 'идёт модерация'],
-    done: ['осмотр завершен', 'осмотр завершён', 'завершен', 'завершён']
-  };
+  // сначала пытаемся найти предпочтительную формулировку
+  for (const pref of prefByTag[tag]) {
+    const p = norm(pref);
+    const hit = listNorm.find((it) => it.n === p || it.n.includes(p));
+    if (hit) return hit.raw;
+  }
 
-  const soft = labels.filter(l => includesAny(l.low, TAG_TO_UI[tag] || []));
-  picked = scoreList(soft);
-  return picked || null;
+  // иначе берём самую длинную формулировку для большей конкретики
+  list.sort((a, b) => b.length - a.length);
+  return list[0];
 }
 
-/* === файловое хранилище отчетов === */
+/* ===== файловое хранилище отчётов ===== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportsDir = path.join(__dirname, '..', 'uploads', 'reports');
@@ -163,7 +197,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/* === список осмотров === */
+/* ===== список осмотров ===== */
 router.get('/', async (_req, res) => {
   try {
     const q = await query(
@@ -182,7 +216,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-/* === детали осмотра === */
+/* ===== детали осмотра ===== */
 router.get('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -206,24 +240,28 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/* === обновление статуса === */
+/* ===== обновление статуса =====
+   Алгоритм:
+   1) Берём входную строку, детектим канонический тег.
+   2) Забираем enum-лейблы из БД и раскладываем по тегам.
+   3) Выбираем ЛЕЙБЛ ровно для распознанного тега.
+   4) Если для тега нет ни одного лейбла в БД — 400 с подсказкой. */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
 
     const raw = req.body?.status;
-    if (typeof raw !== 'string' || raw.trim() === '') {
+    if (typeof raw !== 'string' || !raw.trim()) {
       return res.status(400).json({ error: 'BAD_STATUS' });
     }
 
     const enumLabels = await getEnumLabels();
     if (!enumLabels.length) return res.status(500).json({ error: 'ENUM_EMPTY' });
 
-    const sNorm = normalize(raw);
-
-    // 0) точное совпадение с enum-меткой
-    const exact = enumLabels.find(l => normalize(l) === sNorm);
+    // 0) если пользователь прислал точный enum-лейбл — используем как есть
+    const rawNorm = norm(raw);
+    const exact = enumLabels.find((l) => norm(l) === rawNorm);
     if (exact) {
       const r0 = await query(
         'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
@@ -233,50 +271,33 @@ router.put('/:id/status', async (req, res) => {
       return res.json(r0.rows[0]);
     }
 
-    // 1) прямое соответствие UI-фразе (строгое и по подстроке)
-    let directTag = UI_TO_TAG[sNorm] || null;
-    if (!directTag) {
-      for (const [kNorm, t] of Object.entries(UI_TO_TAG)) {
-        if (sNorm.includes(kNorm)) { directTag = t; break; }
-      }
+    // 1) распознаём канонический тег по входу
+    const tag = detectTagFromText(raw);
+    if (!tag) {
+      // сформируем подсказку с доступными вариантами
+      const buckets = bucketizeLabels(enumLabels);
+      const allowed = TAGS.flatMap((t) => buckets[t]).filter(Boolean);
+      return res.status(400).json({ error: 'BAD_STATUS', message: 'Не удалось распознать статус', allowed });
     }
 
-    // 2) детерминированный выбор по приоритетам
-    let chosenTag = directTag || chooseTagDeterministic(sNorm);
-
-    // 3) резерв: скоринг, если всё ещё не определили
-    if (!chosenTag) {
-      let bestTag = null;
-      let bestScore = -1;
-      for (const tag of Object.keys(STATUS_KEYWORDS)) {
-        const sc = scoreTagForInput(sNorm, tag);
-        if (sc > bestScore) { bestScore = sc; bestTag = tag; }
-      }
-      if (bestScore > 0) chosenTag = bestTag;
-    }
-
-    if (!chosenTag) {
-      return res.status(400).json({ error: 'BAD_STATUS', allowed: enumLabels });
-    }
-
-    // 4) выбираем конкретную enum-метку под тег
-    let target = pickEnumForTag(enumLabels, chosenTag);
-
-    // 5) fallback: НЕ прыгать в done, если изначально не done
-    if (!target) {
-      const prio = chosenTag === 'done'
-        ? ['done', 'accepted', 'in_progress', 'paid_pending']
-        : ['accepted', 'in_progress', 'paid_pending', 'done'];
-      for (const tag of prio) {
-        target = pickEnumForTag(enumLabels, tag);
-        if (target) break;
-      }
-    }
+    // 2) находим подходящий enum-лейбл РОВНО этого тега
+    const buckets = bucketizeLabels(enumLabels);
+    const target = pickLabelForTag(buckets, tag);
 
     if (!target) {
-      return res.status(400).json({ error: 'BAD_STATUS', allowed: enumLabels });
+      // в БД нет лейбла для нужного тега — это конфигурационная ошибка enum'а
+      const diag = {
+        detected_tag: tag,
+        available_by_tag: buckets
+      };
+      return res.status(400).json({
+        error: 'ENUM_MISSING_FOR_TAG',
+        message: `В enum inspection_status отсутствует лейбл для тега ${tag}`,
+        details: diag
+      });
     }
 
+    // 3) обновляем
     const r = await query(
       'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
       [target, id]
@@ -289,7 +310,7 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
-/* === загрузка PDF-отчёта === */
+/* ===== загрузка PDF-отчёта ===== */
 router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
   try {
     const id = Number(req.params.id);
