@@ -16,7 +16,7 @@ const UI = {
 
 const fmt = new Intl.NumberFormat('ru-RU');
 
-export default function Hero({ listingCount = 0 }) {
+export default function Hero({ listingCount = 0, inspectionsUnread = 0 }) {
   const [q, setQ] = useState('');
   const inputRef = useRef(null);
 
@@ -137,6 +137,13 @@ export default function Hero({ listingCount = 0 }) {
           <span style={styles.badgeNum}>{fmt.format(Math.max(0, listingCount))}</span>
           <span style={styles.badgeLabel}>Объявлений ждут своих покупателей</span>
         </div>
+
+        {inspectionsUnread > 0 && (
+          <a href="/inspections" style={styles.inspectionAlert}>
+            <span>Новые обновления осмотров</span>
+            <span style={styles.inspectionAlertCount}>{inspectionsUnread > 99 ? '99+' : inspectionsUnread}</span>
+          </a>
+        )}
 
         <h1 style={styles.title}>
           Автомобили с аукционов —{' '}
@@ -296,4 +303,29 @@ const styles = {
   },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
+  inspectionAlert: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(37,99,235,0.35)',
+    background: 'rgba(37,99,235,0.12)',
+    color: '#1d4ed8',
+    fontWeight: 700,
+    textDecoration: 'none',
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  inspectionAlertCount: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 32,
+    padding: '2px 10px',
+    borderRadius: 999,
+    background: '#1d4ed8',
+    color: '#fff',
+    fontSize: 14,
+  },
 };
