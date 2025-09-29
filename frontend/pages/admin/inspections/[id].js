@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-const API = process.env.NEXT_PUBLIC_API_BASE || '';
+import { resolveApiUrl } from '../../../lib/api';
 const STATUS_FLOW = [
   'Оплачен/Ожидание модерации',
   'Заказ принят, Приступаем к Осмотру',
@@ -21,11 +21,11 @@ export default function AdminInspectionDetail(){
       const token = localStorage.getItem('token');
       if (!token) { router.push('/login'); return; }
 
-      const me = await fetch(`${API}/api/me`, { headers:{ Authorization:'Bearer '+token } });
+      const me = await fetch(resolveApiUrl('/api/me'), { headers:{ Authorization:'Bearer '+token } });
       const user = await me.json();
       if (user?.role !== 'admin') { router.push('/'); return; }
 
-      const res = await fetch(`${API}/api/admin/inspections/${id}`, { headers:{ Authorization:'Bearer '+token } });
+      const res = await fetch(resolveApiUrl(`/api/admin/inspections/${id}`), { headers:{ Authorization:'Bearer '+token } });
       if (!res.ok) { alert('Не найдено или нет доступа'); router.push('/admin/inspections'); return; }
       const data = await res.json();
       setItem(data);
@@ -36,7 +36,7 @@ export default function AdminInspectionDetail(){
     if (!item || item.status === nextStatus) return;
     const token = localStorage.getItem('token');
     setUpdatingStatus(true);
-    const res = await fetch(`${API}/api/admin/inspections/${id}/status`, {
+    const res = await fetch(resolveApiUrl(`/api/admin/inspections/${id}/status`), {
       method:'PUT',
       headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token },
       body: JSON.stringify({ status: nextStatus })
@@ -53,7 +53,7 @@ export default function AdminInspectionDetail(){
     setUploading(true);
     const token = localStorage.getItem('token');
     const form = new FormData(); form.append('report_pdf', file);
-    const res = await fetch(`${API}/api/admin/inspections/${id}/upload`, {
+    const res = await fetch(resolveApiUrl(`/api/admin/inspections/${id}/upload`), {
       method:'POST', headers:{ Authorization:'Bearer '+token }, body: form
     });
     setUploading(false);
@@ -97,7 +97,7 @@ export default function AdminInspectionDetail(){
           })}
         </div>
         <div style={{marginTop:16}}>
-          <div><b>Отчёт (PDF):</b> {item.report_pdf_url ? <a href={item.report_pdf_url} target="_blank" rel="noreferrer">Открыть</a> : <span>не загружен</span>}</div>
+          <div><b>Отчёт (PDF):</b> {item.report_pdf_url ? <a href={resolveApiUrl(item.report_pdf_url)} target="_blank" rel="noreferrer">Открыть</a> : <span>не загружен</span>}</div>
           <input type="file" accept="application/pdf" onChange={uploadPdf} disabled={uploading}/>
         </div>
       </div>
