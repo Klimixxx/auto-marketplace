@@ -788,4 +788,42 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
   }
 });
 
+router.post('/parser-trades/:id/unpublish', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await query('select * from parser_trades where id = $1', [id]);
+    const trade = rows[0];
+    if (!trade) {
+      return res.status(404).json({ error: 'not found' });
+    }
+
+    const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
+
+    const { rows: updatedRows } = await query(
+      'update parser_trades set published_at = null, updated_at = now() where id = $1 returning *',
+      [id],
+    );
+    const updatedTrade = updatedRows[0] || trade;
+
+    let listingsUpdated = 0;
+    if (sourceId != null) {
+      const result = await query(
+        `update listings
+            set published = false,
+                published_at = null,
+                updated_at = now()
+          where source_id = $1`,
+        [String(sourceId)],
+      );
+      listingsUpdated = result.rowCount || 0;
+    }
+
+    return res.json({ ok: true, trade: updatedTrade, listings_updated: listingsUpdated });
+  } catch (error) {
+    console.error('unpublish error:', error);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+
 export default router;
