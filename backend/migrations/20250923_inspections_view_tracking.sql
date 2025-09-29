@@ -34,4 +34,3 @@ BEGIN
      SET user_last_viewed_at = updated_at
    WHERE user_last_viewed_at IS NULL;
 END $$;
-
