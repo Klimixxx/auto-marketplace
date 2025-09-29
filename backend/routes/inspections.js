@@ -5,6 +5,23 @@ import { pool, query } from '../db.js';
 const router = express.Router();
 const BASE_PRICE = 12000;
 
+function userUnreadCondition(alias = 'i') {
+  return `(${alias}.user_last_viewed_at IS NULL OR ${alias}.user_last_viewed_at < ${alias}.updated_at)`;
+}
+
+async function fetchStatuses() {
+  const sql = `
+    SELECT e.enumlabel
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'inspection_status'
+    ORDER BY e.enumsortorder
+  `;
+  const r = await query(sql);
+  return r.rows.map((x) => x.enumlabel);
+}
+
+
 const MAX_LISTING_ID_LENGTH = 160;
 
 function normalizeListingId(value) {
@@ -141,11 +158,12 @@ router.post('/', async (req, res) => {
     );
 
     const ins = await client.query(
-      `INSERT INTO inspections (user_id, listing_id, base_price, discount_percent, final_amount)
-         VALUES ($1,$2,$3,$4,$5)
+      `INSERT INTO inspections (user_id, listing_id, base_price, discount_percent, final_amount, user_last_viewed_at)
+         VALUES ($1,$2,$3,$4,$5, now())
          RETURNING *`,
       [String(userId), String(listingDbId), BASE_PRICE, discountPercent, finalAmount]
     );
+
 
     await client.query('COMMIT');
     transactionStarted = false;
@@ -167,24 +185,61 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.get('/statuses', async (_req, res) => {
+  try {
+    const statuses = await fetchStatuses();
+    res.json({ statuses });
+  } catch (e) {
+    console.error('inspections statuses error:', e);
+    res.status(500).json({ error: 'SERVER_ERROR' });
+  }
+});
+
+router.get('/unread-count', async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ error: 'No user' });
+    const sql = `SELECT COUNT(*)::int AS count FROM inspections i WHERE i.user_id::text = $1 AND ${userUnreadCondition('i')}`;
+    const r = await query(sql, [String(userId)]);
+    res.json({ count: r.rows[0]?.count ?? 0 });
+  } catch (e) {
+    console.error('inspections unread count error:', e);
+    res.status(500).json({ error: 'SERVER_ERROR' });
+  }
+});
+
 // Список заказов текущего пользователя
 router.get('/me', async (req, res) => {
   try {
     const userId = req.user?.sub;
     if (!userId) return res.status(401).json({ error: 'No user' });
-    const q = await query(
-      `SELECT i.*, l.title AS listing_title
-         FROM inspections i
-         JOIN listings l ON l.id = i.listing_id
-        WHERE i.user_id::text = $1
-        ORDER BY i.created_at DESC`,
-      [String(userId)]
-    );
+    const { status, markViewed } = req.query || {};
+    const params = [String(userId)];
+    const where = ['i.user_id::text = $1'];
+
+    if (typeof status === 'string' && status.trim()) {
+      params.push(status.trim());
+      where.push(`i.status = $${params.length}::inspection_status`);
+    }
+
+    const sql = `
+      SELECT i.*, ${userUnreadCondition('i')} AS user_unread,
+             l.title AS listing_title
+        FROM inspections i
+        JOIN listings l ON l.id = i.listing_id
+       WHERE ${where.join(' AND ')}
+       ORDER BY i.created_at DESC
+    `;
+    const q = await query(sql, params);
+
+    if (markViewed && String(markViewed).trim() !== '') {
+      await query('UPDATE inspections SET user_last_viewed_at = now() WHERE user_id::text = $1', [String(userId)]);
+    }
+
     res.json({ items: q.rows });
   } catch (e) {
     console.error('my inspections error:', e);
     res.status(500).json({ error: 'SERVER_ERROR' });
   }
 });
-
 export default router;
