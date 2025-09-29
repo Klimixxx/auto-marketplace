@@ -628,7 +628,12 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
     l.details?.lot_details?.description ||
     l.details?.description ||
     '';
-  const shortDescription = description ? (description.length > 220 ? `${description.slice(0, 217)}…` : description) : '';
+  const descriptionLimit = isCompact ? 160 : 220;
+  const shortDescription = description
+    ? (description.length > descriptionLimit
+      ? `${description.slice(0, Math.max(0, descriptionLimit - 1))}…`
+      : description)
+    : '';
 
   // даты
   const fallbackDateFinish = pickDetailValue(l, [
@@ -761,7 +766,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             </div>
           )}
 
-          {tradeType ? (
+          {tradeType && !isCompact ? (
             <span
               style={{
                 position: 'absolute',
@@ -893,7 +898,7 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             ) : null}
           </div>
 
-          {sourceHref ? (
+          {sourceHref && !isCompact ? (
             <a
               href={sourceHref}
               target="_blank"
