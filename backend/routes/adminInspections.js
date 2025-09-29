@@ -8,15 +8,16 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-/* === ключевые слова по тегам === */
+/* === ключевые слова === */
 const STATUS_KEYWORDS = {
   paid_pending: ['модерац', 'ожидан', 'оплач'],
   accepted: ['принят', 'приступ'],
-  in_progress: ['выполня', 'произв', 'идет осмотр', 'идёт осмотр', 'идет', 'идёт', 'осмотр'],
+  // важно: без «идет/идёт» чтобы не ловить «Идет модерация»
+  in_progress: ['производ', 'выполня', 'осмотр'],
   done: ['заверш', 'готово']
 };
 
-/* прямые фразы UI -> тег */
+/* прямые UI фразы -> тег */
 const UI_TO_TAG = {
   'оплачен/ожидание модерации': 'paid_pending',
   'идет модерация': 'paid_pending',
@@ -34,7 +35,14 @@ const UI_TO_TAG = {
   'осмотр завершён': 'done'
 };
 
-/* === утилиты === */
+/* “сильные” ключи для точного подбора enum-метки */
+const STRONG_KW = {
+  paid_pending: ['модерац', 'ожидан', 'оплач'],
+  accepted: ['принят', 'приступ'],
+  in_progress: ['осмотр', 'производ', 'выполня'],
+  done: ['заверш', 'готово']
+};
+
 async function getEnumLabels() {
   const sql = `
     SELECT e.enumlabel
@@ -52,29 +60,26 @@ function normalize(s) {
     .trim()
     .toLowerCase()
     .replace(/ё/g, 'е')
+  // удаляем пунктуацию, сжимаем пробелы
     .replace(/[.,;:!?()"']/g, '')
     .replace(/\s+/g, ' ');
 }
 
-/* оцениваем, к какому тегу относится ВХОДНАЯ строка */
+/* скоринг входной строки -> тег */
 function scoreTagForInput(input, tag) {
   const kws = STATUS_KEYWORDS[tag] || [];
   let score = 0;
   for (const kw of kws) {
     const k = normalize(kw);
-    if (!k) continue;
-    if (input.includes(k)) {
-      // ключ “уникальный” для accepted
-      if (tag === 'accepted' && (k.startsWith('принят') || k.startsWith('приступ'))) score += 3;
-      // уникальные для done
-      else if (tag === 'done' && k.startsWith('заверш')) score += 3;
-      else score += 1;
-    }
+    if (k && input.includes(k)) score += 1;
   }
+  // бонус за уникальные признаки
+  if (tag === 'accepted' && (input.includes('принят') || input.includes('приступ'))) score += 2;
+  if (tag === 'done' && input.includes('заверш')) score += 2;
   return score;
 }
 
-/* из списка enum-меток выбираем лучшую под данный ТЕГ */
+/* выбираем enum-метку под конкретный тег */
 function pickEnumForTag(enumLabels, tag) {
   const labels = enumLabels.map(l => ({ raw: l, low: normalize(l) }));
   let best = null;
@@ -84,18 +89,23 @@ function pickEnumForTag(enumLabels, tag) {
     let s = 0;
     for (const kw of STATUS_KEYWORDS[tag] || []) {
       const k = normalize(kw);
-      if (k && l.low.includes(k)) {
-        if (tag === 'accepted' && (k.startsWith('принят') || k.startsWith('приступ'))) s += 3;
-        else if (tag === 'done' && k.startsWith('заверш')) s += 3;
-        else s += 1;
-      }
+      if (k && l.low.includes(k)) s += 1;
     }
+    // усиливаем по сильным ключам
+    for (const kw of STRONG_KW[tag] || []) {
+      const k = normalize(kw);
+      if (k && l.low.includes(k)) s += 2;
+    }
+
+    // специальное правило: для in_progress в метке ОБЯЗАТЕЛЕН «осмотр»
+    if (tag === 'in_progress' && !l.low.includes('осмотр')) continue;
+
     if (s > bestScore) { bestScore = s; best = l.raw; }
   }
   return bestScore > 0 ? best : null;
 }
 
-/* === файловое хранилище для отчетов === */
+/* === файловое хранилище отчетов === */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportsDir = path.join(__dirname, '..', 'uploads', 'reports');
@@ -169,22 +179,22 @@ router.put('/:id/status', async (req, res) => {
 
     const sNorm = normalize(raw);
 
-    // 0) точное совпадение с enum-меткой после нормализации
+    // 0) точное совпадение с enum-меткой
     const exact = enumLabels.find(l => normalize(l) === sNorm);
     if (exact) {
-      const r = await query(
+      const r0 = await query(
         'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
         [exact, id]
       );
-      if (!r.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
-      return res.json(r.rows[0]);
+      if (!r0.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+      return res.json(r0.rows[0]);
     }
 
-    // 1) прямое соответствие UI-фразе
-    const directTag = UI_TO_TAG[sNorm];
-    let chosenTag = directTag || null;
+    // 1) прямое соответствие UI-фразе -> тег
+    const directTag = UI_TO_TAG[sNorm] || null;
 
-    // 2) скоринг по ВХОДУ, если прямого не нашли
+    // 2) скоринг входа -> тег, если прямого нет
+    let chosenTag = directTag;
     if (!chosenTag) {
       let bestTag = null;
       let bestScore = -1;
@@ -199,12 +209,11 @@ router.put('/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'BAD_STATUS', allowed: enumLabels });
     }
 
-    // 3) среди enum-меток ищем лучшую под выбранный ТЕГ
+    // 3) выбираем конкретную enum-метку под тег
     let target = pickEnumForTag(enumLabels, chosenTag);
 
-    // жёсткая подстраховка: если вдруг ничего, пробуем fallback по самым “говорящим” словам
+    // жёсткий fallback: пробуем альтернативные теги по приоритету
     if (!target) {
-      // порядок приоритета: accepted > in_progress > paid_pending > done
       const prio = ['accepted', 'in_progress', 'paid_pending', 'done'];
       for (const tag of prio) {
         target = pickEnumForTag(enumLabels, tag);
