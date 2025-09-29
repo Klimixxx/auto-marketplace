@@ -174,7 +174,7 @@ router.put('/:id/status', async (req, res) => {
     res.json(r.rows[0]);
   } catch (e) {
     console.error('admin update status error:', e);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    res.status(500).json({ error: 'SERVER_ERROR' , text: e});
   }
 });
 
