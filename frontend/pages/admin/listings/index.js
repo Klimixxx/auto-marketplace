@@ -479,7 +479,7 @@ export default function AdminParserTradesPage() {
             type="button"
             className={`admin-segment ${isPublishedView ? '' : 'is-active'}`}
             onClick={() => changeView('drafts')}
-            disabled={!router.isReady || view === 'drafts'}
+            disabled={view === 'drafts'}
           >
             Неопубликованные
           </button>
@@ -487,7 +487,7 @@ export default function AdminParserTradesPage() {
             type="button"
             className={`admin-segment ${isPublishedView ? 'is-active' : ''}`}
             onClick={() => changeView('published')}
-            disabled={!router.isReady || view === 'published'}
+            disabled={view === 'published'}
           >
             Опубликованные
           </button>
