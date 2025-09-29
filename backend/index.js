@@ -872,7 +872,7 @@ app.get('/api/listings/featured', async (req, res) => {
 
 app.get('/api/listings/:id', async (req, res) => {
   const { id } = req.params;
-  const { rows } = await query('SELECT * FROM listings WHERE id = $1', [id]);
+  const { rows } = await query('SELECT * FROM listings WHERE id = $1 AND published = TRUE', [id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   res.json(withTradeTypeInfo(rows[0]));
 });
@@ -881,6 +881,12 @@ app.get('/api/listings/:id', async (req, res) => {
 app.post('/api/favorites/:id', auth, async (req, res) => {
   const userId = req.user.sub; const { id } = req.params;
   try {
+    const { rows } = await query('SELECT published FROM listings WHERE id = $1', [id]);
+    const listing = rows[0];
+    if (!listing || listing.published !== true) {
+      await query('DELETE FROM favorites WHERE user_id::text=$1 AND listing_id=$2', [userId, id]);
+      return res.status(404).json({ error: 'Not found' });
+    }
     await query(
       'INSERT INTO favorites(user_id, listing_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
       [userId, id]
@@ -1152,9 +1158,30 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
 
 app.get('/api/me/favorites', auth, async (req, res) => {
   const userId = req.user.sub;
+  const { rows: stale } = await query(
+    `SELECT f.listing_id
+       FROM favorites f
+       LEFT JOIN listings l ON l.id = f.listing_id
+      WHERE f.user_id::text = $1
+        AND (l.id IS NULL OR l.published IS DISTINCT FROM TRUE)`,
+    [userId]
+  );
+
+  if (stale.length) {
+    const ids = stale
+      .map((row) => Number(row.listing_id))
+      .filter((value) => Number.isFinite(value));
+    if (ids.length) {
+      await query(
+        'DELETE FROM favorites WHERE user_id::text=$1 AND listing_id = ANY($2::int[])',
+        [userId, ids]
+      );
+    }
+  }
   const { rows } = await query(
     `SELECT l.* FROM favorites f JOIN listings l ON l.id=f.listing_id
-     WHERE f.user_id::text=$1 ORDER BY f.created_at DESC`, [userId]
+     WHERE f.user_id::text=$1 AND l.published = TRUE ORDER BY f.created_at DESC`,
+    [userId]
   );
   res.json({ items: rows.map(withTradeTypeInfo) });
 });
@@ -1186,7 +1213,11 @@ app.patch('/api/listings/:id', auth, admin, async (req, res) => {
       [published, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    const listing = rows[0];
+    if (listing.published !== true) {
+      await query('DELETE FROM favorites WHERE listing_id = $1', [id]);
+    }
+    res.json(listing);
   } catch (e) {
     console.error('Update listing error:', e);
     res.status(500).json({ error: 'Failed to update' });
