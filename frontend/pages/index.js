@@ -543,113 +543,6 @@ function CarIcon(){
   );
 }
 
-function RecentListingCard({ item, fav, onFav }) {
-  const cover = resolveCover(item);
-  const listingId = item?.id ?? item?.listing_id ?? item?._id;
-  const tradeType =
-    item?.trade_type_label ||
-    formatTradeTypeLabel(item?.trade_type_resolved ?? item?.trade_type) ||
-    'Лот';
-
-  return (
-    <article
-      style={{
-        borderRadius: 12,
-        background: '#fff',
-        border: '1px solid rgba(0,0,0,0.08)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Фото */}
-      <div style={{ position: 'relative', paddingBottom: '60%', background: '#f1f5f9' }}>
-        {cover ? (
-          <img
-            src={cover}
-            alt={item?.title || 'Лот'}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#64748b' }}>
-            Нет фото
-          </div>
-        )}
-
-        {/* Кнопка избранного как на /trades */}
-        {onFav ? (
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFav(); }}
-            style={{
-              position: 'absolute',
-              right: 12,
-              top: 12,
-              borderRadius: 8,
-              border: '1px solid #1d4ed8',
-              background: fav ? '#1d4ed8' : '#fff',
-              color: fav ? '#fff' : '#1d4ed8',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: 13,
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {fav ? 'В избранном' : 'В избранное'}
-          </button>
-        ) : null}
-
-       
-      </div> {/* ← это закрытие контейнера фото */}
-
-      {/* Контент */}
-      <div style={{ padding: '12px 12px 14px', display: 'grid', gap: 12 }}>
-        {/* Заголовок */}
-        <a
-          href={`/trades/${listingId}`}
-          style={{
-            fontWeight: 700, color: '#0f172a', textDecoration: 'none',
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-          }}
-        >
-          {item?.title || 'Лот'}
-        </a>
-
-        {/* Тип торгов */}
-        <div
-          style={{
-            fontSize: 13,
-            color: '#1d4ed8',
-            fontWeight: 600,
-            background: 'rgba(29,78,216,0.06)',
-            borderRadius: 8,
-            padding: '6px 10px',
-            width: 'fit-content',
-          }}
-        >
-          Тип торгов: {tradeType}
-        </div>
-
-        {/* Кнопка Подробнее (Источник убрали) */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <a
-            href={`/trades/${listingId}`}
-            style={{
-              flex: 1, textAlign: 'center', textDecoration: 'none',
-              background: '#1d4ed8', color: '#fff',
-              borderRadius: 10, padding: '9px 10px',
-              fontWeight: 700
-            }}
-          >
-            Подробнее
-          </a>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 
 export default function Home() {
   const [summary, setSummary] = useState(null);
@@ -895,26 +788,20 @@ export default function Home() {
                 {loadingRecent ? (
                   <div className="panel" style={{ color: 'var(--text-700)' }}>Загружаем…</div>
                 ) : recent.length ? (
-                  <div
-                    className="grid"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                      gap: 12
-                    }}
-                  >
+                  <div className="grid" style={{ gap: 16 }}>
                     {recent.map((l) => {
-  const listingId = String(l.id ?? l.listing_id ?? l._id);
-  return (
-    <RecentListingCard
-      key={listingId}
-      item={l}
-      fav={favoriteSet.has(listingId)}
-      onFav={() => toggleFav(l)}
-    />
-  );
-})}
-
+                      const listingId = String(l.id ?? l.listing_id ?? l._id);
+                      return (
+                        <ListingCard
+                          key={listingId}
+                          l={l}
+                          fav={favoriteSet.has(listingId)}
+                          onFav={() => toggleFav(l)}
+                          detailHref={`/trades/${listingId}`}
+                          sourceHref={l.source_url}
+                        />
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="panel" style={{ color: 'var(--text-700)' }}>
