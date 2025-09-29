@@ -1,6 +1,6 @@
 // frontend/pages/inspections.js
 import { useEffect, useState } from 'react';
-import { apiFetch, getToken } from '../lib/api';
+import { apiFetch, getToken, resolveApiUrl } from '../lib/api';
 
 export default function Inspections() {
   const [items, setItems] = useState([]);
@@ -50,7 +50,7 @@ export default function Inspections() {
                 <td style={td}>{(it.final_amount || 0).toLocaleString('ru-RU')} ₽</td>
                 <td style={td}>
                   {(it.status === 'Осмотр завершен' && it.report_pdf_url)
-                    ? <a href={it.report_pdf_url} target="_blank" rel="noreferrer">Скачать PDF</a>
+                    ? <a href={resolveApiUrl(it.report_pdf_url)} target="_blank" rel="noreferrer">Скачать PDF</a>
                     : <span style={{opacity:.6}}>Недоступно</span>}
                 </td>
               </tr>
