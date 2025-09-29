@@ -661,8 +661,10 @@ export default function Home() {
   const [recent, setRecent] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [errorRecent, setErrorRecent] = useState(null);
+  
+  const [inspectionsUnread, setInspectionsUnread] = useState(0);
 
-    const router = useRouter();
+  const router = useRouter();
 
   // токен авторизации и локальное состояние избранного
   const [authToken, setAuthToken] = useState(null);
@@ -683,6 +685,45 @@ export default function Home() {
     window.addEventListener('storage', handler);
     return () => window.removeEventListener('storage', handler);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function loadUnread() {
+      const token = authToken || localStorage.getItem('token');
+      if (!token) {
+        if (!ignore) setInspectionsUnread(0);
+        return;
+      }
+      try {
+        const res = await fetch(api('/api/inspections/unread-count'), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401) {
+          if (!ignore) setInspectionsUnread(0);
+          return;
+        }
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setInspectionsUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setInspectionsUnread(0);
+        console.error('Failed to load inspections unread count', err);
+      }
+    }
+
+    loadUnread();
+    const handler = () => loadUnread();
+    const interval = setInterval(loadUnread, 60000);
+    window.addEventListener('inspections-refresh-count', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('inspections-refresh-count', handler);
+    };
+  }, [authToken]);
 
   // переключение избранного (как в /trades)
   async function toggleFav(listing) {
@@ -811,7 +852,7 @@ export default function Home() {
 
   return (
     <>
-      <Hero listingCount={summary?.totalListings ?? 0} />
+      <Hero listingCount={summary?.totalListings ?? 0} inspectionsUnread={inspectionsUnread} />
       {/* === НОВЫЕ ПРЕДЛОЖЕНИЯ (первые 6 как на /trades) === */}
       {(recent.length || loadingRecent) && (
         <section style={{ margin: '32px 0' }}>
