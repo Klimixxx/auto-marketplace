@@ -8,49 +8,42 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-/* Канонические статусы: ключ — машинный enum код в БД */
-const STATUS_CANON = {
-  paid_pending: {
-    label: 'Оплачен/Ожидание модерации',
-    aliases: ['Оплачен/Ожидание модерации', 'paid_pending', 'оплачен', 'ожидание модерации']
-  },
-  accepted: {
-    label: 'Заказ принят, Приступаем к Осмотру',
-    aliases: ['Заказ принят, Приступаем к Осмотру', 'accepted', 'принят', 'приступаем к осмотру']
-  },
-  in_progress: {
-    label: 'Производится осмотр',
-    aliases: ['Производится осмотр', 'in_progress', 'в процессе', 'идёт осмотр', 'осмотр']
-  },
-  done: {
-    label: 'Осмотр завершен',
-    aliases: ['Осмотр завершен', 'done', 'завершен', 'готово']
-  }
+/* === словарь синонимов -> ключевые слова для подбора enum-метки === */
+const STATUS_KEYWORDS = {
+  paid_pending: ['модерац', 'ожидан', 'оплач', 'ожидание модерации'],
+  accepted: ['принят', 'приступ', 'к осмотру'],
+  in_progress: ['произв', 'идет осмотр', 'идёт осмотр', 'осмотр'],
+  done: ['заверш', 'готово']
 };
 
-function resolveStatus(raw) {
-  const s = String(raw || '').trim();
-  if (!s) return null;
+/* === утилиты для enum === */
+async function getEnumLabels() {
+  const sql = `
+    SELECT e.enumlabel
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'inspection_status'
+    ORDER BY e.enumsortorder
+  `;
+  const r = await query(sql);
+  return r.rows.map(x => x.enumlabel);
+}
 
-  // прямое совпадение по ключу
-  if (STATUS_CANON[s]) return { code: s, label: STATUS_CANON[s].label };
-
-  // по регистронезависимым алиасам
-  const sl = s.toLowerCase();
-  for (const [code, def] of Object.entries(STATUS_CANON)) {
-    if (def.aliases.some(a => String(a).toLowerCase() === sl)) {
-      return { code, label: def.label };
-    }
-  }
-  // попытка по вхождению
-  for (const [code, def] of Object.entries(STATUS_CANON)) {
-    if (def.aliases.some(a => sl.includes(String(a).toLowerCase()))) {
-      return { code, label: def.label };
-    }
+function findEnumByKeywords(enumLabels, keywords) {
+  const labels = enumLabels.map(l => ({ raw: l, low: l.toLowerCase() }));
+  for (const kw of keywords) {
+    const k = kw.toLowerCase();
+    const hit = labels.find(l => l.low.includes(k));
+    if (hit) return hit.raw;
   }
   return null;
 }
 
+function normalize(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
+/* === файловое хранилище для отчетов === */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportsDir = path.join(__dirname, '..', 'uploads', 'reports');
@@ -65,6 +58,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+/* === список осмотров === */
 router.get('/', async (_req, res) => {
   try {
     const q = await query(
@@ -83,6 +77,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
+/* === детали осмотра === */
 router.get('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -106,55 +101,84 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/* Обновление статуса */
+/* === обновление статуса === */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
 
     const raw = req.body?.status;
-    const resolved = resolveStatus(raw);
-    if (!resolved) {
-      return res.status(400).json({
-        error: 'BAD_STATUS',
-        allowed: Object.keys(STATUS_CANON)
-      });
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      return res.status(400).json({ error: 'BAD_STATUS' });
     }
 
-    const { code: enumCode, label: humanLabel } = resolved;
+    const enumLabels = await getEnumLabels();
+    if (!enumLabels.length) return res.status(500).json({ error: 'ENUM_EMPTY' });
 
-    // 1) Пытаемся записать как enum inspection_status (машинный код)
-    try {
-      const r1 = await query(
-        'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
-        [enumCode, id]
-      );
-      if (!r1.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
-      return res.json(r1.rows[0]);
-    } catch (err1) {
-      console.warn('[inspections] enum cast failed:', err1?.code, err1?.message);
+    const s = normalize(raw);
 
-      // 2) Если тип не enum или нет такого enum-значения — пробуем текстовую колонку
-      try {
-        const r2 = await query(
-          'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
-          [humanLabel, id]
-        );
-        if (!r2.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
-        return res.json(r2.rows[0]);
-      } catch (err2) {
-        console.error('[inspections] text update failed:', err2?.code, err2?.message);
-        // Если и это упало, вернём 400, чтобы фронт видел проблему маппинга/схемы
-        return res.status(400).json({ error: 'STATUS_UPDATE_FAILED' });
+    // 1) если фронт прислал уже точную enum-метку
+    const exact = enumLabels.find(l => l.toLowerCase() === s);
+    let target = exact || null;
+
+    // 2) прямые UI-лейблы -> ключи словаря
+    if (!target) {
+      // наиболее частые варианты UI
+      const uiDict = {
+        'оплачен/ожидание модерации': 'paid_pending',
+        'заказ принят, приступаем к осмотру': 'accepted',
+        'производится осмотр': 'in_progress',
+        'осмотр завершен': 'done',
+        // возможные краткие/разговорные
+        'идет модерация': 'paid_pending',
+        'идёт модерация': 'paid_pending',
+        'заказ принят': 'accepted',
+        'идет осмотр': 'in_progress',
+        'идёт осмотр': 'in_progress'
+      };
+      const tag = uiDict[s];
+      if (tag) {
+        target = findEnumByKeywords(enumLabels, STATUS_KEYWORDS[tag]);
       }
     }
+
+    // 3) общий подбор по ключевым словам, если ничего не найдено
+    if (!target) {
+      const allKW = Object.values(STATUS_KEYWORDS).flat();
+      // подбираем по всем корзинам, начиная с самых явных
+      target =
+        findEnumByKeywords(enumLabels, STATUS_KEYWORDS.paid_pending) ||
+        findEnumByKeywords(enumLabels, STATUS_KEYWORDS.accepted) ||
+        findEnumByKeywords(enumLabels, STATUS_KEYWORDS.in_progress) ||
+        findEnumByKeywords(enumLabels, STATUS_KEYWORDS.done) ||
+        null;
+      // если вход уже содержит подсказки — приоритизируем их
+      for (const [tag, kws] of Object.entries(STATUS_KEYWORDS)) {
+        if (kws.some(k => s.includes(k))) {
+          const tryPick = findEnumByKeywords(enumLabels, kws);
+          if (tryPick) { target = tryPick; break; }
+        }
+      }
+    }
+
+    if (!target) {
+      return res.status(400).json({ error: 'BAD_STATUS', allowed: enumLabels });
+    }
+
+    // enum-колонка: используем точную метку + явный каст
+    const r = await query(
+      'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
+      [target, id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json(r.rows[0]);
   } catch (e) {
     console.error('admin update status error:', e);
     res.status(500).json({ error: 'SERVER_ERROR' });
   }
 });
 
-/* Загрузка PDF-отчёта */
+/* === загрузка PDF-отчёта === */
 router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
   try {
     const id = Number(req.params.id);
