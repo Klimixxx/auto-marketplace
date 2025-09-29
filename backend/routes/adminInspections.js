@@ -1,3 +1,4 @@
+// backend/routes/adminInspections.js
 import express from 'express';
 import { query } from '../db.js';
 import multer from 'multer';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-// Витрина для UI
+/* ===== UI последовательность статусов (для справки) ===== */
 const STATUS_FLOW = [
   'Оплачен/Ожидание модерации',
   'Заказ принят, Приступаем к Осмотру',
@@ -15,14 +16,17 @@ const STATUS_FLOW = [
   'Осмотр завершен'
 ];
 
-// Маппинг в значения enum БД (подставь реальные, если отличаются)
+/* ===== Маппинг входа -> значение в БД =====
+ * Приходит либо человекочитаемый лейбл, либо машинный код.
+ * Значение справа — то, что пишем в колонку `status`.
+ */
 const STATUS_DB_MAP = {
   'Оплачен/Ожидание модерации': 'Оплачен/Ожидание модерации',
   'Заказ принят, Приступаем к Осмотру': 'Заказ принят, Приступаем к Осмотру',
   'Производится осмотр': 'Производится осмотр',
   'Осмотр завершен': 'Осмотр завершен',
 
-  // машинные статусы (фронт мог прислать именно их)
+  // машинные статусы
   paid_pending: 'Оплачен/Ожидание модерации',
   accepted: 'Заказ принят, Приступаем к Осмотру',
   in_progress: 'Производится осмотр',
@@ -43,8 +47,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Список
-router.get('/', async (req, res) => {
+/* ===== Список осмотров ===== */
+router.get('/', async (_req, res) => {
   try {
     const q = await query(
       `SELECT i.*,
@@ -62,10 +66,12 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Детали
+/* ===== Детали осмотра ===== */
 router.get('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
+
     const q = await query(
       `SELECT i.*,
               u.name  AS user_name, u.phone AS user_phone, u.subscription_status,
@@ -84,29 +90,27 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Обновить статус
+/* ===== Обновление статуса ===== */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
+
     const raw = req.body?.status;
-    const hasRaw = typeof raw === 'string' && raw.trim().length > 0;
-
-    if (!hasRaw) return res.status(400).json({ error: 'BAD_STATUS' });
-
-    const uiLabel = raw.trim();
-    
-    const normalizedKey =
-      Object.prototype.hasOwnProperty.call(STATUS_DB_MAP, uiLabel)
-        ? uiLabel
-        : uiLabel.toLowerCase();
-    const enumValue = STATUS_DB_MAP[normalizedKey];
-
-    if (!enumValue) {
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
       return res.status(400).json({ error: 'BAD_STATUS' });
     }
 
-    const enumValue = STATUS_MAP[uiLabel] ?? STATUS_MAP[uiLabel]; // оставлено намеренно для читабельности
-    // 1) пробуем как enum (если колонка enum inspection_status)
+    const uiLabel = raw.trim();
+    // Пробуем прямой ключ, иначе — в нижнем регистре для машинных
+    const normalizedKey = Object.prototype.hasOwnProperty.call(STATUS_DB_MAP, uiLabel)
+      ? uiLabel
+      : uiLabel.toLowerCase();
+
+    const enumValue = STATUS_DB_MAP[normalizedKey];
+    if (!enumValue) return res.status(400).json({ error: 'BAD_STATUS' });
+
+    // 1) Обновление с кастом к enum, если в БД тип enum inspection_status
     try {
       const r1 = await query(
         'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
@@ -115,7 +119,7 @@ router.put('/:id/status', async (req, res) => {
       if (!r1.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
       return res.json(r1.rows[0]);
     } catch (err) {
-      // 2) если enum не совпал или тип другой — повторяем без каста (для TEXT/VARCHAR)
+      // 2) Фоллбек на TEXT/VARCHAR
       console.warn('enum cast failed, fallback to TEXT update:', err?.code, err?.message);
       const r2 = await query(
         'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
@@ -130,11 +134,13 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
-// Загрузить PDF отчёт
+/* ===== Загрузка PDF-отчёта ===== */
 router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
     if (!req.file) return res.status(400).json({ error: 'NO_FILE' });
+
     const publicUrl = `/uploads/reports/${req.file.filename}`;
     const r = await query(
       'UPDATE inspections SET report_pdf_url=$1, updated_at=now() WHERE id=$2 RETURNING *',
