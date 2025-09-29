@@ -349,6 +349,8 @@ export default function AdminParserTradeCard() {
 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [updatingPublication, setUpdatingPublication] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
   const [error, setError] = useState(null);
 
   const applyTrade = useCallback((trade) => {
@@ -610,88 +612,194 @@ export default function AdminParserTradeCard() {
     photosText,
   ]);
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    if (!id) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const parsedLotDetails = JSON.parse(lotDetailsText || '{}');
-      const parsedContactDetails = JSON.parse(contactDetailsText || '{}');
-      const parsedDebtorDetails = JSON.parse(debtorDetailsText || '{}');
-      const parsedPrices = JSON.parse(pricesText || '[]');
-      const parsedDocuments = JSON.parse(documentsText || '[]');
-      const parsedPhotos = parsePhotosInput(photosText || '');
-      const syncedLotDetails = syncLotDetailsWithForm(parsedLotDetails, form);
-      // build payload
-      const payload = {
-        ...d,
-        title: trimOrNull(form.title),
-        description: trimOrNull(form.description),
-        category: trimOrNull(form.category),
-        region: trimOrNull(form.region),
-        brand: trimOrNull(form.brand),
-        model: trimOrNull(form.model),
-        year: trimOrNull(form.year),
-        vin: trimOrNull(form.vin),
-        start_price:
-          form.start_price === '' || form.start_price == null
-            ? null
-            : Number(String(form.start_price).replace(/\s/g, '').replace(',', '.')),
-        applications_count:
-          form.applications_count === '' || form.applications_count == null
-            ? 0
-            : Number(form.applications_count),
-        date_start: fromInputDate(form.date_start),
-        date_finish: fromInputDate(form.date_finish),
-        trade_place: trimOrNull(form.trade_place),
-        source_url: trimOrNull(form.source_url),
+  const saveTrade = useCallback(
+    async ({ showAlert = true } = {}) => {
+      if (!id) return null;
+      setSaving(true);
+      setError(null);
+      try {
+        const parsedLotDetails = JSON.parse(lotDetailsText || '{}');
+        const parsedContactDetails = JSON.parse(contactDetailsText || '{}');
+        const parsedDebtorDetails = JSON.parse(debtorDetailsText || '{}');
+        const parsedPrices = JSON.parse(pricesText || '[]');
+        const parsedDocuments = JSON.parse(documentsText || '[]');
+        const parsedPhotos = parsePhotosInput(photosText || '');
+        const syncedLotDetails = syncLotDetailsWithForm(parsedLotDetails, form);
 
-        lot_details: syncedLotDetails,
-        contact_details: parsedContactDetails,
-        debtor_details: parsedDebtorDetails,
-        prices: parsedPrices,
-        documents: parsedDocuments,
-        photos: parsedPhotos,
-      };
+        const payload = {
+          ...d,
+          title: trimOrNull(form.title),
+          description: trimOrNull(form.description),
+          category: trimOrNull(form.category),
+          region: trimOrNull(form.region),
+          brand: trimOrNull(form.brand),
+          model: trimOrNull(form.model),
+          year: trimOrNull(form.year),
+          vin: trimOrNull(form.vin),
+          start_price:
+            form.start_price === '' || form.start_price == null
+              ? null
+              : Number(String(form.start_price).replace(/\s/g, '').replace(',', '.')),
+          applications_count:
+            form.applications_count === '' || form.applications_count == null
+              ? 0
+              : Number(form.applications_count),
+          date_start: fromInputDate(form.date_start),
+          date_finish: fromInputDate(form.date_finish),
+          trade_place: trimOrNull(form.trade_place),
+          source_url: trimOrNull(form.source_url),
 
-      if (!API_BASE) {
-        throw new Error('NEXT_PUBLIC_API_BASE не задан.');
-      }
-      const token = readToken();
-      if (!token) {
-        throw new Error('Требуется авторизация администратора.');
-      }
+          lot_details: syncedLotDetails,
+          contact_details: parsedContactDetails,
+          debtor_details: parsedDebtorDetails,
+          prices: parsedPrices,
+          documents: parsedDocuments,
+          photos: parsedPhotos,
+        };
 
-      const url = `${API_BASE}/api/admin/parser-trades/${id}`;
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      if (res.status === 404) {
-        throw new Error('Лот не найден или удалён.');
+        if (!API_BASE) {
+          throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+        }
+        const token = readToken();
+        if (!token) {
+          throw new Error('Требуется авторизация администратора.');
+        }
+
+        const url = `${API_BASE}/api/admin/parser-trades/${id}`;
+        const res = await fetch(url, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.status === 404) {
+          throw new Error('Лот не найден или удалён.');
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const saved = await res.json();
+        applyTrade(saved);
+        if (showAlert && typeof window !== 'undefined') {
+          window.alert('Изменения сохранены.');
+        }
+        return saved;
+      } catch (e) {
+        setError(`Ошибка сохранения: ${e.message}`);
+        throw e;
+      } finally {
+        setSaving(false);
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const saved = await res.json();
-      applyTrade(saved);
-      if (typeof window !== 'undefined') {
-        window.alert('Изменения сохранены.');
+    },
+    [
+      id,
+      lotDetailsText,
+      contactDetailsText,
+      debtorDetailsText,
+      pricesText,
+      documentsText,
+      photosText,
+      form,
+      d,
+      applyTrade,
+    ],
+  );
+
+      const publishTrade = useCallback(
+    async ({ showAlert = true } = {}) => {
+      if (!id) return null;
+      setPublishing(true);
+      setError(null);
+      try {
+        if (!API_BASE) {
+          throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+        }
+        const token = readToken();
+        if (!token) {
+          throw new Error('Требуется авторизация администратора.');
+        }
+
+        const url = `${API_BASE}/api/admin/parser-trades/${id}/publish`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (res.status === 404) {
+          throw new Error('Лот не найден или уже удалён.');
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        try {
+          const detailRes = await fetch(`${API_BASE}/api/admin/parser-trades/${id}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          });
+          if (detailRes.ok) {
+            const next = await detailRes.json().catch(() => null);
+            if (next) {
+              applyTrade(next);
+            }
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh trade after publish:', refreshError);
+        }
+
+        if (showAlert && typeof window !== 'undefined') {
+          window.alert('Лот опубликован и появится в общем списке объявлений.');
+        }
+        return true;
+      } catch (e) {
+        setError(`Ошибка публикации: ${e.message}`);
+        throw e;
+      } finally {
+        setPublishing(false);
       }
-    } catch (e) {
-      setError(`Ошибка сохранения: ${e.message}`);
-    } finally {
-      setSaving(false);
+    },
+    [id, applyTrade],
+  );
+
+  const saveAndPublish = useCallback(async () => {
+    if (!item?.published_at) {
+      await publishTrade();
+      return;
     }
-  }
 
-  async function publishTrade() {
+    setUpdatingPublication(true);
+    try {
+      await saveTrade({ showAlert: false });
+      await publishTrade({ showAlert: false });
+      if (typeof window !== 'undefined') {
+        window.alert('Изменения сохранены и публикация обновлена.');
+      }
+    } catch (error) {
+      // ошибки уже обработаны в saveTrade/publishTrade
+    } finally {
+      setUpdatingPublication(false);
+    }
+  }, [item?.published_at, saveTrade, publishTrade]);
+
+  const handlePublishClick = useCallback(() => {
+    if (item?.published_at) {
+      void saveAndPublish();
+    } else {
+      void publishTrade();
+    }
+  }, [item?.published_at, saveAndPublish, publishTrade]);
+
+  const unpublishTrade = useCallback(async () => {
     if (!id) return;
-    setPublishing(true);
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Снять объявление с публикации? Оно исчезнет из раздела торгов.');
+      if (!confirmed) return;
+    }
+
+    setUnpublishing(true);
     setError(null);
     try {
       if (!API_BASE) {
@@ -702,7 +810,7 @@ export default function AdminParserTradeCard() {
         throw new Error('Требуется авторизация администратора.');
       }
 
-      const url = `${API_BASE}/api/admin/parser-trades/${id}/publish`;
+      const url = `${API_BASE}/api/admin/parser-trades/${id}/unpublish`;
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -714,16 +822,37 @@ export default function AdminParserTradeCard() {
         throw new Error('Лот не найден или уже удалён.');
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      if (typeof window !== 'undefined') {
-        window.alert('Лот опубликован и появится в общем списке объявлений.');
+      
+      const data = await res.json().catch(() => null);
+      const updated = data && typeof data === 'object' ? data.trade || data.item || null : null;
+      if (updated && typeof updated === 'object') {
+        applyTrade(updated);
+      } else if (item) {
+        applyTrade({ ...item, published_at: null });
       }
-      // no-op
+
+      if (typeof window !== 'undefined') {
+        window.alert('Лот снят с публикации и скрыт из раздела торгов.');
+      }
+
     } catch (e) {
-      setError(`Ошибка публикации: ${e.message}`);
+      setError(`Ошибка снятия с публикации: ${e.message}`);
     } finally {
-      setPublishing(false);
+      setUnpublishing(false);
     }
-  }
+  }, [id, item, applyTrade]);
+
+  const onSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+      try {
+        await saveTrade();
+      } catch (error) {
+        // ошибка уже показана пользователю
+      }
+    },
+    [saveTrade],
+  );
 
   if (loading) {
     return (
@@ -743,7 +872,15 @@ export default function AdminParserTradeCard() {
       </div>
     );
   }
-  const publishButtonLabel = item.published_at ? 'Обновить публикацию' : 'Опубликовать';
+  const publishButtonLabel = item.published_at
+    ? updatingPublication || saving || publishing
+      ? 'Обновляем…'
+      : 'Сохранить и обновить публикацию'
+    : publishing
+    ? 'Публикуем…'
+    : 'Опубликовать';
+
+  const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing;
 
   return (
     <div className="container" style={{ display: 'grid', gap: 16 }}>
@@ -948,15 +1085,26 @@ export default function AdminParserTradeCard() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button type="submit" className="button primary" disabled={saving || publishing}>
+          <button type="submit" className="button primary" disabled={actionButtonsDisabled}>
             {saving ? 'Сохранение…' : 'Сохранить изменения'}
           </button>
-          <button type="button" className="button outline" onClick={resetChanges} disabled={saving || publishing}>
+          <button type="button" className="button outline" onClick={resetChanges} disabled={actionButtonsDisabled}>
             Сбросить изменения
           </button>
-          <button type="button" className="button" onClick={publishTrade} disabled={saving || publishing}>
-            {publishing ? 'Публикуем…' : publishButtonLabel}
+          <button type="button" className="button" onClick={handlePublishClick} disabled={actionButtonsDisabled}>
+            {publishButtonLabel}
           </button>
+          {item.published_at ? (
+            <button
+              type="button"
+              className="button outline"
+              onClick={unpublishTrade}
+              disabled={actionButtonsDisabled}
+              style={{ borderColor: '#f87171', color: '#b91c1c' }}
+            >
+              {unpublishing ? 'Снимаем…' : 'Снять с публикации'}
+            </button>
+          ) : null}
         </div>
       </form>
 
