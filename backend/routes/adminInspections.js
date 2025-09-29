@@ -17,6 +17,10 @@ function norm(s) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function sqlStringLiteral(s) {
+  // экранируем одинарные кавычки для SQL-литерала
+  return String(s).replace(/'/g, "''");
+}
 
 /* ===== канонические теги и словари ===== */
 const TAGS = ['paid_pending', 'accepted', 'in_progress', 'done'];
@@ -90,7 +94,7 @@ function detectTagFromText(sRaw) {
   return null;
 }
 
-/* ===== работа с enum ===== */
+/* ===== enum из БД ===== */
 async function getEnumLabels() {
   const sql = `
     SELECT e.enumlabel
@@ -103,21 +107,15 @@ async function getEnumLabels() {
   return r.rows.map((x) => x.enumlabel);
 }
 
-/* гарантированно добавить значение в enum, если его нет (совместимо со старыми PG) */
+/* безопасно добавить значение в enum, если его нет.
+   Требует PostgreSQL 12+ (поддержка IF NOT EXISTS для ENUM). */
 async function ensureEnumLabel(enumType, value) {
-  const sql = `
-  DO $$
-  BEGIN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM pg_type t
-      JOIN pg_enum e ON e.enumtypid = t.oid
-      WHERE t.typname = $1 AND e.enumlabel = $2
-    ) THEN
-      EXECUTE format('ALTER TYPE %I ADD VALUE %L', $1, $2);
-    END IF;
-  END$$;`;
-  await query(sql, [enumType, value]);
+  if (enumType !== 'inspection_status') {
+    throw new Error('Unsupported enum type');
+  }
+  const literal = sqlStringLiteral(value);
+  const sql = `ALTER TYPE ${enumType} ADD VALUE IF NOT EXISTS '${literal}';`;
+  await query(sql); // без параметров — это DDL, параметры тут не работают
 }
 
 /* ===== файловое хранилище отчётов ===== */
@@ -183,7 +181,7 @@ router.get('/:id', async (req, res) => {
    1) Если прислали точный enum-лейбл — ставим его.
    2) Иначе распознаём тег по тексту.
    3) Для тега берём желаемый лейбл DESIRED_ENUM_LABEL[tag].
-   4) Гарантируем его существование в enum (ensureEnumLabel), затем пишем. */
+   4) Гарантируем его наличие в enum (ensureEnumLabel), затем пишем. */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -222,9 +220,10 @@ router.put('/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'TAG_NOT_SUPPORTED', tag });
     }
 
-    // 3) гарантируем наличие такого лейбла в enum, затем обновляем запись
+    // 3) гарантируем наличие такого лейбла в enum (DDL без параметров)
     await ensureEnumLabel('inspection_status', desired);
 
+    // 4) обновляем запись
     const r = await query(
       'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
       [desired, id]
