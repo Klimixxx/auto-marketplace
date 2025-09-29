@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
-/* ===== нормализация ===== */
+/* ===== утилиты ===== */
 function norm(s) {
   return String(s || '')
     .toLowerCase()
@@ -18,8 +18,8 @@ function norm(s) {
     .trim();
 }
 
-/* ===== канонические теги и маркеры ===== */
-const TAGS = /** @type const */ (['paid_pending', 'accepted', 'in_progress', 'done']);
+/* ===== канонические теги и словари ===== */
+const TAGS = ['paid_pending', 'accepted', 'in_progress', 'done'];
 
 const MARKERS = {
   done: ['заверш', 'готово', 'закончено', 'выполнен', 'выполнена', 'отчет готов', 'отчёт готов'],
@@ -36,7 +36,6 @@ const UI_TO_TAG_RAW = {
   'ожидает проверки': 'paid_pending',
   'ждет проверки': 'paid_pending',
   'ждёт проверки': 'paid_pending',
-
   // accepted
   'заказ принят, приступаем к осмотру': 'accepted',
   'заказ принят': 'accepted',
@@ -44,7 +43,6 @@ const UI_TO_TAG_RAW = {
   'приступаем': 'accepted',
   'подтвержден': 'accepted',
   'подтверждено': 'accepted',
-
   // in_progress
   'производится осмотр': 'in_progress',
   'выполняется осмотр': 'in_progress',
@@ -53,7 +51,6 @@ const UI_TO_TAG_RAW = {
   'идёт осмотр': 'in_progress',
   'осмотр начат': 'in_progress',
   'в процессе': 'in_progress',
-
   // done
   'осмотр завершен': 'done',
   'осмотр завершён': 'done',
@@ -69,10 +66,19 @@ const UI_TO_TAG = (() => {
   return out;
 })();
 
-/* ===== распознавание тега по тексту (жесткий порядок) =====
-   done → accepted → in_progress → paid_pending */
+/* желаемые читаемые лейблы для каждого тега */
+const DESIRED_ENUM_LABEL = {
+  paid_pending: 'Идет модерация',
+  accepted: 'Заказ принят, Приступаем к Осмотру',
+  in_progress: 'Выполняется осмотр машины',
+  done: 'Завершен'
+};
+
+/* ===== распознавание тега по тексту =====
+   Порядок: done → accepted → in_progress → paid_pending */
 function detectTagFromText(sRaw) {
   const s = norm(sRaw);
+
   if (UI_TO_TAG[s]) return UI_TO_TAG[s];
   for (const [k, tag] of Object.entries(UI_TO_TAG)) if (s.includes(k)) return tag;
 
@@ -84,21 +90,7 @@ function detectTagFromText(sRaw) {
   return null;
 }
 
-/* ===== классификация enum-лейбла БД в тег (тот же порядок) ===== */
-function classifyEnumLabel(labelRaw) {
-  const l = norm(labelRaw);
-  if (UI_TO_TAG[l]) return UI_TO_TAG[l];
-  for (const [k, tag] of Object.entries(UI_TO_TAG)) if (l.includes(k)) return tag;
-
-  const hasAny = (arr) => arr.some((kw) => l.includes(norm(kw)));
-  if (hasAny(MARKERS.done)) return 'done';
-  if (hasAny(MARKERS.accepted)) return 'accepted';
-  if (hasAny(MARKERS.in_progress)) return 'in_progress';
-  if (hasAny(MARKERS.paid_pending)) return 'paid_pending';
-  return null;
-}
-
-/* ===== enum из БД ===== */
+/* ===== работа с enum ===== */
 async function getEnumLabels() {
   const sql = `
     SELECT e.enumlabel
@@ -111,53 +103,21 @@ async function getEnumLabels() {
   return r.rows.map((x) => x.enumlabel);
 }
 
-/* раскладываем лейблы по тегам */
-function bucketizeLabels(enumLabels) {
-  const buckets = { paid_pending: [], accepted: [], in_progress: [], done: [] };
-  for (const lbl of enumLabels) {
-    const tag = classifyEnumLabel(lbl);
-    if (tag && buckets[tag]) buckets[tag].push(lbl);
-  }
-  return buckets;
-}
-
-/* выбор "типичного" лейбла внутри тега */
-function pickLabelForTag(buckets, tag) {
-  const list = (buckets[tag] || []).map((x) => ({ raw: x, n: norm(x) }));
-  if (!list.length) return null;
-
-  const prefByTag = {
-    paid_pending: ['оплачен/ожидание модерации', 'ожидает проверки', 'идет модерация', 'идёт модерация'],
-    accepted: ['заказ принят, приступаем к осмотру', 'заказ принят', 'приступаем к осмотру', 'подтвержден', 'подтверждено'],
-    in_progress: ['выполняется осмотр машины', 'выполняется осмотр', 'производится осмотр', 'идет осмотр', 'идёт осмотр'],
-    done: ['осмотр завершен', 'осмотр завершён', 'отчет готов', 'отчёт готов', 'завершен', 'завершён']
-  }[tag] || [];
-
-  for (const pref of prefByTag) {
-    const p = norm(pref);
-    const hit = list.find((it) => it.n === p || it.n.includes(p));
-    if (hit) return hit.raw;
-  }
-  // иначе — самая длинная строка
-  list.sort((a, b) => b.raw.length - a.raw.length);
-  return list[0].raw;
-}
-
-/* мягкий fallback: выбираем ближайший доступный тег */
-function pickWithFallback(buckets, detectedTag) {
-  /** порядки близости */
-  const fallbackOrder = {
-    accepted: ['accepted', 'in_progress', 'paid_pending'],
-    in_progress: ['in_progress', 'accepted', 'paid_pending'],
-    paid_pending: ['paid_pending', 'accepted', 'in_progress'],
-    done: ['done', 'in_progress', 'accepted'] // если нет done — откатываемся к процессу
-  }[detectedTag] || [detectedTag];
-
-  for (const tag of fallbackOrder) {
-    const lbl = pickLabelForTag(buckets, tag);
-    if (lbl) return { tag, label: lbl };
-  }
-  return null;
+/* гарантированно добавить значение в enum, если его нет (совместимо со старыми PG) */
+async function ensureEnumLabel(enumType, value) {
+  const sql = `
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_type t
+      JOIN pg_enum e ON e.enumtypid = t.oid
+      WHERE t.typname = $1 AND e.enumlabel = $2
+    ) THEN
+      EXECUTE format('ALTER TYPE %I ADD VALUE %L', $1, $2);
+    END IF;
+  END$$;`;
+  await query(sql, [enumType, value]);
 }
 
 /* ===== файловое хранилище отчётов ===== */
@@ -218,7 +178,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/* ===== обновление статуса ===== */
+/* ===== обновление статуса =====
+   Алгоритм:
+   1) Если прислали точный enum-лейбл — ставим его.
+   2) Иначе распознаём тег по тексту.
+   3) Для тега берём желаемый лейбл DESIRED_ENUM_LABEL[tag].
+   4) Гарантируем его существование в enum (ensureEnumLabel), затем пишем. */
 router.put('/:id/status', async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -234,7 +199,7 @@ router.put('/:id/status', async (req, res) => {
 
     const rawNorm = norm(raw);
 
-    // точное совпадение с enum-лейблом
+    // 0) точное совпадение с существующим enum
     const exact = enumLabels.find((l) => norm(l) === rawNorm);
     if (exact) {
       const r0 = await query(
@@ -245,30 +210,28 @@ router.put('/:id/status', async (req, res) => {
       return res.json(r0.rows[0]);
     }
 
-    // распознать тег по тексту
-    const detectedTag = detectTagFromText(raw);
-    if (!detectedTag) {
+    // 1) определить канонический тег
+    const tag = detectTagFromText(raw);
+    if (!tag) {
       return res.status(400).json({ error: 'BAD_STATUS', message: 'Не удалось распознать статус' });
     }
 
-    // разложить enum-лейблы и выбрать по мягкому fallback
-    const buckets = bucketizeLabels(enumLabels);
-    const pick = pickWithFallback(buckets, detectedTag);
-    if (!pick) {
-      return res.status(400).json({
-        error: 'ENUM_EMPTY_FOR_ALL',
-        message: 'В enum нет подходящих лейблов ни для исходного тега, ни для fallback'
-      });
+    // 2) желаемый читаемый лейбл для enum
+    const desired = DESIRED_ENUM_LABEL[tag];
+    if (!desired) {
+      return res.status(400).json({ error: 'TAG_NOT_SUPPORTED', tag });
     }
+
+    // 3) гарантируем наличие такого лейбла в enum, затем обновляем запись
+    await ensureEnumLabel('inspection_status', desired);
 
     const r = await query(
       'UPDATE inspections SET status = $1::inspection_status, updated_at = now() WHERE id = $2 RETURNING *',
-      [pick.label, id]
+      [desired, id]
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
 
-    // добавим диагностический хвост, чтобы видеть куда упали по fallback
-    res.json({ ...r.rows[0], _resolved_tag: detectedTag, _used_tag: pick.tag });
+    res.json({ ...r.rows[0], _resolved_tag: tag, _enum_ensured: true });
   } catch (e) {
     console.error('admin update status error:', e);
     res.status(500).json({ error: 'SERVER_ERROR', text: String(e) });
