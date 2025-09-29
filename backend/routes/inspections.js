@@ -185,7 +185,7 @@ router.post('/', async (req, res) => {
       }
     }
     console.error('create inspection error:', e);
-    return res.status(500).json({ error: 'SERVER_ERROR' });
+    return res.status(500).json({ error: 'SERVER_ERROR', text: e});
   } finally {
     if (client) {
       client.release();
