@@ -16,17 +16,17 @@ const STATUS_FLOW = [
 ];
 
 // Маппинг в значения enum БД (подставь реальные, если отличаются)
-const STATUS_MAP = {
-  'Оплачен/Ожидание модерации': 'paid_pending',
-  'Заказ принят, Приступаем к Осмотру': 'accepted',
-  'Производится осмотр': 'in_progress',
-  'Осмотр завершен': 'done',
+const STATUS_DB_MAP = {
+  'Оплачен/Ожидание модерации': 'Оплачен/Ожидание модерации',
+  'Заказ принят, Приступаем к Осмотру': 'Заказ принят, Приступаем к Осмотру',
+  'Производится осмотр': 'Производится осмотр',
+  'Осмотр завершен': 'Осмотр завершен',
 
-  // на случай если фронт уже шлет машинные
-  paid_pending: 'paid_pending',
-  accepted: 'accepted',
-  in_progress: 'in_progress',
-  done: 'done'
+  // машинные статусы (фронт мог прислать именно их)
+  paid_pending: 'Оплачен/Ожидание модерации',
+  accepted: 'Заказ принят, Приступаем к Осмотру',
+  in_progress: 'Производится осмотр',
+  done: 'Осмотр завершен'
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -94,7 +94,14 @@ router.put('/:id/status', async (req, res) => {
     if (!hasRaw) return res.status(400).json({ error: 'BAD_STATUS' });
 
     const uiLabel = raw.trim();
-    if (!STATUS_FLOW.includes(uiLabel) && !(uiLabel in STATUS_MAP)) {
+    
+    const normalizedKey =
+      Object.prototype.hasOwnProperty.call(STATUS_DB_MAP, uiLabel)
+        ? uiLabel
+        : uiLabel.toLowerCase();
+    const enumValue = STATUS_DB_MAP[normalizedKey];
+
+    if (!enumValue) {
       return res.status(400).json({ error: 'BAD_STATUS' });
     }
 
@@ -112,7 +119,7 @@ router.put('/:id/status', async (req, res) => {
       console.warn('enum cast failed, fallback to TEXT update:', err?.code, err?.message);
       const r2 = await query(
         'UPDATE inspections SET status = $1, updated_at = now() WHERE id = $2 RETURNING *',
-        [uiLabel, id]
+        [enumValue, id]
       );
       if (!r2.rows[0]) return res.status(404).json({ error: 'NOT_FOUND' });
       return res.json(r2.rows[0]);
