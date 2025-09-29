@@ -12,13 +12,12 @@ const router = express.Router();
 const STATUS_KEYWORDS = {
   paid_pending: ['модерац', 'ожидан', 'оплач'],
   accepted: ['принят', 'приступ'],
-  // важно: без «идет/идёт» чтобы не ловить «Идет модерация»
   in_progress: ['производ', 'выполня', 'осмотр'],
   done: ['заверш', 'готово']
 };
 
-/* прямые UI фразы -> тег */
-const UI_TO_TAG = {
+/* прямые UI фразы -> тег (сырые ключи) */
+const UI_TO_TAG_RAW = {
   'оплачен/ожидание модерации': 'paid_pending',
   'идет модерация': 'paid_pending',
   'идёт модерация': 'paid_pending',
@@ -34,6 +33,24 @@ const UI_TO_TAG = {
   'осмотр завершен': 'done',
   'осмотр завершён': 'done'
 };
+
+function normalize(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[.,;:!?()"']/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/* нормализованный словарь UI -> тег */
+const UI_TO_TAG = (() => {
+  const out = {};
+  for (const [k, v] of Object.entries(UI_TO_TAG_RAW)) {
+    out[normalize(k)] = v;
+  }
+  return out;
+})();
 
 /* “сильные” ключи для точного подбора enum-метки */
 const STRONG_KW = {
@@ -55,16 +72,6 @@ async function getEnumLabels() {
   return r.rows.map(x => x.enumlabel);
 }
 
-function normalize(s) {
-  return String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-  // удаляем пунктуацию, сжимаем пробелы
-    .replace(/[.,;:!?()"']/g, '')
-    .replace(/\s+/g, ' ');
-}
-
 /* скоринг входной строки -> тег */
 function scoreTagForInput(input, tag) {
   const kws = STATUS_KEYWORDS[tag] || [];
@@ -73,7 +80,6 @@ function scoreTagForInput(input, tag) {
     const k = normalize(kw);
     if (k && input.includes(k)) score += 1;
   }
-  // бонус за уникальные признаки
   if (tag === 'accepted' && (input.includes('принят') || input.includes('приступ'))) score += 2;
   if (tag === 'done' && input.includes('заверш')) score += 2;
   return score;
@@ -91,15 +97,11 @@ function pickEnumForTag(enumLabels, tag) {
       const k = normalize(kw);
       if (k && l.low.includes(k)) s += 1;
     }
-    // усиливаем по сильным ключам
     for (const kw of STRONG_KW[tag] || []) {
       const k = normalize(kw);
       if (k && l.low.includes(k)) s += 2;
     }
-
-    // специальное правило: для in_progress в метке ОБЯЗАТЕЛЕН «осмотр»
     if (tag === 'in_progress' && !l.low.includes('осмотр')) continue;
-
     if (s > bestScore) { bestScore = s; best = l.raw; }
   }
   return bestScore > 0 ? best : null;
@@ -190,7 +192,7 @@ router.put('/:id/status', async (req, res) => {
       return res.json(r0.rows[0]);
     }
 
-    // 1) прямое соответствие UI-фразе -> тег
+    // 1) прямое соответствие UI-фразе (с нормализацией)
     const directTag = UI_TO_TAG[sNorm] || null;
 
     // 2) скоринг входа -> тег, если прямого нет
@@ -212,7 +214,7 @@ router.put('/:id/status', async (req, res) => {
     // 3) выбираем конкретную enum-метку под тег
     let target = pickEnumForTag(enumLabels, chosenTag);
 
-    // жёсткий fallback: пробуем альтернативные теги по приоритету
+    // fallback по приоритету, если вдруг не нашли внутри тега
     if (!target) {
       const prio = ['accepted', 'in_progress', 'paid_pending', 'done'];
       for (const tag of prio) {
