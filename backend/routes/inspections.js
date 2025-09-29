@@ -4,6 +4,7 @@ import { pool, query } from '../db.js';
 
 const router = express.Router();
 const BASE_PRICE = 12000;
+const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
 
 function userUnreadCondition(alias = 'i') {
   return `(${alias}.user_last_viewed_at IS NULL OR ${alias}.user_last_viewed_at < ${alias}.updated_at)`;
@@ -158,10 +159,17 @@ router.post('/', async (req, res) => {
     );
 
     const ins = await client.query(
-      `INSERT INTO inspections (user_id, listing_id, base_price, discount_percent, final_amount, user_last_viewed_at)
-         VALUES ($1,$2,$3,$4,$5, now())
+      `INSERT INTO inspections (user_id, listing_id, status, base_price, discount_percent, final_amount, user_last_viewed_at)
+         VALUES ($1,$2,$3,$4,$5,$6, now())
          RETURNING *`,
-      [String(userId), String(listingDbId), BASE_PRICE, discountPercent, finalAmount]
+      [
+        String(userId),
+        String(listingDbId),
+        INITIAL_STATUS,
+        BASE_PRICE,
+        discountPercent,
+        finalAmount,
+      ]
     );
 
 
