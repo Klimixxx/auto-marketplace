@@ -1,8 +1,52 @@
 // frontend/components/AdminLayout.jsx
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { resolveApiUrl } from '../lib/api';
 
 export default function AdminLayout({ me, title, children }) {
   const router = useRouter();
+
+  const [inspectionsUnread, setInspectionsUnread] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      try {
+        if (me && me.role !== 'admin') {
+          setInspectionsUnread(0);
+          return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setInspectionsUnread(0);
+          return;
+        }
+        const res = await fetch(resolveApiUrl('/api/admin/inspections/unread-count'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setInspectionsUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setInspectionsUnread(0);
+        console.error('Failed to load admin inspection counter', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    const interval = setInterval(load, 60000);
+    window.addEventListener('admin-inspections-refresh', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('admin-inspections-refresh', handler);
+    };
+  }, [me]);
 
   // Используем токены из globals.css
   const UI = {
@@ -26,7 +70,7 @@ export default function AdminLayout({ me, title, children }) {
   const links = [
     { href: '/admin', label: 'Дэшборд', icon: <IconHome /> },
     { href: '/admin/listings', label: 'Объявления', icon: <IconCards /> },
-    { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck /> },
+    { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
     { href: '/admin/users', label: 'Пользователи', icon: <IconUsers /> },
     { href: '/admin/admins', label: 'Администраторы', icon: <IconShield /> },
     { href: '/admin/notify', label: 'Уведомления', icon: <IconBell /> },
@@ -84,6 +128,8 @@ export default function AdminLayout({ me, title, children }) {
             <nav style={{ display: 'grid', gap: 6 }}>
               {links.map((l) => {
                 const active = isActive(l.href);
+                const badgeValue = Number(l.badge) || 0;
+                const badgeText = badgeValue > 99 ? '99+' : String(badgeValue);
                 return (
                   <a
                     key={l.href}
@@ -103,7 +149,34 @@ export default function AdminLayout({ me, title, children }) {
                     onMouseLeave={(e) => (e.currentTarget.style.color = UI.text)}
                   >
                     <span aria-hidden>{l.icon}</span>
-                    <span style={{ fontWeight: active ? 700 : 500 }}>{l.label}</span>
+                    <span
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: 1,
+                        fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      <span>{l.label}</span>
+                      {badgeValue > 0 && (
+                        <span
+                          style={{
+                            marginLeft: 'auto',
+                            background: '#ef4444',
+                            color: '#fff',
+                            borderRadius: 999,
+                            padding: '0 8px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            minWidth: 24,
+                            textAlign: 'center',
+                          }}
+                        >
+                          {badgeText}
+                        </span>
+                      )}
+                    </span>
                   </a>
                 );
               })}
