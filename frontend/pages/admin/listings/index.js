@@ -92,6 +92,7 @@ export default function AdminParserTradesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [unpublishingId, setUnpublishingId] = useState(null);
   const [featuringId, setFeaturingId] = useState(null);
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
@@ -114,6 +115,7 @@ export default function AdminParserTradesPage() {
       setPage(1);
       setPageCount(1);
       setPublishingId(null);
+      setUnpublishingId(null);
       setListLoading(true);
       setIngesting(false);
       if (!router.isReady) return;
@@ -410,6 +412,52 @@ export default function AdminParserTradesPage() {
     [page, loadPage, view],
   );
 
+  const unpublish = useCallback(
+    async (id) => {
+      if (view !== 'published') return;
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно снять объявление с публикации.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      if (typeof window !== 'undefined') {
+        const confirmed = window.confirm('Снять объявление с публикации? Оно исчезнет из раздела /trades.');
+        if (!confirmed) return;
+      }
+
+      setUnpublishingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/unpublish`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        alert('Объявление снято с публикации и скрыто из раздела /trades.');
+        await loadPage(page);
+      } catch (error) {
+        console.error('unpublish error:', error);
+        alert(`Ошибка снятия с публикации: ${error.message || 'failed'}`);
+      } finally {
+        setUnpublishingId(null);
+      }
+    },
+    [page, loadPage, view],
+  );
+
   const toggleFeatured = useCallback(
     async (id, nextState) => {
       if (!API_BASE) {
@@ -617,6 +665,7 @@ export default function AdminParserTradesPage() {
                     const createdAt = formatCreatedAt(item.created_at);
                     const publishedAt = formatCreatedAt(item.published_at);
                     const isPublishing = publishingId === item.id;
+                    const isUnpublishing = unpublishingId === item.id;
                     const isFeatured = Boolean(item.is_featured);
                     const isFeaturing = featuringId === item.id;
                     const detailHref = {
@@ -667,7 +716,17 @@ export default function AdminParserTradesPage() {
                             <Link href={detailHref} className="button button-small button-outline">
                               Редактировать
                             </Link>
-                            {!isPublishedView && (
+                            {isPublishedView ? (
+                              <button
+                                type="button"
+                                className="button button-small button-outline"
+                                onClick={() => unpublish(item.id)}
+                                disabled={isUnpublishing || listLoading}
+                                style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
+                              >
+                                {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
+                              </button>
+                            ) : (
                               <button
                                 type="button"
                                 className="button button-small"
