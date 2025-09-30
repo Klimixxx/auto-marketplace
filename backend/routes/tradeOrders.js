@@ -195,7 +195,7 @@ router.post('/', async (req, res) => {
 
   try {
     const listingQuery = await query(
-      `SELECT id, title, start_price, current_price, min_price, max_price, price, amount, details
+      `SELECT id, title, start_price, current_price, min_price, max_price, details
          FROM listings
         WHERE id::text = $1 OR source_id = $1
         LIMIT 1`,
