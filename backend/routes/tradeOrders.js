@@ -1,17 +1,15 @@
 import express from 'express';
 import { pool, query } from '../db.js';
 
+import {
+  PRO_DISCOUNT_PERCENT,
+  loadTradePriceTiers,
+  prepareTierForComputation,
+} from '../services/tradePricing.js';
+
 const router = express.Router();
 
 const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
-const PRO_DISCOUNT_PERCENT = 30;
-
-const PRICE_TIERS = [
-  { max: 500_000, amount: 15000, label: 'Лот до 500 000 ₽' },
-  { max: 1_500_000, amount: 25000, label: 'Лот до 1 500 000 ₽' },
-  { max: 3_000_000, amount: 35000, label: 'Лот до 3 000 000 ₽' },
-  { max: Number.POSITIVE_INFINITY, amount: 50000, label: 'Лот свыше 3 000 000 ₽' },
-];
 
 const PRICE_DETAIL_KEYS = [
   'current_price', 'currentPrice', 'current_price_number',
@@ -137,19 +135,33 @@ function resolveLotPrice(listing) {
   return findNumeric(candidates);
 }
 
-function computePricing(listing, subscriptionStatus) {
-  const lotPrice = resolveLotPrice(listing);
-  let tier = PRICE_TIERS[PRICE_TIERS.length - 1];
+function normalizeTiersForComputation(tiers) {
+  if (!Array.isArray(tiers) || !tiers.length) return [];
+  return tiers
+    .map((tier) => prepareTierForComputation(tier))
+    .filter((tier) => tier && Number.isFinite(tier.amount) && tier.amount >= 0);
+}
 
-  if (lotPrice != null && Number.isFinite(lotPrice)) {
-    for (const candidate of PRICE_TIERS) {
+function computePricing(listing, subscriptionStatus, tiers) {
+  const preparedTiers = normalizeTiersForComputation(tiers);
+  const fallbackTier = preparedTiers.length
+    ? preparedTiers[preparedTiers.length - 1]
+    : { label: 'Тариф', amount: 0, max: Number.POSITIVE_INFINITY };
+
+  const lotPrice = resolveLotPrice(listing);
+  let tier = fallbackTier;
+
+  if (lotPrice != null && Number.isFinite(lotPrice) && preparedTiers.length) {
+    for (const candidate of preparedTiers) {
       if (lotPrice <= candidate.max) {
         tier = candidate;
         break;
       }
     }
-  } else {
-    tier = PRICE_TIERS[1] || PRICE_TIERS[0];
+  } else if (preparedTiers.length > 1) {
+    tier = preparedTiers[1] || preparedTiers[0];
+  } else if (preparedTiers.length === 1) {
+    tier = preparedTiers[0];
   }
 
   const basePrice = tier.amount;
@@ -230,7 +242,8 @@ router.post('/', async (req, res) => {
         .json({ error: 'BALANCE_FROZEN', message: 'Баланс пользователя заморожен' });
     }
 
-    const pricing = computePricing(listing, user.subscription_status);
+    const tiers = await loadTradePriceTiers(client);
+    const pricing = computePricing(listing, user.subscription_status, tiers);
 
     const currentBalanceRaw = user.balance;
     const currentBalance = parseMoneyLike(currentBalanceRaw);
