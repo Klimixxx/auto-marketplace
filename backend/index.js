@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
 import adminParserRouter from './routes/adminParser.js';
 import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
+import tradeOrdersRouter from './routes/tradeOrders.js';
+import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
