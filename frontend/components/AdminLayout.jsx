@@ -7,6 +7,7 @@ export default function AdminLayout({ me, title, children }) {
   const router = useRouter();
 
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
+  const [tradeOrdersUnread, setTradeOrdersUnread] = useState(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -48,6 +49,43 @@ export default function AdminLayout({ me, title, children }) {
     };
   }, [me]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      try {
+        if (me && me.role !== 'admin') {
+          setTradeOrdersUnread(0);
+          return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) { setTradeOrdersUnread(0); return; }
+        const res = await fetch(resolveApiUrl('/api/admin/trade-orders/unread-count'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setTradeOrdersUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setTradeOrdersUnread(0);
+        console.error('Failed to load admin trade orders counter', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    const interval = setInterval(load, 60000);
+    window.addEventListener('admin-trade-orders-refresh', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('admin-trade-orders-refresh', handler);
+    };
+  }, [me]);
+
   // Используем токены из globals.css
   const UI = {
     pageBg: 'var(--bg-alt)',                 // молочный фон страницы
@@ -70,6 +108,7 @@ export default function AdminLayout({ me, title, children }) {
   const links = [
     { href: '/admin', label: 'Дэшборд', icon: <IconHome /> },
     { href: '/admin/listings', label: 'Объявления', icon: <IconCards /> },
+    { href: '/admin/trade-orders', label: 'Торги', icon: <IconCheck />, badge: tradeOrdersUnread },
     { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
     { href: '/admin/users', label: 'Пользователи', icon: <IconUsers /> },
     { href: '/admin/admins', label: 'Администраторы', icon: <IconShield /> },
