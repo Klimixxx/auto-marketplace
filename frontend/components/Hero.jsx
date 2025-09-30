@@ -16,7 +16,7 @@ const UI = {
 
 const fmt = new Intl.NumberFormat('ru-RU');
 
-export default function Hero({ listingCount = 0, inspectionsUnread = 0 }) {
+export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrdersUnread = 0 }) {
   const [q, setQ] = useState('');
   const inputRef = useRef(null);
 
@@ -139,9 +139,15 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0 }) {
         </div>
 
         {inspectionsUnread > 0 && (
-          <a href="/inspections" style={styles.inspectionAlert}>
+          <a href="/inspections" style={styles.alert}>
             <span>Новые обновления осмотров</span>
-            <span style={styles.inspectionAlertCount}>{inspectionsUnread > 99 ? '99+' : inspectionsUnread}</span>
+            <span style={styles.alertCount}>{inspectionsUnread > 99 ? '99+' : inspectionsUnread}</span>
+          </a>
+        )}
+        {tradeOrdersUnread > 0 && (
+          <a href="/my-trades" style={{ ...styles.alert, background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16,185,129,0.3)' }}>
+            <span>Есть новости по вашим торгам</span>
+            <span style={styles.alertCount}>{tradeOrdersUnread > 99 ? '99+' : tradeOrdersUnread}</span>
           </a>
         )}
 
@@ -303,7 +309,7 @@ const styles = {
   },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
-  inspectionAlert: {
+  alert: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 10,
@@ -317,7 +323,7 @@ const styles = {
     marginTop: 12,
     alignSelf: 'flex-start',
   },
-  inspectionAlertCount: {
+  alertCount: {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
