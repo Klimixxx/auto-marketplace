@@ -167,6 +167,8 @@ export default function Header({ user }) {
   const [authed, setAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notif, setNotif] = useState(0);
+  const [tradeUnread, setTradeUnread] = useState(0);
+  const [inspectionUnread, setInspectionUnread] = useState(0);
   const menuRef = useRef(null);
 
   // профиль
@@ -257,6 +259,68 @@ export default function Header({ user }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) { setInspectionUnread(0); return; }
+      try {
+        const res = await fetch(join('/api/inspections/unread-count'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setInspectionUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setInspectionUnread(0);
+        console.warn('Failed to load inspection counter', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    window.addEventListener('inspections-refresh-count', handler);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener('inspections-refresh-count', handler);
+    };
+  }, [authed]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) { setTradeUnread(0); return; }
+      try {
+        const res = await fetch(join('/api/trade-orders/unread-count'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setTradeUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setTradeUnread(0);
+        console.warn('Failed to load trade orders counter', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    window.addEventListener('trade-orders-refresh-count', handler);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener('trade-orders-refresh-count', handler);
+    };
+  }, [authed]);
+
   // при заходе в /notifications обнуляем и помечаем прочитанными
   useEffect(() => {
     const onRoute = async (url) => {
@@ -308,6 +372,39 @@ export default function Header({ user }) {
     router.push(s ? `/trades?q=${encodeURIComponent(s)}` : '/trades');
   };
 
+  const renderNavLink = (href, label, badge = 0) => {
+    const badgeValue = Number(badge) || 0;
+    const badgeText = badgeValue > 99 ? '99+' : String(badgeValue);
+    return (
+      <a
+        href={href}
+        className="nav-link gradtext"
+        style={{ color: '#FFFFFF', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      >
+        <span>{label}</span>
+        {badgeValue > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 20,
+              height: 20,
+              padding: '0 6px',
+              borderRadius: 999,
+              background: 'rgba(239,68,68,0.9)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {badgeText}
+          </span>
+        )}
+      </a>
+    );
+  };
+
   return (
     <header
       className="header-solid"
@@ -328,19 +425,12 @@ export default function Header({ user }) {
           }}
         >
           <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
-            <a href="/trades" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
-              Торги
-            </a>
-            <a href="/inspections" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
-              Мои Осмотры
-            </a>
-            <a href="/support" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
-              Поддержка
-            </a>
+            {renderNavLink('/trades', 'Торги')}
+            {renderNavLink('/my-trades', 'Мои Торги', tradeUnread)}
+            {renderNavLink('/inspections', 'Мои Осмотры', inspectionUnread)}
+            {renderNavLink('/support', 'Поддержка')}
             {me?.role === 'admin' && (
-              <a href="/admin" className="nav-link gradtext" style={{ color: '#FFFFFF', textDecoration: 'none' }}>
-                Админ Панель
-              </a>
+              renderNavLink('/admin', 'Админ Панель')
             )}
           </nav>
 
@@ -423,9 +513,9 @@ export default function Header({ user }) {
                     overflow: 'hidden',
                   }}
                 >
-                  <MenuItem href="/my-trades" text="Мои Торги" />
+                  <MenuItem href="/my-trades" text="Мои Торги" badge={tradeUnread} />
                   <MenuItem href="/account" text="Личный Кабинет" />
-                  <MenuItem href="/inspections" text="Мои Осмотры" />
+                  <MenuItem href="/inspections" text="Мои Осмотры" badge={inspectionUnread} />
                   <MenuItem href="/support" text="Поддержка" />
                   <MenuItem href="/favorites" text="Избранное" />
                   <hr style={{ margin: 0, border: 'none', borderTop: `1px solid ${UI.menuBorder}` }} />
@@ -589,10 +679,42 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
   );
 }
 
-function MenuItem({ href, text }) {
+function MenuItem({ href, text, badge = 0 }) {
+  const value = Number(badge) || 0;
+  const badgeText = value > 99 ? '99+' : String(value);
   return (
-    <a href={href} style={{ display: 'block', padding: '12px 14px', color: 'var(--blue)', textDecoration: 'none' }}>
-      {text}
+    <a
+      href={href}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        padding: '12px 14px',
+        color: 'var(--blue)',
+        textDecoration: 'none',
+      }}
+    >
+      <span>{text}</span>
+      {value > 0 && (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 20,
+            height: 20,
+            padding: '0 6px',
+            borderRadius: 999,
+            background: 'rgba(239,68,68,0.9)',
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+          }}
+        >
+          {badgeText}
+        </span>
+      )}
     </a>
   );
 }
