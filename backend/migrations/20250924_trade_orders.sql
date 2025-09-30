@@ -1,9 +1,13 @@
--- trade_orders: enum, таблица, колонки, индексы, триггер updated_at
+-- 20250924_trade_orders.sql
+-- Создает enum, таблицу, добивает недостающие поля/индексы и триггер updated_at.
 
 DO $m$
 DECLARE
   v_user_id_type    TEXT;
   v_listing_id_type TEXT;
+  has_tbl           BOOLEAN;
+  has_fk_user       BOOLEAN;
+  has_fk_listing    BOOLEAN;
 BEGIN
   -- enum trade_order_status
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'trade_order_status') THEN
@@ -17,14 +21,11 @@ BEGIN
     $q$;
   END IF;
 
-  -- определить типы users.id и listings.id
+  -- типы ключей users.id и listings.id
   SELECT format_type(a.atttypid, a.atttypmod)
     INTO v_user_id_type
   FROM pg_attribute a
-  WHERE a.attrelid = 'users'::regclass
-    AND a.attname = 'id'
-    AND a.attnum > 0
-    AND NOT a.attisdropped
+  WHERE a.attrelid = 'users'::regclass AND a.attname = 'id' AND a.attnum > 0 AND NOT a.attisdropped
   LIMIT 1;
   IF v_user_id_type IS NULL THEN
     RAISE EXCEPTION 'Не удалось определить тип users.id';
@@ -33,20 +34,19 @@ BEGIN
   SELECT format_type(a.atttypid, a.atttypmod)
     INTO v_listing_id_type
   FROM pg_attribute a
-  WHERE a.attrelid = 'listings'::regclass
-    AND a.attname = 'id'
-    AND a.attnum > 0
-    AND NOT a.attisdropped
+  WHERE a.attrelid = 'listings'::regclass AND a.attname = 'id' AND a.attnum > 0 AND NOT a.attisdropped
   LIMIT 1;
   IF v_listing_id_type IS NULL THEN
     RAISE EXCEPTION 'Не удалось определить тип listings.id';
   END IF;
 
-  -- создать таблицу при отсутствии
-  IF NOT EXISTS (
+  -- таблица trade_orders
+  SELECT EXISTS (
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = current_schema() AND table_name = 'trade_orders'
-  ) THEN
+  ) INTO has_tbl;
+
+  IF NOT has_tbl THEN
     EXECUTE format($q$
       CREATE TABLE trade_orders (
         id BIGSERIAL PRIMARY KEY,
@@ -64,12 +64,11 @@ BEGIN
         user_last_viewed_at  TIMESTAMP DEFAULT now()
       )
     $q$, v_user_id_type, v_listing_id_type);
-  END IF;
+  ELSE
+    -- добиваем недостающие колонки
+    EXECUTE 'ALTER TABLE trade_orders ADD COLUMN IF NOT EXISTS user_id ' || v_user_id_type;
+    EXECUTE 'ALTER TABLE trade_orders ADD COLUMN IF NOT EXISTS listing_id ' || v_listing_id_type;
 
-  -- добить недостающие колонки и дефолты, если таблица уже была
-  PERFORM 1 FROM information_schema.columns
-   WHERE table_schema = current_schema() AND table_name = 'trade_orders';
-  IF FOUND THEN
     EXECUTE 'ALTER TABLE trade_orders ADD COLUMN IF NOT EXISTS status trade_order_status';
     EXECUTE 'ALTER TABLE trade_orders ALTER COLUMN status SET DEFAULT ''Оплачен/Ожидание модерации''';
 
@@ -94,19 +93,33 @@ BEGIN
     EXECUTE 'ALTER TABLE trade_orders ADD COLUMN IF NOT EXISTS admin_last_viewed_at TIMESTAMP';
     EXECUTE 'ALTER TABLE trade_orders ADD COLUMN IF NOT EXISTS user_last_viewed_at TIMESTAMP';
     EXECUTE 'ALTER TABLE trade_orders ALTER COLUMN user_last_viewed_at SET DEFAULT now()';
+  END IF;
 
-    -- убедиться, что внешние ключи существуют
-    EXECUTE format('ALTER TABLE trade_orders
-                    ADD COLUMN IF NOT EXISTS user_id %s', v_user_id_type);
-    EXECUTE 'ALTER TABLE trade_orders
-              ADD CONSTRAINT IF NOT EXISTS trade_orders_user_fk
-              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE';
+  -- внешние ключи: только если отсутствуют
+  SELECT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    WHERE c.conname = 'trade_orders_user_fk'
+      AND c.conrelid = 'trade_orders'::regclass
+  ) INTO has_fk_user;
 
-    EXECUTE format('ALTER TABLE trade_orders
-                    ADD COLUMN IF NOT EXISTS listing_id %s', v_listing_id_type);
+  IF NOT has_fk_user THEN
     EXECUTE 'ALTER TABLE trade_orders
-              ADD CONSTRAINT IF NOT EXISTS trade_orders_listing_fk
-              FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE';
+             ADD CONSTRAINT trade_orders_user_fk
+             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    WHERE c.conname = 'trade_orders_listing_fk'
+      AND c.conrelid = 'trade_orders'::regclass
+  ) INTO has_fk_listing;
+
+  IF NOT has_fk_listing THEN
+    EXECUTE 'ALTER TABLE trade_orders
+             ADD CONSTRAINT trade_orders_listing_fk
+             FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE';
   END IF;
 
   -- индексы
@@ -125,13 +138,13 @@ BEGIN
 END
 $m$;
 
--- триггер на обновление updated_at
+-- триггер updated_at
 DO $m$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc WHERE proname = 'trade_orders_set_updated_at'
   ) THEN
-    CREATE OR REPLACE FUNCTION trade_orders_set_updated_at()
+    CREATE FUNCTION trade_orders_set_updated_at()
     RETURNS trigger AS $$
     BEGIN
       NEW.updated_at := now();
