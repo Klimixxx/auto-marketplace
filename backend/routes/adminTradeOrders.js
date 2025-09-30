@@ -75,7 +75,7 @@ router.get('/', async (req, res) => {
     res.json({ items: q.rows });
   } catch (error) {
     console.error('admin list trade orders error:', error);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    res.status(500).json({ error: 'SERVER_ERROR', text: error });
   }
 });
 
