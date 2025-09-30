@@ -109,6 +109,7 @@ export default function AdminLayout({ me, title, children }) {
     { href: '/admin', label: 'Дэшборд', icon: <IconHome /> },
     { href: '/admin/listings', label: 'Объявления', icon: <IconCards /> },
     { href: '/admin/trade-orders', label: 'Торги', icon: <IconCheck />, badge: tradeOrdersUnread },
+    { href: '/admin/trade-pricing', label: 'Тарифы торгов', icon: <IconCoins /> },
     { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
     { href: '/admin/users', label: 'Пользователи', icon: <IconUsers /> },
     { href: '/admin/admins', label: 'Администраторы', icon: <IconShield /> },
@@ -296,6 +297,15 @@ function IconCheck({ size = 18, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M20 7 9 18l-5-5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconCoins({ size = 18, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <ellipse cx="12" cy="6" rx="8" ry="3" stroke={color} strokeWidth="1.5" />
+      <path d="M4 6v8c0 1.657 3.582 3 8 3s8-1.343 8-3V6" stroke={color} strokeWidth="1.5" />
+      <path d="M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3" stroke={color} strokeWidth="1.5" />
     </svg>
   );
 }
