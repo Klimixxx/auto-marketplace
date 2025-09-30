@@ -1,31 +1,29 @@
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_type WHERE typname = 'trade_order_status'
-  ) THEN
-    CREATE TYPE trade_order_status AS ENUM (
-      'Оплачен/Ожидание модерации',
-      'Заявка подтверждена',
-      'Подготовка к торгам',
-      'Торги завершены'
-    );
-  END IF;
-END $$;
-
-DO $$
+DO $m$
 DECLARE
   v_user_id_type TEXT;
   v_listing_id_type TEXT;
-  v_sql TEXT;
 BEGIN
+  -- enum trade_order_status
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'trade_order_status') THEN
+    EXECUTE $q$
+      CREATE TYPE trade_order_status AS ENUM (
+        'Оплачен/Ожидание модерации',
+        'Заявка подтверждена',
+        'Подготовка к торгам',
+        'Торги завершены'
+      )
+    $q$;
+  END IF;
+
+  -- типы users.id и listings.id
   SELECT format_type(a.atttypid, a.atttypmod)
     INTO v_user_id_type
-    FROM pg_attribute a
-   WHERE a.attrelid = 'users'::regclass
-     AND a.attname = 'id'
-     AND a.attnum > 0
-     AND NOT a.attisdropped
-   LIMIT 1;
+  FROM pg_attribute a
+  WHERE a.attrelid = 'users'::regclass
+    AND a.attname = 'id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped
+  LIMIT 1;
 
   IF v_user_id_type IS NULL THEN
     RAISE EXCEPTION 'Не удалось определить тип users.id';
@@ -33,24 +31,24 @@ BEGIN
 
   SELECT format_type(a.atttypid, a.atttypmod)
     INTO v_listing_id_type
-    FROM pg_attribute a
-   WHERE a.attrelid = 'listings'::regclass
-     AND a.attname = 'id'
-     AND a.attnum > 0
-     AND NOT a.attisdropped
-   LIMIT 1;
+  FROM pg_attribute a
+  WHERE a.attrelid = 'listings'::regclass
+    AND a.attname = 'id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped
+  LIMIT 1;
 
   IF v_listing_id_type IS NULL THEN
     RAISE EXCEPTION 'Не удалось определить тип listings.id';
   END IF;
 
+  -- таблица trade_orders
   IF NOT EXISTS (
-    SELECT 1
-      FROM information_schema.tables
-     WHERE table_schema = current_schema()
-       AND table_name = 'trade_orders'
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = 'trade_orders'
   ) THEN
-    v_sql := format($fmt$
+    EXECUTE format($q$
       CREATE TABLE trade_orders (
         id BIGSERIAL PRIMARY KEY,
         user_id %1$s NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -66,18 +64,19 @@ BEGIN
         admin_last_viewed_at TIMESTAMP,
         user_last_viewed_at TIMESTAMP DEFAULT now()
       )
-    $fmt$, v_user_id_type, v_listing_id_type);
-    EXECUTE v_sql;
+    $q$, v_user_id_type, v_listing_id_type);
   END IF;
-END $$;
 
-CREATE INDEX IF NOT EXISTS idx_trade_orders_user ON trade_orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_trade_orders_listing ON trade_orders(listing_id);
+  -- индексы
+  EXECUTE $q$CREATE INDEX IF NOT EXISTS idx_trade_orders_user ON trade_orders(user_id)$q$;
+  EXECUTE $q$CREATE INDEX IF NOT EXISTS idx_trade_orders_listing ON trade_orders(listing_id)$q$;
 
-DO $$
-BEGIN
-  UPDATE trade_orders
-     SET admin_last_viewed_at = COALESCE(admin_last_viewed_at, updated_at),
-         user_last_viewed_at = COALESCE(user_last_viewed_at, updated_at)
-   WHERE admin_last_viewed_at IS NULL OR user_last_viewed_at IS NULL;
-END $$;
+  -- backfill viewed_at
+  EXECUTE $q$
+    UPDATE trade_orders
+       SET admin_last_viewed_at = COALESCE(admin_last_viewed_at, updated_at),
+           user_last_viewed_at  = COALESCE(user_last_viewed_at,  updated_at)
+     WHERE admin_last_viewed_at IS NULL OR user_last_viewed_at IS NULL
+  $q$;
+END
+$m$;
