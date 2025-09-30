@@ -1020,7 +1020,9 @@ app.patch('/api/me', auth, async (req, res) => {
 
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
 app.use('/api/inspections', auth, inspectionsRouter);
+app.use('/api/trade-orders', auth, tradeOrdersRouter);
 app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
+app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
 
 
 
