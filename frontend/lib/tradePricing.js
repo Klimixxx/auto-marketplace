@@ -1,8 +1,8 @@
-const PRICE_TIERS = [
-  { max: 500_000, amount: 15000, label: 'Лот до 500 000 ₽' },
-  { max: 1_500_000, amount: 25000, label: 'Лот до 1 500 000 ₽' },
-  { max: 3_000_000, amount: 35000, label: 'Лот до 3 000 000 ₽' },
-  { max: Number.POSITIVE_INFINITY, amount: 50000, label: 'Лот свыше 3 000 000 ₽' },
+export const DEFAULT_TRADE_PRICE_TIERS = [
+  { id: null, label: 'Лот до 500 000 ₽', max: 500_000, amount: 15000, sortOrder: 10 },
+  { id: null, label: 'Лот до 1 500 000 ₽', max: 1_500_000, amount: 25000, sortOrder: 20 },
+  { id: null, label: 'Лот до 3 000 000 ₽', max: 3_000_000, amount: 35000, sortOrder: 30 },
+  { id: null, label: 'Лот свыше 3 000 000 ₽', max: Number.POSITIVE_INFINITY, amount: 50000, sortOrder: 40 },
 ];
 
 const PRICE_DETAIL_KEYS = [
@@ -88,26 +88,97 @@ export function estimateLotPrice(listing) {
   return null;
 }
 
-export function resolvePriceTier(listing) {
+function parseSortOrder(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const parsed = Number(String(value).trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeTier(tier) {
+  if (!tier) return null;
+  const label = String(tier.label || '').trim();
+  if (!label) return null;
+  const amount = parseMoneyLike(tier.amount ?? tier.price ?? tier.baseAmount);
+  if (amount == null || !Number.isFinite(amount) || amount < 0) return null;
+  const maxSource = tier.max ?? tier.maxAmount ?? tier.limit;
+  const maxParsed = parseMoneyLike(maxSource);
+  const max = maxParsed != null && Number.isFinite(maxParsed) && maxParsed > 0
+    ? Math.round(maxParsed)
+    : Number.POSITIVE_INFINITY;
+  const sortOrder = parseSortOrder(tier.sortOrder ?? tier.sort_order);
+
+  return {
+    id: tier.id ?? null,
+    label,
+    amount: Math.round(amount),
+    max,
+    sortOrder,
+  };
+}
+
+export function prepareTradePriceTiers(tiers) {
+  const normalized = Array.isArray(tiers)
+    ? tiers.map(normalizeTier).filter(Boolean)
+    : [];
+
+  const base = normalized.length
+    ? normalized
+    : DEFAULT_TRADE_PRICE_TIERS.map((tier) => ({ ...tier }));
+
+  const hasInfinity = base.some((tier) => !Number.isFinite(tier.max) || tier.max === Number.POSITIVE_INFINITY);
+  const result = [...base];
+
+  if (!hasInfinity) {
+    const fallback = DEFAULT_TRADE_PRICE_TIERS[DEFAULT_TRADE_PRICE_TIERS.length - 1];
+    result.push({ ...fallback });
+  }
+
+  return result.sort((a, b) => {
+    const orderA = a.sortOrder;
+    const orderB = b.sortOrder;
+    if (orderA != null && orderB != null && orderA !== orderB) return orderA - orderB;
+    if (orderA != null && orderB == null) return -1;
+    if (orderA == null && orderB != null) return 1;
+    const maxA = Number.isFinite(a.max) ? a.max : Number.POSITIVE_INFINITY;
+    const maxB = Number.isFinite(b.max) ? b.max : Number.POSITIVE_INFINITY;
+    if (maxA !== maxB) {
+      if (!Number.isFinite(maxA)) return 1;
+      if (!Number.isFinite(maxB)) return -1;
+      return maxA - maxB;
+    }
+    return a.amount - b.amount;
+  });
+}
+
+export function resolvePriceTier(listing, tiers = DEFAULT_TRADE_PRICE_TIERS) {
+  const prepared = prepareTradePriceTiers(tiers);
   const lotPrice = estimateLotPrice(listing);
   let tier = PRICE_TIERS[PRICE_TIERS.length - 1];
 
   if (lotPrice != null && Number.isFinite(lotPrice)) {
-    for (const option of PRICE_TIERS) {
-      if (lotPrice <= option.max) {
+    for (const option of prepared) {
+      const limit = Number.isFinite(option.max) ? option.max : Number.POSITIVE_INFINITY;
+      if (lotPrice <= limit) {
         tier = option;
         break;
       }
     }
-  } else {
-    tier = PRICE_TIERS[1] || PRICE_TIERS[0];
+  } else if (prepared.length > 1) {
+    tier = prepared[1] || prepared[0];
+  } else if (prepared.length === 1) {
+    tier = prepared[0];
   }
 
   return { ...tier, lotPrice };
 }
 
-export function computeTradeOrderPrice(listing, { subscriptionStatus = 'free', proDiscountPercent = 30 } = {}) {
-  const tier = resolvePriceTier(listing);
+export function computeTradeOrderPrice(listing, {
+  subscriptionStatus = 'free',
+  proDiscountPercent = 30,
+  tiers = DEFAULT_TRADE_PRICE_TIERS,
+} = {}) {
+  const tier = resolvePriceTier(listing, tiers);
   const normalizedSubscription = String(subscriptionStatus || 'free').trim().toLowerCase();
   const discountPercent = normalizedSubscription === 'pro' ? proDiscountPercent : 0;
   const finalAmount = Math.max(0, Math.round((tier.amount * (100 - discountPercent)) / 100));
