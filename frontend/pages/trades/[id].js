@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import InspectionModal from '../../components/InspectionModal';
+import TradeOrderModal from '../../components/TradeOrderModal';
 import {
   formatValueForDisplay,
   translateFieldKey,
@@ -361,7 +361,7 @@ export default function ListingPage({ item }) {
       ?? item?.start_price
       ?? null);
 
-  const [openInspection, setOpenInspection] = useState(false);
+  const [openTradeModal, setOpenTradeModal] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
   function handleOrderClick() {
@@ -371,7 +371,7 @@ export default function ListingPage({ item }) {
       window.location.href = `/login?next=${encodeURIComponent(next)}`;
       return;
     }
-    setOpenInspection(true);
+    setOpenTradeModal(true);
   }
 
   const photos = collectPhotos(details);
@@ -503,7 +503,7 @@ export default function ListingPage({ item }) {
             )}
 
           <div className="detail-summary__actions">
-              <button onClick={handleOrderClick} className="button">Заказать осмотр</button>
+              <button onClick={handleOrderClick} className="button">Заказать сопровождение торгов</button>
               {item?.source_url ? (
                 <a href={item.source_url} target="_blank" rel="noreferrer" className="button button-outline">
                   Перейти к источнику
@@ -518,10 +518,11 @@ export default function ListingPage({ item }) {
         </div>
       </div>
 
-      <InspectionModal
+      <TradeOrderModal
         listingId={listingIdRaw}
-        isOpen={openInspection}
-        onClose={() => setOpenInspection(false)}
+        listing={item}
+        isOpen={openTradeModal}
+        onClose={() => setOpenTradeModal(false)}
       />
 
       <div className="detail-layout">
