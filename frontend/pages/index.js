@@ -556,6 +556,7 @@ export default function Home() {
   const [errorRecent, setErrorRecent] = useState(null);
   
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
+  const [tradeUnread, setTradeUnread] = useState(0);
 
   const router = useRouter();
 
@@ -615,6 +616,42 @@ export default function Home() {
       ignore = true;
       clearInterval(interval);
       window.removeEventListener('inspections-refresh-count', handler);
+    };
+  }, [authToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function loadUnread() {
+      const token = authToken || localStorage.getItem('token');
+      if (!token) {
+        if (!ignore) setTradeUnread(0);
+        return;
+      }
+      try {
+        const res = await fetch(api('/api/trade-orders/unread-count'), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401) { if (!ignore) setTradeUnread(0); return; }
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setTradeUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setTradeUnread(0);
+        console.error('Failed to load trade orders unread count', err);
+      }
+    }
+
+    loadUnread();
+    const handler = () => loadUnread();
+    const interval = setInterval(loadUnread, 60000);
+    window.addEventListener('trade-orders-refresh-count', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('trade-orders-refresh-count', handler);
     };
   }, [authToken]);
 
@@ -745,7 +782,7 @@ export default function Home() {
 
   return (
     <>
-      <Hero listingCount={summary?.totalListings ?? 0} inspectionsUnread={inspectionsUnread} />
+      <Hero listingCount={summary?.totalListings ?? 0} inspectionsUnread={inspectionsUnread} tradeOrdersUnread={tradeUnread} />
       {/* === НОВЫЕ ПРЕДЛОЖЕНИЯ (первые 6 как на /trades) === */}
       {(recent.length || loadingRecent) && (
         <section style={{ margin: '32px 0' }}>
