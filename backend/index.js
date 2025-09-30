@@ -13,6 +13,8 @@ import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
 import tradeOrdersRouter from './routes/tradeOrders.js';
 import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
+import tradePricingRouter from './routes/tradePricing.js';
+import adminTradePricingRouter from './routes/adminTradePricing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1022,9 +1024,11 @@ app.patch('/api/me', auth, async (req, res) => {
 
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
 app.use('/api/inspections', auth, inspectionsRouter);
+app.use('/api/trade-pricing', tradePricingRouter);
 app.use('/api/trade-orders', auth, tradeOrdersRouter);
 app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
 app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
+app.use('/api/admin/trade-pricing', auth, requireAdmin, adminTradePricingRouter);
 
 
 
