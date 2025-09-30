@@ -1,7 +1,9 @@
+// lib/tradePricing.js
+
 export const DEFAULT_TRADE_PRICE_TIERS = [
-  { id: null, label: 'Лот до 500 000 ₽', max: 500_000, amount: 15000, sortOrder: 10 },
-  { id: null, label: 'Лот до 1 500 000 ₽', max: 1_500_000, amount: 25000, sortOrder: 20 },
-  { id: null, label: 'Лот до 3 000 000 ₽', max: 3_000_000, amount: 35000, sortOrder: 30 },
+  { id: null, label: 'Лот до 500 000 ₽',   max: 500_000,               amount: 15000, sortOrder: 10 },
+  { id: null, label: 'Лот до 1 500 000 ₽', max: 1_500_000,             amount: 25000, sortOrder: 20 },
+  { id: null, label: 'Лот до 3 000 000 ₽', max: 3_000_000,             amount: 35000, sortOrder: 30 },
   { id: null, label: 'Лот свыше 3 000 000 ₽', max: Number.POSITIVE_INFINITY, amount: 50000, sortOrder: 40 },
 ];
 
@@ -154,7 +156,9 @@ export function prepareTradePriceTiers(tiers) {
 export function resolvePriceTier(listing, tiers = DEFAULT_TRADE_PRICE_TIERS) {
   const prepared = prepareTradePriceTiers(tiers);
   const lotPrice = estimateLotPrice(listing);
-  let tier = PRICE_TIERS[PRICE_TIERS.length - 1];
+
+  // Фолбек — последний элемент подготовленного списка
+  let tier = prepared.length ? prepared[prepared.length - 1] : DEFAULT_TRADE_PRICE_TIERS[DEFAULT_TRADE_PRICE_TIERS.length - 1];
 
   if (lotPrice != null && Number.isFinite(lotPrice)) {
     for (const option of prepared) {
@@ -192,4 +196,4 @@ export function computeTradeOrderPrice(listing, {
   };
 }
 
-export { PRICE_TIERS };
+// Никакого export { PRICE_TIERS } — такой константы нет и не нужна.
