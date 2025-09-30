@@ -4,6 +4,7 @@ import { computeTradeOrderPrice } from '../lib/tradePricing';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 const TRADE_ORDER_ENDPOINT = API_BASE ? `${API_BASE}/api/trade-orders` : '/api/trade-orders';
 const PROFILE_ENDPOINT = API_BASE ? `${API_BASE}/api/me` : '/api/me';
+const TRADE_PRICING_ENDPOINT = API_BASE ? `${API_BASE}/api/trade-pricing` : '/api/trade-pricing';
 const MAX_LISTING_ID_LENGTH = 160;
 
 function normalizeListingId(value) {
@@ -52,6 +53,7 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [pricingConfig, setPricingConfig] = useState({ tiers: null, proDiscountPercent: 30, loaded: false });
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -86,9 +88,45 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
     return () => { ignore = true; };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let ignore = false;
+
+    async function loadPricing() {
+      try {
+        const res = await fetch(TRADE_PRICING_ENDPOINT, { cache: 'no-store' });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (ignore) return;
+        const rawPercent = Number(data?.proDiscountPercent);
+        setPricingConfig({
+          tiers: Array.isArray(data?.tiers) && data.tiers.length ? data.tiers : null,
+          proDiscountPercent: Number.isFinite(rawPercent) ? rawPercent : 30,
+          loaded: true,
+        });
+      } catch (error) {
+        if (!ignore) {
+          setPricingConfig((prev) => ({ ...prev, loaded: true }));
+        }
+        console.warn('Failed to load trade pricing configuration', error);
+      }
+    }
+
+    loadPricing();
+    return () => {
+      ignore = true;
+    };
+  }, [isOpen]);
+
+  const { tiers: pricingTiers, proDiscountPercent } = pricingConfig;
+
   const pricing = useMemo(() => {
-    return computeTradeOrderPrice(listing || {}, { subscriptionStatus: subscriptionStatus || 'free' });
-  }, [listing, subscriptionStatus]);
+    return computeTradeOrderPrice(listing || {}, {
+      subscriptionStatus: subscriptionStatus || 'free',
+      proDiscountPercent: proDiscountPercent ?? 30,
+      tiers: pricingTiers ?? undefined,
+    });
+  }, [listing, subscriptionStatus, proDiscountPercent, pricingTiers]);
 
   if (!isOpen) return null;
 
@@ -178,7 +216,7 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
             </p>
           ) : null}
           <div style={{ color: '#A0A6B0', marginTop: 6 }}>
-            Подписка <b>PRO</b> даёт скидку 30% на сопровождение торгов.
+            Подписка <b>PRO</b> даёт скидку {(proDiscountPercent ?? 30)}% на сопровождение торгов.
           </div>
         </div>
 
