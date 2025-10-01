@@ -14,6 +14,7 @@
   --text-muted: #6b7280;    /* secondary */
   --text-subtle: #9ca3af;   /* tertiary */
   --text-on-accent: #ffffff;
+  --muted: var(--text-muted);
 
   /* ===== Accent (Avito-like blue) ===== */
   --accent: #2a65f7;
@@ -137,8 +138,15 @@ a:hover {
   background: var(--card-soft);
 }
 
-.muted {
-  color: var(--muted);
+muted {
+  color: var(--text-muted);
+}
+
+.detail-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
 }
 
 .big {
@@ -743,10 +751,10 @@ listing-card__more-button {
 }
 
 .header-solid {
-  background: transparent !important;
-  background-image: none !important;
-  border-bottom: none !important;
-  box-shadow: none !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08) !important;
+  backdrop-filter: blur(14px);
   color: var(--text);
 }
 
@@ -765,13 +773,21 @@ listing-card__more-button {
   color:transparent;
 }
 
-/* Убираем градиент на ссылках верхнего меню и оставляем синий */
+
+.header-solid .nav-link,
+.header-solid .nav-link.gradtext,
 .header--top .nav-link.gradtext,
 .header--bottom .nav-link.gradtext {
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
-  color: #FFFFFF !important;
+  color: var(--text-strong) !important;
+  font-weight: 600;
+}
+
+.header-solid .nav-link:hover,
+.header-solid .nav-link.gradtext:hover {
+  color: var(--accent-hover) !important;
 }
 
 
