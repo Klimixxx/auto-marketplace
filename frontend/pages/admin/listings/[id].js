@@ -6,6 +6,7 @@ import {
   makeKeyValueEntries,
   translateValueByKey,
 } from '../../../lib/lotFormatting';
+import { normalizeTradeTypeCode } from '../../../lib/tradeTypes';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
@@ -53,13 +54,6 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('ru-RU');
-}
-
-function formatObject(value) {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return JSON.stringify(value, null, 2);
-  }
-  return JSON.stringify({}, null, 2);
 }
 
 function formatArray(value) {
@@ -110,40 +104,6 @@ function extractPhotos(trade) {
   return urls;
 }
 
-function parsePhotosInput(text) {
-  const trimmed = String(text || '').trim();
-  if (!trimmed) return [];
-  if (trimmed.startsWith('[')) {
-    let parsed;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      throw new Error('Некорректный JSON фотографий.');
-    }
-    if (!Array.isArray(parsed)) {
-      throw new Error('JSON фотографий должен быть массивом.');
-    }
-    const result = [];
-    for (const entry of parsed) {
-      const normalized = normalizePhotoInput(entry);
-      if (normalized) result.push(normalized);
-    }
-    return result;
-  }
-  return trimmed
-    .split('\n')
-    .map((line) => normalizePhotoInput(line))
-    .filter(Boolean);
-}
-
-function getPhotoPreview(text) {
-  try {
-    return parsePhotosInput(text).map((photo) => photo.url);
-  } catch {
-    return [];
-  }
-}
-
 function ensureAbsolutePhotoUrl(url) {
   if (!url) return '';
   const trimmed = String(url).trim();
@@ -155,6 +115,662 @@ function ensureAbsolutePhotoUrl(url) {
   } catch {
     return trimmed;
   }
+}
+
+const TRADE_TYPE_OPTIONS = [
+  { value: '', label: 'Не указано' },
+  { value: 'public_offer', label: 'Публичное предложение' },
+  { value: 'open_auction', label: 'Открытый аукцион' },
+  { value: 'auction', label: 'Аукцион' },
+  { value: 'offer', label: 'Торговое предложение' },
+];
+
+const LOT_FIELDS_EXCLUDE = new Set([
+  'title',
+  'description',
+  'category',
+  'region',
+  'brand',
+  'model',
+  'year',
+  'vin',
+  'start_price',
+  'applications_count',
+  'date_start',
+  'date_finish',
+  'trade_place',
+  'source_url',
+  'prices',
+  'documents',
+  'photos',
+  'period_prices',
+  'periodPrices',
+  'price_schedule',
+  'priceSchedule',
+  'offer_schedule',
+  'price_graph',
+  'price_schedule_text',
+  'schedule',
+  'contact_details',
+  'debtor_details',
+  'raw_payload',
+]);
+
+const LOT_FIELD_PRESETS = [
+  { key: 'trade_type', label: 'Тип торгов', type: 'select', options: TRADE_TYPE_OPTIONS },
+  { key: 'asset_type', label: 'Тип актива' },
+  { key: 'asset_name', label: 'Наименование актива' },
+  { key: 'lot_number', label: 'Номер лота' },
+  { key: 'inventory_number', label: 'Инвентарный номер' },
+  { key: 'mileage', label: 'Пробег, км', numeric: true },
+  { key: 'engine', label: 'Двигатель' },
+  { key: 'engine_type', label: 'Тип двигателя' },
+  { key: 'engine_volume', label: 'Объём двигателя, л' },
+  { key: 'engine_power', label: 'Мощность двигателя (л.с.)', numeric: true },
+  { key: 'engine_power_hp', label: 'Мощность двигателя (л.с.)', numeric: true },
+  { key: 'engine_power_kw', label: 'Мощность двигателя (кВт)', numeric: true },
+  { key: 'fuel_type', label: 'Тип топлива' },
+  { key: 'transmission', label: 'Коробка передач' },
+  { key: 'drive', label: 'Тип привода' },
+  { key: 'wheel', label: 'Расположение руля' },
+  { key: 'steering', label: 'Расположение руля' },
+  { key: 'body_type', label: 'Тип кузова' },
+  { key: 'color', label: 'Цвет' },
+  { key: 'doors', label: 'Количество дверей', numeric: true },
+  { key: 'seats', label: 'Количество мест', numeric: true },
+  { key: 'condition', label: 'Состояние' },
+  { key: 'equipment', label: 'Комплектация' },
+  { key: 'options', label: 'Опции' },
+  { key: 'extras', label: 'Дополнительно' },
+  { key: 'restrictions', label: 'Ограничения' },
+  { key: 'encumbrances', label: 'Обременения' },
+  { key: 'documents_required', label: 'Требуемые документы' },
+  { key: 'auction_url', label: 'Ссылка на торги' },
+];
+
+const CONTACT_FIELDS = [
+  { key: 'organizer_name', label: 'Организатор' },
+  { key: 'organizer_inn', label: 'ИНН организатора' },
+  { key: 'organizer_ogrn', label: 'ОГРН организатора' },
+  { key: 'organizer_ogrnip', label: 'ОГРНИП организатора' },
+  { key: 'manager', label: 'Менеджер' },
+  { key: 'contact_name', label: 'Контактное лицо' },
+  { key: 'phone', label: 'Телефон' },
+  { key: 'email', label: 'Email' },
+  { key: 'website', label: 'Сайт' },
+  { key: 'address', label: 'Адрес' },
+  { key: 'inspection_procedure', label: 'Порядок осмотра', type: 'textarea' },
+  { key: 'inspection_time', label: 'Время осмотра' },
+  { key: 'inspection_dates', label: 'Даты осмотра' },
+  { key: 'inspection_address', label: 'Адрес осмотра' },
+];
+
+const DEBTOR_FIELDS = [
+  { key: 'debtor_name', label: 'Должник' },
+  { key: 'debtor_inn', label: 'ИНН должника' },
+  { key: 'debtor_ogrn', label: 'ОГРН должника' },
+  { key: 'debtor_ogrnip', label: 'ОГРНИП должника' },
+  { key: 'debtor_snils', label: 'СНИЛС должника' },
+  { key: 'debtor_address', label: 'Адрес должника' },
+  { key: 'debtor_phone', label: 'Телефон должника' },
+  { key: 'debtor_email', label: 'Email должника' },
+  { key: 'debtor_manager', label: 'Представитель должника' },
+];
+
+function toFormString(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет';
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function parseNumericInput(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const normalized = text.replace(/\u00a0/g, '').replace(/\s/g, '').replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createLotFieldRows(lot) {
+  const base = lot && typeof lot === 'object' && !Array.isArray(lot) ? lot : {};
+  const rows = [];
+  const usedKeys = new Set();
+
+  LOT_FIELD_PRESETS.forEach((preset) => {
+    usedKeys.add(preset.key);
+    rows.push({
+      key: preset.key,
+      label: preset.label,
+      type: preset.type || 'text',
+      options: preset.options || null,
+      placeholder: preset.placeholder,
+      value: toFormString(base[preset.key]),
+      isCustom: false,
+      numeric: Boolean(preset.numeric),
+    });
+  });
+
+  Object.entries(base).forEach(([key, value]) => {
+    if (usedKeys.has(key) || LOT_FIELDS_EXCLUDE.has(key)) return;
+    const label = translateValueByKey(key) || key;
+    const isMultiline =
+      (typeof value === 'string' && (value.includes('\n') || value.length > 160))
+      || (value && typeof value === 'object');
+    rows.push({
+      key,
+      label,
+      type: isMultiline ? 'textarea' : 'text',
+      value: toFormString(value),
+      isCustom: true,
+      numeric: false,
+    });
+    usedKeys.add(key);
+  });
+
+  return rows;
+}
+
+function sectionStateFromObject(source, fieldDefs) {
+  const base = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+  const values = {};
+  fieldDefs.forEach(({ key }) => {
+    values[key] = toFormString(base[key]);
+  });
+
+  const extras = [];
+  Object.entries(base).forEach(([key, value]) => {
+    if (fieldDefs.some((field) => field.key === key)) return;
+    extras.push({ key, value: toFormString(value) });
+  });
+
+  return { values, extras };
+}
+
+function normalizePriceHistory(prices) {
+  if (!Array.isArray(prices)) return [];
+  return prices.map((entry, index) => {
+    const obj = entry && typeof entry === 'object' ? entry : {};
+    const stage =
+      obj.stage
+      || obj.stage_name
+      || obj.stageName
+      || obj.round
+      || obj.type
+      || obj.name
+      || obj.title
+      || '';
+    const price =
+      obj.price
+      || obj.currentPrice
+      || obj.current_price
+      || obj.startPrice
+      || obj.start_price
+      || obj.value
+      || obj.amount
+      || '';
+    const date =
+      obj.date
+      || obj.date_start
+      || obj.dateStart
+      || obj.date_finish
+      || obj.dateFinish
+      || obj.updated_at
+      || obj.updatedAt
+      || '';
+    const comment =
+      obj.comment
+      || obj.description
+      || obj.info
+      || obj.status
+      || obj.note
+      || '';
+
+    const knownKeys = new Set([
+      'stage', 'stage_name', 'stageName', 'round', 'type', 'name', 'title',
+      'price', 'currentPrice', 'current_price', 'startPrice', 'start_price', 'value', 'amount',
+      'date', 'date_start', 'dateStart', 'date_finish', 'dateFinish', 'updated_at', 'updatedAt',
+      'comment', 'description', 'info', 'status', 'note',
+    ]);
+    const extra = {};
+    Object.entries(obj).forEach(([key, value]) => {
+      if (!knownKeys.has(key)) {
+        extra[key] = value;
+      }
+    });
+
+    return {
+      id: obj.id || obj.code || `price-${index}`,
+      stage: toFormString(stage),
+      price: toFormString(price),
+      date: toFormString(date),
+      comment: toFormString(comment),
+      extra,
+    };
+  });
+}
+
+function buildPriceHistoryPayload(history) {
+  return history
+    .filter((entry) => entry && (entry.stage || entry.price || entry.date || entry.comment))
+    .map((entry) => {
+      const payload = { ...entry.extra };
+      if (entry.stage) payload.stage = entry.stage;
+      if (entry.price) {
+        const numeric = parseNumericInput(entry.price);
+        payload.price = numeric != null ? numeric : entry.price;
+      }
+      if (entry.date) payload.date = entry.date;
+      if (entry.comment) payload.comment = entry.comment;
+      return payload;
+    });
+}
+
+function normalizeDocuments(documents) {
+  if (!Array.isArray(documents)) return [];
+  return documents.map((doc, index) => {
+    const obj = doc && typeof doc === 'object' ? doc : {};
+    const knownKeys = new Set(['id', 'title', 'description', 'type', 'date', 'url']);
+    const extra = {};
+    Object.entries(obj).forEach(([key, value]) => {
+      if (!knownKeys.has(key)) extra[key] = value;
+    });
+    return {
+      id: obj.id || `document-${index}`,
+      title: toFormString(obj.title),
+      description: toFormString(obj.description),
+      type: toFormString(obj.type),
+      date: toFormString(obj.date),
+      url: toFormString(obj.url),
+      extra,
+    };
+  });
+}
+
+function buildDocumentsPayload(docs) {
+  return docs
+    .filter((doc) => doc && (doc.title || doc.url || doc.description || doc.type || doc.date))
+    .map((doc) => {
+      const payload = { ...doc.extra };
+      if (doc.title) payload.title = doc.title;
+      if (doc.description) payload.description = doc.description;
+      if (doc.type) payload.type = doc.type;
+      if (doc.date) payload.date = doc.date;
+      if (doc.url) payload.url = doc.url;
+      return payload;
+    });
+}
+
+function normalizePhotosForEditing(trade) {
+  const photos = [];
+  const seen = new Set();
+  const sources = [
+    trade?.photos,
+    trade?.lot_details?.photos,
+    trade?.lot_details?.images,
+    trade?.lot_details?.gallery,
+  ];
+  sources.forEach((pool) => {
+    if (!Array.isArray(pool)) return;
+    pool.forEach((entry) => {
+      const normalized = normalizePhotoInput(entry);
+      if (!normalized?.url || seen.has(normalized.url)) return;
+      seen.add(normalized.url);
+      photos.push({ id: normalized.url, url: normalized.url, title: normalized.title ? String(normalized.title) : '' });
+    });
+  });
+  return photos;
+}
+
+function buildPhotosPayload(photos) {
+  const list = [];
+  const seen = new Set();
+  photos.forEach((photo) => {
+    if (!photo || !photo.url) return;
+    const url = photo.url.trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    const entry = { url };
+    if (photo.title) entry.title = photo.title;
+    list.push(entry);
+  });
+  return list;
+}
+
+function normalizeAuctionPricing(trade, lot) {
+  const base = lot && typeof lot === 'object' ? lot : {};
+  const pick = (...keys) => {
+    for (const key of keys) {
+      if (base[key] != null && base[key] !== '') return base[key];
+      if (trade && trade[key] != null && trade[key] !== '') return trade[key];
+    }
+    return '';
+  };
+
+  const deadlineCandidate =
+    base.application_deadline
+    || base.application_deadline_date
+    || base.applications_deadline
+    || base.applications_deadline_date
+    || trade?.application_deadline
+    || trade?.applications_deadline
+    || '';
+
+  return {
+    start_price: toFormString(pick('start_price', 'initial_price')), 
+    current_price: toFormString(pick('current_price', 'price')), 
+    min_price: toFormString(pick('min_price', 'minimal_price', 'price_min', 'minimum_price')), 
+    max_price: toFormString(pick('max_price', 'maximum_price', 'price_max', 'maximumPrice')), 
+    step: toFormString(pick('price_step', 'auction_step', 'step', 'bid_step', 'increase_step', 'step_value')), 
+    deposit: toFormString(pick('deposit', 'deposit_amount', 'guarantee_deposit', 'zadatok', 'pledge', 'bail')), 
+    currency: toFormString(pick('currency')), 
+    application_deadline: toInputDate(deadlineCandidate),
+  };
+}
+
+function normalizePublicOfferPeriods(lot) {
+  const base = lot && typeof lot === 'object' ? lot : {};
+  const pools = [
+    base.period_prices,
+    base.periodPrices,
+    base.price_schedule,
+    base.priceSchedule,
+    base.offer_schedule,
+    base.offerSchedule,
+    base.price_graph,
+    base.priceGraph,
+    base.schedule,
+  ];
+  const periods = [];
+  const seen = new Set();
+  pools.forEach((pool) => {
+    if (!Array.isArray(pool)) return;
+    pool.forEach((entry, index) => {
+      if (!entry || typeof entry !== 'object') return;
+      const startRaw =
+        entry.date_start
+        || entry.start_date
+        || entry.period_start
+        || entry.dateBegin
+        || entry.date_from
+        || entry.begin
+        || entry.start
+        || entry.from
+        || null;
+      const endRaw =
+        entry.date_end
+        || entry.end_date
+        || entry.period_end
+        || entry.dateFinish
+        || entry.date_to
+        || entry.finish
+        || entry.end
+        || entry.to
+        || null;
+      const priceRaw =
+        entry.price
+        || entry.current_price
+        || entry.currentPrice
+        || entry.start_price
+        || entry.startPrice
+        || entry.value
+        || entry.amount
+        || entry.price_min
+        || entry.minimum_price
+        || entry.min_price
+        || null;
+      const minPriceRaw = entry.min_price || entry.minimum_price || entry.price_min || null;
+      const depositRaw =
+        entry.deposit
+        || entry.deposit_amount
+        || entry.zadatok
+        || entry.pledge
+        || entry.bail
+        || entry.guarantee
+        || null;
+      const commentRaw = entry.comment || entry.note || entry.stage || entry.stage_name || entry.description || '';
+      const extra = { ...entry };
+      delete extra.date_start;
+      delete extra.start_date;
+      delete extra.period_start;
+      delete extra.dateBegin;
+      delete extra.date_from;
+      delete extra.begin;
+      delete extra.start;
+      delete extra.from;
+      delete extra.date_end;
+      delete extra.end_date;
+      delete extra.period_end;
+      delete extra.dateFinish;
+      delete extra.date_to;
+      delete extra.finish;
+      delete extra.end;
+      delete extra.to;
+      delete extra.price;
+      delete extra.current_price;
+      delete extra.currentPrice;
+      delete extra.start_price;
+      delete extra.startPrice;
+      delete extra.value;
+      delete extra.amount;
+      delete extra.price_min;
+      delete extra.minimum_price;
+      delete extra.min_price;
+      delete extra.deposit;
+      delete extra.deposit_amount;
+      delete extra.zadatok;
+      delete extra.pledge;
+      delete extra.bail;
+      delete extra.guarantee;
+      delete extra.comment;
+      delete extra.note;
+      delete extra.stage;
+      delete extra.stage_name;
+      delete extra.description;
+
+      const key = `${startRaw || ''}-${endRaw || ''}-${priceRaw || ''}-${depositRaw || ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      periods.push({
+        id: entry.id || entry.code || entry.key || `period-${periods.length}-${index}`,
+        date_start: toInputDate(startRaw),
+        date_end: toInputDate(endRaw),
+        price: toFormString(priceRaw),
+        min_price: toFormString(minPriceRaw),
+        deposit: toFormString(depositRaw),
+        comment: toFormString(commentRaw),
+        extra,
+      });
+    });
+  });
+
+  return periods;
+}
+
+function buildPublicOfferPeriodsPayload(periods) {
+  return periods
+    .filter((period) => period && (period.date_start || period.date_end || period.price || period.min_price || period.deposit || period.comment))
+    .map((period) => {
+      const payload = { ...period.extra };
+      if (period.date_start) payload.date_start = fromInputDate(period.date_start) || period.date_start;
+      if (period.date_end) payload.date_end = fromInputDate(period.date_end) || period.date_end;
+      if (period.price) {
+        const numeric = parseNumericInput(period.price);
+        payload.price = numeric != null ? numeric : period.price;
+      }
+      if (period.min_price) {
+        const numericMin = parseNumericInput(period.min_price);
+        payload.min_price = numericMin != null ? numericMin : period.min_price;
+      }
+      if (period.deposit) {
+        const numericDeposit = parseNumericInput(period.deposit);
+        payload.deposit = numericDeposit != null ? numericDeposit : period.deposit;
+      }
+      if (period.comment) payload.comment = period.comment;
+      return payload;
+    });
+}
+
+function lotFieldsToObject(rows, preserved = {}) {
+  const base = { ...(preserved || {}) };
+  rows.forEach((row) => {
+    if (!row) return;
+    const key = row.key != null ? String(row.key).trim() : '';
+    if (!key) return;
+    const rawValue = row.value;
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      delete base[key];
+      return;
+    }
+    let value = rawValue;
+    if (row.type === 'select') {
+      value = String(rawValue).trim();
+      if (!value) {
+        delete base[key];
+        return;
+      }
+    } else if (row.numeric) {
+      const numeric = parseNumericInput(rawValue);
+      value = numeric != null ? numeric : String(rawValue).trim();
+      if (value === '') {
+        delete base[key];
+        return;
+      }
+    } else if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      if (!trimmed) {
+        delete base[key];
+        return;
+      }
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          value = JSON.parse(trimmed);
+        } catch {
+          value = trimmed;
+        }
+      } else {
+        value = trimmed;
+      }
+    }
+    base[key] = value;
+  });
+  return base;
+}
+
+function sectionStateToObject(section) {
+  if (!section) return {};
+  const result = {};
+  const values = section.values || {};
+  Object.entries(values).forEach(([key, value]) => {
+    const normalizedKey = key != null ? String(key).trim() : '';
+    if (!normalizedKey) return;
+    const trimmedValue = trimOrNull(value);
+    if (trimmedValue != null) {
+      result[normalizedKey] = trimmedValue;
+    }
+  });
+
+  (section.extras || []).forEach((entry) => {
+    if (!entry) return;
+    const key = entry.key != null ? String(entry.key).trim() : '';
+    if (!key) return;
+    const valueRaw = entry.value;
+    if (valueRaw === undefined || valueRaw === null || valueRaw === '') return;
+    if (typeof valueRaw === 'string') {
+      const trimmed = valueRaw.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          result[key] = JSON.parse(trimmed);
+          return;
+        } catch {
+          result[key] = trimmed;
+          return;
+        }
+      }
+      result[key] = trimmed;
+      return;
+    }
+    result[key] = valueRaw;
+  });
+
+  return result;
+}
+
+function buildLotDetailsFromState(lotFields, preserved, form, auctionPricing, publicOfferPeriods) {
+  const base = lotFieldsToObject(lotFields, preserved);
+
+  const auction = auctionPricing || {};
+  if (auction.start_price) {
+    const numeric = parseNumericInput(auction.start_price);
+    base.start_price = numeric != null ? numeric : auction.start_price;
+  } else {
+    delete base.start_price;
+  }
+  if (auction.current_price) {
+    const numeric = parseNumericInput(auction.current_price);
+    base.current_price = numeric != null ? numeric : auction.current_price;
+  } else {
+    delete base.current_price;
+  }
+  if (auction.min_price) {
+    const numeric = parseNumericInput(auction.min_price);
+    base.min_price = numeric != null ? numeric : auction.min_price;
+  } else {
+    delete base.min_price;
+  }
+  if (auction.max_price) {
+    const numeric = parseNumericInput(auction.max_price);
+    base.max_price = numeric != null ? numeric : auction.max_price;
+  } else {
+    delete base.max_price;
+  }
+  if (auction.step) {
+    const numeric = parseNumericInput(auction.step);
+    const stepValue = numeric != null ? numeric : String(auction.step).trim();
+    base.price_step = stepValue;
+    base.auction_step = stepValue;
+  } else {
+    delete base.price_step;
+    delete base.auction_step;
+  }
+  if (auction.deposit) {
+    const numeric = parseNumericInput(auction.deposit);
+    base.deposit = numeric != null ? numeric : auction.deposit;
+  } else {
+    delete base.deposit;
+  }
+  if (auction.currency) {
+    base.currency = String(auction.currency).trim();
+  } else {
+    delete base.currency;
+  }
+
+  if (auction.application_deadline) {
+    base.application_deadline = fromInputDate(auction.application_deadline) || auction.application_deadline;
+  } else {
+    delete base.application_deadline;
+  }
+
+  const periodsPayload = buildPublicOfferPeriodsPayload(publicOfferPeriods || []);
+  if (periodsPayload.length) {
+    base.period_prices = periodsPayload;
+    base.price_schedule = periodsPayload;
+  } else {
+    delete base.period_prices;
+    delete base.price_schedule;
+  }
+
+  const synced = syncLotDetailsWithForm(base, form);
+  return synced;
 }
 
 const LOT_DETAIL_SYNC_MAP = {
@@ -336,12 +952,24 @@ export default function AdminParserTradeCard() {
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState(null);
-  const [lotDetailsText, setLotDetailsText] = useState('{}');
-  const [contactDetailsText, setContactDetailsText] = useState('{}');
-  const [debtorDetailsText, setDebtorDetailsText] = useState('{}');
-  const [pricesText, setPricesText] = useState('[]');
-  const [documentsText, setDocumentsText] = useState('[]');
-  const [photosText, setPhotosText] = useState('');
+  const [lotFields, setLotFields] = useState([]);
+  const [lotPreserved, setLotPreserved] = useState({});
+  const [contactState, setContactState] = useState({ values: {}, extras: [] });
+  const [debtorState, setDebtorState] = useState({ values: {}, extras: [] });
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [auctionPricing, setAuctionPricing] = useState({
+    start_price: '',
+    current_price: '',
+    min_price: '',
+    max_price: '',
+    step: '',
+    deposit: '',
+    currency: '',
+    application_deadline: '',
+  });
+  const [publicOfferPeriods, setPublicOfferPeriods] = useState([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const singleFileInputRef = useRef(null);
@@ -356,17 +984,19 @@ export default function AdminParserTradeCard() {
   const applyTrade = useCallback((trade) => {
     if (!trade) return;
     setItem(trade);
+    
+    const lotDetails = trade.lot_details && typeof trade.lot_details === 'object' ? trade.lot_details : {};
 
     setForm({
       title: trade.title || '',
-      description: trade.description || trade.lot_details?.description || '',
+      description: trade.description || lotDetails.description || '',
       category: trade.category || '',
       region: trade.region || '',
       brand: trade.brand || '',
       model: trade.model || '',
       year: trade.year || '',
-      vin: trade.vin || trade.lot_details?.vin || '',
-      start_price: trade.start_price ?? trade.lot_details?.start_price ?? '',
+      vin: trade.vin || lotDetails.vin || '',
+      start_price: trade.start_price ?? lotDetails.start_price ?? '',
       applications_count: trade.applications_count ?? 0,
       date_start: toInputDate(trade.date_start || trade.dateStart),
       date_finish: toInputDate(trade.date_finish || trade.dateFinish),
@@ -374,20 +1004,23 @@ export default function AdminParserTradeCard() {
       source_url: trade.source_url || trade.url || trade.source || '',
     });
 
-    setLotDetailsText(formatObject(trade.lot_details));
-    setContactDetailsText(formatObject(trade.contact_details));
-    setDebtorDetailsText(formatObject(trade.debtor_details));
-    setPricesText(formatArray(trade.prices));
-    setDocumentsText(formatArray(trade.documents));
+    const rows = createLotFieldRows(lotDetails);
+    const preserved = {};
+    Object.entries(lotDetails || {}).forEach(([key, value]) => {
+      if (LOT_FIELDS_EXCLUDE.has(key)) {
+        preserved[key] = value;
+      }
+    });
+    setLotFields(rows);
+    setLotPreserved(preserved);
 
-    const photos = extractPhotos(trade);
-    if (photos.length) {
-      setPhotosText(photos.join('\n'));
-    } else if (Array.isArray(trade.photos)) {
-      setPhotosText(JSON.stringify(trade.photos, null, 2));
-    } else {
-      setPhotosText('');
-    }
+    setContactState(sectionStateFromObject(trade.contact_details, CONTACT_FIELDS));
+    setDebtorState(sectionStateFromObject(trade.debtor_details, DEBTOR_FIELDS));
+    setPriceHistory(normalizePriceHistory(trade.prices));
+    setDocuments(normalizeDocuments(trade.documents));
+    setPhotos(normalizePhotosForEditing(trade));
+    setAuctionPricing(normalizeAuctionPricing(trade, lotDetails));
+    setPublicOfferPeriods(normalizePublicOfferPeriods(lotDetails));
     setUploadError(null);
     setUploadingPhotos(false);
   }, []);
@@ -498,19 +1131,22 @@ export default function AdminParserTradeCard() {
           throw new Error('Не удалось получить ссылки на загруженные файлы');
         }
 
-        setPhotosText((prev) => {
-          const lines = (prev || '')
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean);
-          const seen = new Set(lines);
-          const next = [...lines];
-          urls.forEach((url) => {
-            if (!seen.has(url)) {
-              seen.add(url);
-              next.push(url);
-            }
+        setPhotos((prev) => {
+          const previous = Array.isArray(prev) ? prev : [];
+          const next = [...previous];
+          const seen = new Set(previous.map((photo) => photo.url));
+          uploaded.forEach((item) => {
+            const url = ensureAbsolutePhotoUrl(item.url || item.path);
+            if (!url || seen.has(url)) return;
+            seen.add(url);
+            next.push({
+              id: url,
+              url,
+              title: item.originalName || '',
+            });
           });
+          return next;
+        });
           return next.join('\n');
         });
       } catch (uploadErrorInstance) {
@@ -525,7 +1161,7 @@ export default function AdminParserTradeCard() {
         setUploadingPhotos(false);
       }
     },
-    [id, setPhotosText],
+    [id],
   );
 
   const handleSingleFileChange = useCallback(
@@ -562,6 +1198,212 @@ export default function AdminParserTradeCard() {
     []
   );
 
+  const updateAuctionField = useCallback(
+    (key) => (event) => {
+      const value = event?.target?.value ?? event;
+      setAuctionPricing((prev) => ({ ...prev, [key]: value }));
+      if (key === 'start_price') {
+        setForm((prev) => ({ ...(prev || {}), start_price: value }));
+      }
+    },
+    [],
+  );
+
+  const updateLotFieldValue = useCallback((index, value) => {
+    setLotFields((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      next[index] = { ...next[index], value };
+      return next;
+    });
+  }, []);
+
+  const updateLotFieldKey = useCallback((index, key) => {
+    setLotFields((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const normalizedKey = key != null ? String(key) : '';
+      next[index] = {
+        ...next[index],
+        key: normalizedKey,
+        label: normalizedKey ? translateValueByKey(normalizedKey) || normalizedKey : 'Новое поле',
+      };
+      return next;
+    });
+  }, []);
+
+  const removeLotField = useCallback((index) => {
+    setLotFields((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const addLotField = useCallback(() => {
+    setLotFields((prev) => [
+      ...prev,
+      { key: '', label: 'Новое поле', type: 'text', value: '', isCustom: true, numeric: false },
+    ]);
+  }, []);
+
+  const updateContactValue = useCallback((key, value) => {
+    setContactState((prev) => ({
+      values: { ...prev.values, [key]: value },
+      extras: prev.extras || [],
+    }));
+  }, []);
+
+  const updateDebtorValue = useCallback((key, value) => {
+    setDebtorState((prev) => ({
+      values: { ...prev.values, [key]: value },
+      extras: prev.extras || [],
+    }));
+  }, []);
+
+  const updateContactExtra = useCallback((index, field, value) => {
+    setContactState((prev) => {
+      const extras = Array.isArray(prev.extras) ? [...prev.extras] : [];
+      if (!extras[index]) extras[index] = { key: '', value: '' };
+      extras[index] = { ...extras[index], [field]: value };
+      return { values: prev.values || {}, extras };
+    });
+  }, []);
+
+  const removeContactExtra = useCallback((index) => {
+    setContactState((prev) => ({
+      values: prev.values || {},
+      extras: (prev.extras || []).filter((_, idx) => idx !== index),
+    }));
+  }, []);
+
+  const addContactExtra = useCallback(() => {
+    setContactState((prev) => ({
+      values: prev.values || {},
+      extras: [...(prev.extras || []), { key: '', value: '' }],
+    }));
+  }, []);
+
+  const updateDebtorExtra = useCallback((index, field, value) => {
+    setDebtorState((prev) => {
+      const extras = Array.isArray(prev.extras) ? [...prev.extras] : [];
+      if (!extras[index]) extras[index] = { key: '', value: '' };
+      extras[index] = { ...extras[index], [field]: value };
+      return { values: prev.values || {}, extras };
+    });
+  }, []);
+
+  const removeDebtorExtra = useCallback((index) => {
+    setDebtorState((prev) => ({
+      values: prev.values || {},
+      extras: (prev.extras || []).filter((_, idx) => idx !== index),
+    }));
+  }, []);
+
+  const addDebtorExtra = useCallback(() => {
+    setDebtorState((prev) => ({
+      values: prev.values || {},
+      extras: [...(prev.extras || []), { key: '', value: '' }],
+    }));
+  }, []);
+
+  const updatePriceHistoryEntry = useCallback((index, patch) => {
+    setPriceHistory((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
+
+  const addPriceHistoryEntry = useCallback(() => {
+    setPriceHistory((prev) => [
+      ...prev,
+      { id: `price-${Date.now()}`, stage: '', price: '', date: '', comment: '', extra: {} },
+    ]);
+  }, []);
+
+  const removePriceHistoryEntry = useCallback((index) => {
+    setPriceHistory((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const updatePeriodEntry = useCallback((index, patch) => {
+    setPublicOfferPeriods((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
+
+  const addPeriodEntry = useCallback(() => {
+    setPublicOfferPeriods((prev) => [
+      ...prev,
+      { id: `period-${Date.now()}`, date_start: '', date_end: '', price: '', min_price: '', deposit: '', comment: '', extra: {} },
+    ]);
+  }, []);
+
+  const removePeriodEntry = useCallback((index) => {
+    setPublicOfferPeriods((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const movePeriodEntry = useCallback((index, direction) => {
+    setPublicOfferPeriods((prev) => {
+      const next = [...prev];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= next.length) return prev;
+      const [item] = next.splice(index, 1);
+      next.splice(targetIndex, 0, item);
+      return next;
+    });
+  }, []);
+
+  const updateDocumentEntry = useCallback((index, patch) => {
+    setDocuments((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
+
+  const addDocumentEntry = useCallback(() => {
+    setDocuments((prev) => [
+      ...prev,
+      { id: `document-${Date.now()}`, title: '', type: '', date: '', url: '', description: '', extra: {} },
+    ]);
+  }, []);
+
+  const removeDocumentEntry = useCallback((index) => {
+    setDocuments((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const updatePhotoEntry = useCallback((index, patch) => {
+    setPhotos((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const updated = { ...next[index], ...patch };
+      updated.id = updated.url || next[index].id;
+      next[index] = updated;
+      return next;
+    });
+  }, []);
+
+  const addPhotoEntry = useCallback(() => {
+    setPhotos((prev) => [...prev, { id: `photo-${Date.now()}`, url: '', title: '' }]);
+  }, []);
+
+  const removePhotoEntry = useCallback((index) => {
+    setPhotos((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
+  const movePhotoEntry = useCallback((index, direction) => {
+    setPhotos((prev) => {
+      const next = [...prev];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= next.length) return prev;
+      const [item] = next.splice(index, 1);
+      next.splice(targetIndex, 0, item);
+      return next;
+    });
+  }, []);
+
   const resetChanges = useCallback(() => {
     if (item) applyTrade(item);
   }, [item, applyTrade]);
@@ -569,32 +1411,22 @@ export default function AdminParserTradeCard() {
   const descriptionPreview = useMemo(() => (form?.description || '').trim(), [form?.description]);
 
   const d = useMemo(() => {
-    // parsed blocks for preview sections
-    let lot = {};
-    let contact = {};
-    let debtor = {};
-    let prices = [];
-    let documents = [];
-    let photos = [];
-
-    try { lot = JSON.parse(lotDetailsText || '{}'); } catch {}
-    try { contact = JSON.parse(contactDetailsText || '{}'); } catch {}
-    try { debtor = JSON.parse(debtorDetailsText || '{}'); } catch {}
-    try { prices = JSON.parse(pricesText || '[]'); } catch {}
-    try { documents = JSON.parse(documentsText || '[]'); } catch {}
-    try { photos = parsePhotosInput(photosText || ''); } catch {}
-
-    const syncedLot = syncLotDetailsWithForm(lot, form);
+    const lot = buildLotDetailsFromState(lotFields, lotPreserved, form, auctionPricing, publicOfferPeriods);
+    const contact = sectionStateToObject(contactState);
+    const debtor = sectionStateToObject(debtorState);
+    const pricesPayload = buildPriceHistoryPayload(priceHistory);
+    const documentsPayload = buildDocumentsPayload(documents);
+    const photosPayload = buildPhotosPayload(photos);
 
     const merged = {
       ...(item || {}),
       ...form,
-      lot_details: syncedLot,
+      lot_details: lot,
       contact_details: contact,
       debtor_details: debtor,
-      prices,
-      documents,
-      photos,
+      prices: pricesPayload,
+      documents: documentsPayload,
+      photos: photosPayload,
     };
 
     // keep original payload for debug if present
@@ -604,13 +1436,43 @@ export default function AdminParserTradeCard() {
   }, [
     item,
     form,
-    lotDetailsText,
-    contactDetailsText,
-    debtorDetailsText,
-    pricesText,
-    documentsText,
-    photosText,
+    lotFields,
+    lotPreserved,
+    contactState,
+    debtorState,
+    priceHistory,
+    documents,
+    photos,
+    auctionPricing,
+    publicOfferPeriods,
   ]);
+
+  const tradeType = useMemo(() => {
+    const row = lotFields.find((entry) => entry.key === 'trade_type');
+    if (!row || row.value == null) return '';
+    return String(row.value).trim();
+  }, [lotFields]);
+
+  const normalizedTradeType = useMemo(() => {
+    const fromRow = normalizeTradeTypeCode(tradeType);
+    if (fromRow) return fromRow;
+
+    if (!item) return null;
+    const candidates = [
+      item.trade_type,
+      item.tradeType,
+      item.lot_details?.trade_type,
+      item.lot_details?.tradeType,
+    ];
+    for (const candidate of candidates) {
+      const normalized = normalizeTradeTypeCode(candidate);
+      if (normalized) return normalized;
+    }
+    return null;
+  }, [item, tradeType]);
+
+  const isPublicOffer = normalizedTradeType === 'public_offer';
+  const isAuction = normalizedTradeType === 'open_auction' || normalizedTradeType === 'auction';
 
   const saveTrade = useCallback(
     async ({ showAlert = true } = {}) => {
@@ -618,43 +1480,52 @@ export default function AdminParserTradeCard() {
       setSaving(true);
       setError(null);
       try {
-        const parsedLotDetails = JSON.parse(lotDetailsText || '{}');
-        const parsedContactDetails = JSON.parse(contactDetailsText || '{}');
-        const parsedDebtorDetails = JSON.parse(debtorDetailsText || '{}');
-        const parsedPrices = JSON.parse(pricesText || '[]');
-        const parsedDocuments = JSON.parse(documentsText || '[]');
-        const parsedPhotos = parsePhotosInput(photosText || '');
-        const syncedLotDetails = syncLotDetailsWithForm(parsedLotDetails, form);
+        const lotDetailsPayload = buildLotDetailsFromState(
+          lotFields,
+          lotPreserved,
+          form,
+          auctionPricing,
+          publicOfferPeriods,
+        );
+        const contactPayload = sectionStateToObject(contactState);
+        const debtorPayload = sectionStateToObject(debtorState);
+        const pricesPayload = buildPriceHistoryPayload(priceHistory);
+        const documentsPayload = buildDocumentsPayload(documents);
+        const photosPayload = buildPhotosPayload(photos);
+
+        const effectiveStartPrice =
+          auctionPricing?.start_price && auctionPricing.start_price !== ''
+            ? auctionPricing.start_price
+            : form?.start_price;
+        const startPriceNumeric = parseNumericInput(effectiveStartPrice);
+        const applicationsCountNumeric =
+          form?.applications_count === '' || form?.applications_count == null
+            ? 0
+            : Number(form.applications_count);
 
         const payload = {
           ...d,
-          title: trimOrNull(form.title),
-          description: trimOrNull(form.description),
-          category: trimOrNull(form.category),
-          region: trimOrNull(form.region),
-          brand: trimOrNull(form.brand),
-          model: trimOrNull(form.model),
-          year: trimOrNull(form.year),
-          vin: trimOrNull(form.vin),
-          start_price:
-            form.start_price === '' || form.start_price == null
-              ? null
-              : Number(String(form.start_price).replace(/\s/g, '').replace(',', '.')),
-          applications_count:
-            form.applications_count === '' || form.applications_count == null
-              ? 0
-              : Number(form.applications_count),
-          date_start: fromInputDate(form.date_start),
-          date_finish: fromInputDate(form.date_finish),
-          trade_place: trimOrNull(form.trade_place),
-          source_url: trimOrNull(form.source_url),
+          title: trimOrNull(form?.title),
+          description: trimOrNull(form?.description),
+          category: trimOrNull(form?.category),
+          region: trimOrNull(form?.region),
+          brand: trimOrNull(form?.brand),
+          model: trimOrNull(form?.model),
+          year: trimOrNull(form?.year),
+          vin: trimOrNull(form?.vin),
+          start_price: effectiveStartPrice === '' || effectiveStartPrice == null ? null : startPriceNumeric ?? effectiveStartPrice,
+          applications_count: applicationsCountNumeric,
+          date_start: fromInputDate(form?.date_start),
+          date_finish: fromInputDate(form?.date_finish),
+          trade_place: trimOrNull(form?.trade_place),
+          source_url: trimOrNull(form?.source_url),
 
-          lot_details: syncedLotDetails,
-          contact_details: parsedContactDetails,
-          debtor_details: parsedDebtorDetails,
-          prices: parsedPrices,
-          documents: parsedDocuments,
-          photos: parsedPhotos,
+          lot_details: lotDetailsPayload,
+          contact_details: contactPayload,
+          debtor_details: debtorPayload,
+          prices: pricesPayload,
+          documents: documentsPayload,
+          photos: photosPayload,
         };
 
         if (!API_BASE) {
@@ -694,19 +1565,22 @@ export default function AdminParserTradeCard() {
     },
     [
       id,
-      lotDetailsText,
-      contactDetailsText,
-      debtorDetailsText,
-      pricesText,
-      documentsText,
-      photosText,
       form,
       d,
+      lotFields,
+      lotPreserved,
+      contactState,
+      debtorState,
+      priceHistory,
+      documents,
+      photos,
+      auctionPricing,
+      publicOfferPeriods,
       applyTrade,
     ],
   );
 
-      const publishTrade = useCallback(
+    const publishTrade = useCallback(
     async ({ showAlert = true } = {}) => {
       if (!id) return null;
       setPublishing(true);
@@ -989,100 +1863,688 @@ export default function AdminParserTradeCard() {
           />
         </label>
 
-        <div className="admin-upload">
-          <div className="admin-upload__row">
-            <div className="admin-upload__text">
-              <div className="admin-upload__title">Добавить фотографии</div>
-              <p className="admin-upload__description">
-                Поддерживаются изображения до 10&nbsp;МБ. Можно выбрать один файл или загрузить несколько сразу.
+        <section style={{ display: 'grid', gap: 12, paddingTop: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>Характеристики лота</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Укажите технические параметры и дополнительные поля. Поле «Тип торгов» влияет на блоки цен ниже.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+            {lotFields.map((row, index) => {
+              if (!row || row.isCustom) return null;
+              if (row.type === 'select') {
+                const selectOptions = row.options && Array.isArray(row.options) ? row.options : TRADE_TYPE_OPTIONS;
+                return (
+                  <label key={`${row.key || 'select'}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">{row.label}</span>
+                    <select
+                      className="input"
+                      value={row.value || ''}
+                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                    >
+                      {selectOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              }
+              if (row.type === 'textarea') {
+                return (
+                  <label key={`${row.key || 'textarea'}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">{row.label}</span>
+                    <textarea
+                      className="textarea"
+                      rows={row.value && String(row.value).length > 160 ? 4 : 3}
+                      value={row.value || ''}
+                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                    />
+                  </label>
+                );
+              }
+              return (
+                <label key={`${row.key || 'input'}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">{row.label}</span>
+                  <input
+                    className="input"
+                    value={row.value || ''}
+                    onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                    inputMode={row.numeric ? 'numeric' : undefined}
+                  />
+                </label>
+              );
+            })}
+          </div>
+          {lotFields.some((row) => row?.isCustom) ? (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {lotFields.map((row, index) => {
+                if (!row?.isCustom) return null;
+                return (
+                  <div
+                    key={`${row.key || 'custom'}-${index}`}
+                    className="panel"
+                    style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}
+                  >
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Название поля</span>
+                      <input
+                        className="input"
+                        value={row.key || ''}
+                        onChange={(e) => updateLotFieldKey(index, e.target.value)}
+                        placeholder="Например, mileage"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Значение</span>
+                      <textarea
+                        className="textarea"
+                        rows={row.value && String(row.value).length > 160 ? 4 : 2}
+                        value={row.value || ''}
+                        onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                      />
+                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button type="button" className="button outline" onClick={() => removeLotField(index)}>
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            ) : null}
+          <div>
+            <button type="button" className="button outline" onClick={addLotField}>
+              Добавить характеристику
+            </button>
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Контакты организатора</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Эти данные показываются покупателям для связи. Добавляйте только актуальную информацию.
               </p>
             </div>
-            <div className="admin-upload__actions">
-              <button
-                type="button"
-                className="button button-small button-outline"
-                onClick={triggerSingleUpload}
-                disabled={uploadingPhotos}
-              >
-                Загрузить файл
-              </button>
-              <button
-                type="button"
-                className="button button-small"
-                onClick={triggerMultipleUpload}
-                disabled={uploadingPhotos}
-              >
-                Загрузить несколько
-              </button>
-            </div>
+            <button type="button" className="button outline" onClick={addContactExtra}>
+              Добавить поле контактов
+            </button>
           </div>
-          {uploadingPhotos ? <div className="admin-upload__status">Загрузка фотографий…</div> : null}
-          {uploadError ? <div className="admin-upload__error">{uploadError}</div> : null}
-          <div className="admin-upload__hint">Ссылки на загруженные файлы автоматически появятся в поле ниже.</div>
-          <input
-            ref={singleFileInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleSingleFileChange}
-          />
-          <input
-            ref={multipleFileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleMultipleFileChange}
-          />
-        </div>
-
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Фотографии (URL по одному в строке или JSON-массив)</span>
-          <textarea
-            className="textarea"
-            rows={4}
-            value={photosText}
-            onChange={(e) => setPhotosText(e.target.value)}
-            placeholder='["https://.../1.jpg","https://.../2.jpg"] или по строке на URL'
-          />
-        </label>
-
-        {getPhotoPreview(photosText).length > 0 && (
-          <div className="panel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-            {getPhotoPreview(photosText).map((url, i) => (
-              <div key={url || i} className="panel" style={{ padding: 8 }}>
-                <img src={url} alt={`Фото ${i + 1}`} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 6 }} />
-                <div className="muted" style={{ marginTop: 6, fontSize: 12, wordBreak: 'break-word' }}>{url}</div>
-              </div>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+            {CONTACT_FIELDS.map((field) => (
+              <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted">{field.label}</span>
+                {field.type === 'textarea' ? (
+                  <textarea
+                    className="textarea"
+                    rows={contactState.values?.[field.key] && contactState.values[field.key].length > 160 ? 4 : 2}
+                    value={contactState.values?.[field.key] || ''}
+                    onChange={(e) => updateContactValue(field.key, e.target.value)}
+                  />
+                ) : (
+                  <input
+                    className="input"
+                    value={contactState.values?.[field.key] || ''}
+                    onChange={(e) => updateContactValue(field.key, e.target.value)}
+                  />
+                )}
+              </label>
             ))}
           </div>
-        )}
+          {contactState.extras && contactState.extras.length > 0 ? (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {contactState.extras.map((extra, index) => (
+                <div key={`contact-extra-${index}`} className="panel" style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Название поля</span>
+                    <input
+                      className="input"
+                      value={extra.key || ''}
+                      onChange={(e) => updateContactExtra(index, 'key', e.target.value)}
+                      placeholder="Например, WhatsApp"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Значение</span>
+                    <textarea
+                      className="textarea"
+                      rows={extra.value && extra.value.length > 160 ? 4 : 2}
+                      value={extra.value || ''}
+                      onChange={(e) => updateContactExtra(index, 'value', e.target.value)}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="button" className="button outline" onClick={() => removeContactExtra(index)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">lot_details (JSON)</span>
-            <textarea className="textarea" rows={8} value={lotDetailsText} onChange={(e) => setLotDetailsText(e.target.value)} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">contact_details (JSON)</span>
-            <textarea className="textarea" rows={8} value={contactDetailsText} onChange={(e) => setContactDetailsText(e.target.value)} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">debtor_details (JSON)</span>
-            <textarea className="textarea" rows={8} value={debtorDetailsText} onChange={(e) => setDebtorDetailsText(e.target.value)} />
-          </label>
-        </div>
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Данные должника</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Проверьте корректность сведений о должнике и добавьте дополнительные поля при необходимости.
+              </p>
+            </div>
+            <button type="button" className="button outline" onClick={addDebtorExtra}>
+              Добавить поле должника
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+            {DEBTOR_FIELDS.map((field) => (
+              <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted">{field.label}</span>
+                <input
+                  className="input"
+                  value={debtorState.values?.[field.key] || ''}
+                  onChange={(e) => updateDebtorValue(field.key, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+          {debtorState.extras && debtorState.extras.length > 0 ? (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {debtorState.extras.map((extra, index) => (
+                <div key={`debtor-extra-${index}`} className="panel" style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Название поля</span>
+                    <input
+                      className="input"
+                      value={extra.key || ''}
+                      onChange={(e) => updateDebtorExtra(index, 'key', e.target.value)}
+                      placeholder="Например, СНИЛС"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Значение</span>
+                    <textarea
+                      className="textarea"
+                      rows={extra.value && extra.value.length > 160 ? 4 : 2}
+                      value={extra.value || ''}
+                      onChange={(e) => updateDebtorExtra(index, 'value', e.target.value)}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="button" className="button outline" onClick={() => removeDebtorExtra(index)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">prices (JSON-массив)</span>
-            <textarea className="textarea" rows={6} value={pricesText} onChange={(e) => setPricesText(e.target.value)} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">documents (JSON-массив)</span>
-            <textarea className="textarea" rows={6} value={documentsText} onChange={(e) => setDocumentsText(e.target.value)} />
-          </label>
-        </div>
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>Фотографии</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Можно загрузить изображения или указать ссылки вручную. Порядок влияет на отображение в карточке.
+            </p>
+          </div>
+          <div className="admin-upload">
+            <div className="admin-upload__row">
+              <div className="admin-upload__text">
+                <div className="admin-upload__title">Загрузить изображения</div>
+                <p className="admin-upload__description">
+                  Поддерживаются изображения до 10&nbsp;МБ. Можно выбрать один файл или загрузить несколько сразу.
+                </p>
+              </div>
+            <div className="admin-upload__actions">
+                <button
+                  type="button"
+                  className="button button-small button-outline"
+                  onClick={triggerSingleUpload}
+                  disabled={uploadingPhotos}
+                >
+                  Загрузить файл
+                </button>
+                <button
+                  type="button"
+                  className="button button-small"
+                  onClick={triggerMultipleUpload}
+                  disabled={uploadingPhotos}
+                >
+                  Загрузить несколько
+                </button>
+              </div>
+            </div>
+            {uploadingPhotos ? <div className="admin-upload__status">Загрузка фотографий…</div> : null}
+            {uploadError ? <div className="admin-upload__error">{uploadError}</div> : null}
+            <div className="admin-upload__hint">Загруженные файлы автоматически добавятся в список ниже.</div>
+            <input
+              ref={singleFileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleSingleFileChange}
+            />
+            <input
+              ref={multipleFileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleMultipleFileChange}
+            />
+          </div>
+          {photos.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13 }}>Фотографии пока не добавлены.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {photos.map((photo, index) => (
+                <div key={photo.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {photo.url ? (
+                      <img
+                        src={photo.url}
+                        alt={photo.title || `Фото ${index + 1}`}
+                        style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 6 }}
+                      />
+                    ) : (
+                      <div className="muted" style={{ fontSize: 12 }}>Предпросмотр появится после указания ссылки.</div>
+                    )}
+                    <div style={{ display: 'grid', gap: 8, flex: '1 1 220px' }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className="muted">Ссылка на изображение</span>
+                        <input
+                          className="input"
+                          value={photo.url || ''}
+                          onChange={(e) => updatePhotoEntry(index, { url: e.target.value })}
+                          placeholder="https://example.ru/photo.jpg"
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className="muted">Подпись / комментарий</span>
+                        <input
+                          className="input"
+                          value={photo.title || ''}
+                          onChange={(e) => updatePhotoEntry(index, { title: e.target.value })}
+                          placeholder="Например, Вид спереди"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="button outline"
+                      onClick={() => movePhotoEntry(index, -1)}
+                      disabled={index === 0}
+                      style={{ padding: '6px 10px' }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="button outline"
+                      onClick={() => movePhotoEntry(index, 1)}
+                      disabled={index === photos.length - 1}
+                      style={{ padding: '6px 10px' }}
+                    >
+                      ↓
+                    </button>
+                    <button type="button" className="button outline" onClick={() => removePhotoEntry(index)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="button outline" onClick={addPhotoEntry}>
+              Добавить ссылку вручную
+            </button>
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Документы</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Прикрепите файлы и ссылки, которые должны отображаться в карточке объявления.
+              </p>
+            </div>
+            <button type="button" className="button outline" onClick={addDocumentEntry}>
+              Добавить документ
+            </button>
+          </div>
+          {documents.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13 }}>Документы пока не добавлены.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {documents.map((doc, index) => (
+                <div key={doc.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Название</span>
+                      <input
+                        className="input"
+                        value={doc.title || ''}
+                        onChange={(e) => updateDocumentEntry(index, { title: e.target.value })}
+                        placeholder="Например, Перечень имущества"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Тип / категория</span>
+                      <input
+                        className="input"
+                        value={doc.type || ''}
+                        onChange={(e) => updateDocumentEntry(index, { type: e.target.value })}
+                        placeholder="Например, Договор"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Дата</span>
+                      <input
+                        className="input"
+                        value={doc.date || ''}
+                        onChange={(e) => updateDocumentEntry(index, { date: e.target.value })}
+                        placeholder="Например, 01.04.2025"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Ссылка на файл</span>
+                      <input
+                        className="input"
+                        type="url"
+                        value={doc.url || ''}
+                        onChange={(e) => updateDocumentEntry(index, { url: e.target.value })}
+                        placeholder="https://example.ru/document.pdf"
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Описание</span>
+                    <textarea
+                      className="textarea"
+                      rows={doc.description && doc.description.length > 160 ? 4 : 2}
+                      value={doc.description || ''}
+                      onChange={(e) => updateDocumentEntry(index, { description: e.target.value })}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="button" className="button outline" onClick={() => removeDocumentEntry(index)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>История изменений цены</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Эти записи отображаются в разделе «История цен» карточки лота.
+              </p>
+            </div>
+            <button type="button" className="button outline" onClick={addPriceHistoryEntry}>
+              Добавить запись
+            </button>
+          </div>
+          {priceHistory.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13 }}>Записей пока нет.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {priceHistory.map((entry, index) => (
+                <div key={entry.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Этап / стадия</span>
+                      <input
+                        className="input"
+                        value={entry.stage || ''}
+                        onChange={(e) => updatePriceHistoryEntry(index, { stage: e.target.value })}
+                        placeholder="Например, Первый этап"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Цена</span>
+                      <input
+                        className="input"
+                        value={entry.price || ''}
+                        onChange={(e) => updatePriceHistoryEntry(index, { price: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Дата</span>
+                      <input
+                        className="input"
+                        value={entry.date || ''}
+                        onChange={(e) => updatePriceHistoryEntry(index, { date: e.target.value })}
+                        placeholder="Например, 15.03.2025 10:00"
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Комментарий</span>
+                    <textarea
+                      className="textarea"
+                      rows={entry.comment && entry.comment.length > 160 ? 4 : 2}
+                      value={entry.comment || ''}
+                      onChange={(e) => updatePriceHistoryEntry(index, { comment: e.target.value })}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="button" className="button outline" onClick={() => removePriceHistoryEntry(index)}>
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>График снижения цены (публичное предложение)</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Укажите периоды изменения цены. Эти данные используются для отображения расписания предложения.
+              {!isPublicOffer ? ' График можно подготовить заранее и выбрать тип «Публичное предложение» позже.' : ''}
+            </p>
+          </div>
+          {publicOfferPeriods.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13 }}>Периоды пока не добавлены.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {publicOfferPeriods.map((period, index) => (
+                <div key={period.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div className="muted" style={{ fontWeight: 600 }}>Период {index + 1}</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="button outline"
+                        onClick={() => movePeriodEntry(index, -1)}
+                        disabled={index === 0}
+                        style={{ padding: '6px 10px' }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="button outline"
+                        onClick={() => movePeriodEntry(index, 1)}
+                        disabled={index === publicOfferPeriods.length - 1}
+                        style={{ padding: '6px 10px' }}
+                      >
+                        ↓
+                      </button>
+                      <button type="button" className="button outline" onClick={() => removePeriodEntry(index)}>
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Дата начала</span>
+                      <input
+                        className="input"
+                        type="datetime-local"
+                        value={period.date_start || ''}
+                        onChange={(e) => updatePeriodEntry(index, { date_start: e.target.value })}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Дата окончания</span>
+                      <input
+                        className="input"
+                        type="datetime-local"
+                        value={period.date_end || ''}
+                        onChange={(e) => updatePeriodEntry(index, { date_end: e.target.value })}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Цена, руб.</span>
+                      <input
+                        className="input"
+                        value={period.price || ''}
+                        onChange={(e) => updatePeriodEntry(index, { price: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Минимальная цена</span>
+                      <input
+                        className="input"
+                        value={period.min_price || ''}
+                        onChange={(e) => updatePeriodEntry(index, { min_price: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="muted">Задаток, руб.</span>
+                      <input
+                        className="input"
+                        value={period.deposit || ''}
+                        onChange={(e) => updatePeriodEntry(index, { deposit: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Комментарий / примечание</span>
+                    <textarea
+                      className="textarea"
+                      rows={period.comment && period.comment.length > 160 ? 4 : 2}
+                      value={period.comment || ''}
+                      onChange={(e) => updatePeriodEntry(index, { comment: e.target.value })}
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <button type="button" className="button outline" onClick={addPeriodEntry}>
+              Добавить период
+            </button>
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>Цены для открытого аукциона</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Заполните значения, если торги проходят в формате открытого аукциона.
+              {!isAuction ? ' Блок можно оставить пустым для других типов торгов.' : ''}
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Начальная цена</span>
+              <input
+                className="input"
+                value={auctionPricing.start_price || ''}
+                onChange={updateAuctionField('start_price')}
+                placeholder="Например, 1500000"
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Текущая цена</span>
+              <input
+                className="input"
+                value={auctionPricing.current_price || ''}
+                onChange={updateAuctionField('current_price')}
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Минимальная цена</span>
+              <input
+                className="input"
+                value={auctionPricing.min_price || ''}
+                onChange={updateAuctionField('min_price')}
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Максимальная цена</span>
+              <input
+                className="input"
+                value={auctionPricing.max_price || ''}
+                onChange={updateAuctionField('max_price')}
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Шаг аукциона</span>
+              <input
+                className="input"
+                value={auctionPricing.step || ''}
+                onChange={updateAuctionField('step')}
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Задаток</span>
+              <input
+                className="input"
+                value={auctionPricing.deposit || ''}
+                onChange={updateAuctionField('deposit')}
+                inputMode="numeric"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Валюта</span>
+              <input
+                className="input"
+                value={auctionPricing.currency || ''}
+                onChange={updateAuctionField('currency')}
+                placeholder="Например, RUB"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Крайний срок подачи заявок</span>
+              <input
+                className="input"
+                type="datetime-local"
+                value={auctionPricing.application_deadline || ''}
+                onChange={updateAuctionField('application_deadline')}
+              />
+            </label>
+          </div>
+        </section>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <button type="submit" className="button primary" disabled={actionButtonsDisabled}>
