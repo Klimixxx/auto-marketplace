@@ -1147,8 +1147,6 @@ export default function AdminParserTradeCard() {
           });
           return next;
         });
-          return next.join('\n');
-        });
       } catch (uploadErrorInstance) {
         console.error('upload photos error:', uploadErrorInstance);
         const message =
@@ -1580,7 +1578,7 @@ export default function AdminParserTradeCard() {
     ],
   );
 
-    const publishTrade = useCallback(
+  const publishTrade = useCallback(
     async ({ showAlert = true } = {}) => {
       if (!id) return null;
       setPublishing(true);
@@ -2211,17 +2209,15 @@ export default function AdminParserTradeCard() {
         </section>
 
         <section style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <h3 style={{ margin: 0 }}>Документы</h3>
-              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                Прикрепите файлы и ссылки, которые должны отображаться в карточке объявления.
-              </p>
-            </div>
-            <button type="button" className="button outline" onClick={addDocumentEntry}>
-              Добавить документ
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>Документы</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Прикрепите файлы и ссылки, которые должны отображаться в карточке объявления.
+            </p>
           </div>
+          <button type="button" className="button outline" onClick={addDocumentEntry}>
+            Добавить документ
+          </button>
           {documents.length === 0 ? (
             <div className="muted" style={{ fontSize: 13 }}>Документы пока не добавлены.</div>
           ) : (
@@ -2288,17 +2284,15 @@ export default function AdminParserTradeCard() {
         </section>
 
         <section style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <h3 style={{ margin: 0 }}>История изменений цены</h3>
-              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                Эти записи отображаются в разделе «История цен» карточки лота.
-              </p>
-            </div>
-            <button type="button" className="button outline" onClick={addPriceHistoryEntry}>
-              Добавить запись
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h3 style={{ margin: 0 }}>История изменений цены</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Эти записи отображаются в разделе «История цен» карточки лота.
+            </p>
           </div>
+          <button type="button" className="button outline" onClick={addPriceHistoryEntry}>
+            Добавить запись
+          </button>
           {priceHistory.length === 0 ? (
             <div className="muted" style={{ fontSize: 13 }}>Записей пока нет.</div>
           ) : (
