@@ -7,41 +7,41 @@ const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  topBg: 'var(--smoky-top)',
-  topText: '#E6EDF3',
-  topMuted: 'rgba(17,24,39,0.70)',
-  border: 'rgba(255,255,255,0.12)',
-  baseBg: 'transparent',
+  topBg: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.92) 100%)',
+  topText: 'var(--text-strong)',
+  topMuted: 'var(--text-muted)',
+  border: 'rgba(15,23,42,0.06)',
+  baseBg: 'var(--surface-1)',
 
   inputBg: '#ffffff',
-  inputBorder: 'rgba(17,24,39,0.14)',
-  inputBorderFocus: 'rgba(42,101,247,0.45)',
-  inputText: '#111827',
-  inputPlaceholder: 'rgba(17,24,39,0.45)',
+  inputBorder: 'var(--border)',
+  inputBorderFocus: 'var(--outline)',
+  inputText: 'var(--text)',
+  inputPlaceholder: 'var(--text-muted)',
 
-  btnBg: 'var(--blue)',
-  btnHover: '#1e53d6',
-  btnText: '#ffffff',
+  btnBg: 'var(--accent)',
+  btnHover: 'var(--accent-hover)',
+  btnText: 'var(--text-on-accent)',
   btnSoftBg: 'rgba(42,101,247,0.08)',
-  btnSoftText: '#1e53d6',
-  btnSoftHoverBg: 'rgba(42,101,247,0.14)',
+  btnSoftText: 'var(--accent)',
+  btnSoftHoverBg: 'rgba(42,101,247,0.16)',
 
-  link: 'var(--blue)',
-  linkHover: '#1e53d6',
-  icon: '#111827',
-  iconMuted: 'rgba(17,24,39,0.65)',
+  link: 'var(--accent)',
+  linkHover: 'var(--accent-hover)',
+  icon: 'var(--text-muted)',
+  iconMuted: 'rgba(15,23,42,0.45)',
 
-  menuBg: '#ffffff',
-  menuBorder: 'rgba(17,24,39,0.10)',
+  menuBg: 'var(--surface-1)',
+  menuBorder: 'rgba(15,23,42,0.12)',
 
-  heroBtn: 'var(--blue)',
-  heroBtnHover: '#1e53d6',
+  heroBtn: 'var(--accent)',
+  heroBtnHover: 'var(--accent-hover)',
   red: '#ef4444',
   yellow: '#facc15',
-  chipBg: 'rgba(42,101,247,0.06)',
-  chipBorder: 'rgba(42,101,247,0.18)',
-  notice: '#60A5FA',
-  pillBg: 'transparent',
+  chipBg: 'rgba(42,101,247,0.12)',
+  chipBorder: 'rgba(42,101,247,0.24)',
+  notice: 'var(--accent)',
+  pillBg: 'rgba(42,101,247,0.10)',
 };
 
 function IconUser({ size = 20, color = 'currentColor' }) {
@@ -379,7 +379,15 @@ export default function Header({ user }) {
       <a
         href={href}
         className="nav-link gradtext"
-        style={{ color: '#FFFFFF', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        style={{
+          color: UI.topText,
+          textDecoration: 'none',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontWeight: 600,
+          transition: 'color 0.2s ease',
+        }}
       >
         <span>{label}</span>
         {badgeValue > 0 && (
@@ -422,6 +430,7 @@ export default function Header({ user }) {
             alignItems: 'center',
             gap: 12,
             padding: '0 12px',
+            color: UI.topText,
           }}
         >
           <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
@@ -438,12 +447,13 @@ export default function Header({ user }) {
             {me && (
               <div
                 style={{
-                  padding: '6px 10px',
-                  borderRadius: 10,
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.35)',
-                  color: '#FFFFFF',
-                  fontWeight: 700,
+                  padding: '6px 12px',
+                  borderRadius: 12,
+                  background: UI.pillBg,
+                  border: `1px solid ${UI.chipBorder}`,
+                  color: UI.topText,
+                  fontWeight: 600,
+                  lineHeight: 1.2,
                 }}
               >
                 Баланс: {fmtRub.format(balance)}
@@ -462,12 +472,13 @@ export default function Header({ user }) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '6px 10px',
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.35)',
-                  borderRadius: 10,
+                  padding: '6px 12px',
+                  background: UI.baseBg,
+                  border: `1px solid ${UI.menuBorder}`,
+                  borderRadius: 12,
                   cursor: 'pointer',
-                  color: '#FFFFFF',
+                  color: UI.topText,
+                  boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
                 }}
               >
                 <span
@@ -476,13 +487,13 @@ export default function Header({ user }) {
                     width: 24,
                     height: 24,
                     borderRadius: '50%',
-                    background: 'transparent',
+                    background: UI.btnSoftBg,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: '1px solid rgba(255,255,255,0.35)',
+                    border: `1px solid ${UI.btnSoftHoverBg}`,
                   }}
                 >
-                  <IconUser size={16} color="#FFFFFF" />
+                  <IconUser size={16} color={UI.icon} />
                 </span>
                 <span
                   style={{
@@ -491,7 +502,7 @@ export default function Header({ user }) {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    color: '#FFFFFF',
+                    color: UI.topText,
                   }}
                 >
                   {username}
@@ -507,7 +518,7 @@ export default function Header({ user }) {
                     background: UI.menuBg,
                     border: `1px solid ${UI.menuBorder}`,
                     borderRadius: 12,
-                    boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+                    boxShadow: '0 20px 45px rgba(15,23,42,0.12)',
                     minWidth: 260,
                     zIndex: 60,
                     overflow: 'hidden',
@@ -634,17 +645,29 @@ export default function Header({ user }) {
 /* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const badgeText = badge > 99 ? '99+' : String(badge || '');
+  const handleMouseEnter = (event) => {
+    event.currentTarget.style.background = UI.btnSoftBg;
+    event.currentTarget.style.borderColor = UI.btnSoftHoverBg;
+    event.currentTarget.style.color = UI.link;
+  };
+  const handleMouseLeave = (event) => {
+    event.currentTarget.style.background = UI.baseBg;
+    event.currentTarget.style.borderColor = UI.menuBorder;
+    event.currentTarget.style.color = UI.icon;
+  };
   return (
     <button
       aria-label={ariaLabel}
       onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         position: 'relative',
         width: 36,
         height: 36,
         borderRadius: 10,
-        background: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(255,255,255,0.10)',
+        background: UI.baseBg,
+        border: `1px solid ${UI.menuBorder}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -668,7 +691,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
             fontWeight: 800,
             display: 'grid',
             placeItems: 'center',
-            border: '2px solid #1A1C20',
+            border: '2px solid var(--surface-1)',
             lineHeight: '18px',
           }}
         >
@@ -690,9 +713,19 @@ function MenuItem({ href, text, badge = 0 }) {
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
-        padding: '12px 14px',
-        color: 'var(--blue)',
+        padding: '12px 16px',
+        color: 'var(--text-strong)',
         textDecoration: 'none',
+        fontWeight: 600,
+        transition: 'background 0.2s ease, color 0.2s ease',
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.background = 'rgba(42,101,247,0.08)';
+        event.currentTarget.style.color = 'var(--accent)';
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.background = 'transparent';
+        event.currentTarget.style.color = 'var(--text-strong)';
       }}
     >
       <span>{text}</span>
@@ -722,8 +755,8 @@ function MenuItem({ href, text, badge = 0 }) {
 function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-      <div style={{ color: '#111827', fontWeight: 900, letterSpacing: 0.3, fontSize: 18 }}>
-        AuctionA<span style={{ color: '#EF4444' }}>f</span>to
+      <div style={{ color: 'var(--text-strong)', fontWeight: 900, letterSpacing: 0.3, fontSize: 18 }}>
+        AuctionA<span style={{ color: 'var(--accent)' }}>f</span>to
       </div>
     </div>
   );
@@ -734,12 +767,12 @@ function BellIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M5 17h14l-2-3v-4a5 5 0 10-10 0v4l-2 3Z"
-        stroke="#FFFFFF"
+        stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M9.5 20a2.5 2.5 0 005 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
