@@ -266,7 +266,7 @@ function KeyValueGrid({ entries }) {
         const isMultiline = typeof value === 'string' && value.includes('\n');
         return (
           <div key={`${key}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div className="muted" style={{ fontSize: 12 }}>{key}</div>
+            <div className="detail-label">{key}</div>
             {isMultiline
               ? <pre style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{value}</pre>
               : <div style={{ fontWeight: 600, wordBreak: 'break-word' }}>{value}</div>}
@@ -289,7 +289,7 @@ function KeyValueList({ entries, renderValue, valueClassName, valueStyle }) {
         const isMultiline = typeof content === 'string' && content.includes('\n');
         return (
           <div key={`${key}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-            <div className="muted" style={{ fontSize: 12 }}>{key}</div>
+            <div className="detail-label">{key}</div>
             {isMultiline ? (
               <pre
                 className={resolvedClassName}
