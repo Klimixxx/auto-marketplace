@@ -1,24 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { resolveApiUrl } from '../../lib/api';
+import { DEFAULT_DEPOSIT_PERCENT } from '../../lib/tradePricing';
 
 function formatNumber(value) {
   if (value === null || value === undefined || value === '') return '';
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value);
-  return new Intl.NumberFormat('ru-RU').format(num);
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(num);
+}
+
+function parsePercentInput(value) {
+  if (value === null || value === undefined) return '';
+  const cleaned = String(value).replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  if (!cleaned) return '';
+  const [integer = '', ...rest] = cleaned.split('.');
+  const fraction = rest.join('');
+  return fraction ? `${integer}.${fraction}` : integer;
+}
+
+function computeExample(depositPercent) {
+  const percent = Number.isFinite(depositPercent) ? depositPercent : DEFAULT_DEPOSIT_PERCENT;
+  const depositAmount = 100_000;
+  const serviceFee = Math.round((depositAmount * percent) / 100);
+  const final = depositAmount + serviceFee;
+  return { depositAmount, serviceFee, final };
 }
 
 export default function AdminTradePricingPage() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [items, setItems] = useState([]);
-  const [effective, setEffective] = useState([]);
-  const [drafts, setDrafts] = useState({});
-  const [savingId, setSavingId] = useState(null);
-  const [createDraft, setCreateDraft] = useState({ label: '', amount: '', maxAmount: '', sortOrder: '' });
-  const [creating, setCreating] = useState(false);
+  const [depositPercent, setDepositPercent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -45,34 +60,28 @@ export default function AdminTradePricingPage() {
     return localStorage.getItem('token');
   }, [me]);
 
-  async function loadPricing() {
+  async function loadSettings() {
     const token = tokenMemo;
     if (!token) return;
     try {
       setLoading(true);
       setError('');
+      setSavedMessage('');
       const res = await fetch(resolveApiUrl('/api/admin/trade-pricing'), {
         headers: { Authorization: 'Bearer ' + token },
       });
       if (res.status === 403) { alert('Нет доступа'); window.location.href = '/'; return; }
       if (!res.ok) throw new Error('status ' + res.status);
       const data = await res.json();
-      const rawItems = Array.isArray(data?.items) ? data.items : [];
-      setItems(rawItems);
-      setEffective(Array.isArray(data?.effective) ? data.effective : []);
-      const map = {};
-      rawItems.forEach((tier) => {
-        map[tier.id] = {
-          label: tier.label || '',
-          amount: tier.amount != null ? String(tier.amount) : '',
-          maxAmount: tier.maxAmount != null ? String(tier.maxAmount) : '',
-          sortOrder: tier.sortOrder != null ? String(tier.sortOrder) : '',
-        };
-      });
-      setDrafts(map);
+      const percent = Number(data?.settings?.depositPercent);
+      if (Number.isFinite(percent)) {
+        setDepositPercent(String(percent));
+      } else {
+        setDepositPercent(String(DEFAULT_DEPOSIT_PERCENT));
+      }
     } catch (err) {
-      console.error('Failed to load trade pricing tiers', err);
-      setError('Не удалось загрузить тарифы. Попробуйте позже.');
+      console.error('Failed to load trade pricing settings', err);
+      setError('Не удалось загрузить настройки. Попробуйте позже.');
     } finally {
       setLoading(false);
     }
@@ -80,274 +89,92 @@ export default function AdminTradePricingPage() {
 
   useEffect(() => {
     if (!me) return;
-    loadPricing();
+    loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
 
-  function updateDraft(id, field, value) {
-    setDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] || {}),
-        [field]: value,
-      },
-    }));
-  }
-
-  async function saveTier(id) {
-    const draft = drafts[id];
-    if (!draft) return;
+  async function saveSettings() {
     const token = tokenMemo;
     if (!token) return;
+    const percentValue = depositPercent === '' ? DEFAULT_DEPOSIT_PERCENT : Number(depositPercent);
+    if (!Number.isFinite(percentValue)) {
+      alert('Введите корректное значение процента.');
+      return;
+    }
     try {
-      setSavingId(id);
-      const payload = {
-        label: draft.label,
-        amount: draft.amount,
-        maxAmount: draft.maxAmount === '' ? null : draft.maxAmount,
-        sortOrder: draft.sortOrder === '' ? null : draft.sortOrder,
-      };
-      const res = await fetch(resolveApiUrl(`/api/admin/trade-pricing/${id}`), {
+      setSaving(true);
+      setSavedMessage('');
+      const res = await fetch(resolveApiUrl('/api/admin/trade-pricing'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: 'Bearer ' + token,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ depositPercent: percentValue }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `status ${res.status}`);
       }
-      await loadPricing();
+      const data = await res.json();
+      const savedPercent = Number(data?.settings?.depositPercent);
+      if (Number.isFinite(savedPercent)) {
+        setDepositPercent(String(savedPercent));
+      }
+      setSavedMessage('Настройки сохранены.');
     } catch (err) {
-      console.error('Failed to save trade tier', err);
-      alert('Не удалось сохранить тариф. Проверьте данные и попробуйте снова.');
+      console.error('Failed to save trade pricing settings', err);
+      alert('Не удалось сохранить процент. Попробуйте позже.');
     } finally {
-      setSavingId(null);
+      setSaving(false);
     }
   }
 
-  async function deleteTier(id) {
-    const token = tokenMemo;
-    if (!token) return;
-    if (!window.confirm('Удалить этот тариф?')) return;
-    try {
-      const res = await fetch(resolveApiUrl(`/api/admin/trade-pricing/${id}`), {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || `status ${res.status}`);
-      }
-      await loadPricing();
-    } catch (err) {
-      console.error('Failed to delete tier', err);
-      alert('Не удалось удалить тариф. Попробуйте позже.');
-    }
-  }
-
-  async function createTier() {
-    const token = tokenMemo;
-    if (!token) return;
-    const payload = {
-      label: createDraft.label,
-      amount: createDraft.amount,
-      maxAmount: createDraft.maxAmount === '' ? null : createDraft.maxAmount,
-      sortOrder: createDraft.sortOrder === '' ? null : createDraft.sortOrder,
-    };
-    try {
-      setCreating(true);
-      const res = await fetch(resolveApiUrl('/api/admin/trade-pricing'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + token,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || `status ${res.status}`);
-      }
-      setCreateDraft({ label: '', amount: '', maxAmount: '', sortOrder: '' });
-      await loadPricing();
-    } catch (err) {
-      console.error('Failed to create tier', err);
-      alert('Не удалось добавить тариф. Убедитесь в корректности данных.');
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  const previewTiers = useMemo(() => {
-    return effective.map((tier) => {
-      const isInfinite = tier.maxAmount == null;
-      return {
-        ...tier,
-        amountFormatted: formatNumber(tier.amount),
-        rangeLabel: isInfinite ? 'Без лимита' : `До ${formatNumber(tier.maxAmount)} ₽`,
-      };
-    });
-  }, [effective]);
+  const percentNumber = Number(depositPercent);
+  const example = computeExample(Number.isFinite(percentNumber) ? percentNumber : DEFAULT_DEPOSIT_PERCENT);
 
   return (
-    <AdminLayout me={me} title="Тарифы сопровождения торгов">
+    <AdminLayout me={me} title="Настройки сопровождения торгов">
       {loading && <div>Загрузка…</div>}
       {!loading && error && <div style={{ color: '#ef4444', marginBottom: 16 }}>{error}</div>}
 
       {!loading && !error && (
-        <div style={{ display: 'grid', gap: 24 }}>
-          <section>
-            <h2 style={{ marginTop: 0 }}>Действующие тарифы</h2>
-            {items.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)' }}>Тарифы не найдены. Добавьте новый тариф ниже.</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-                  <thead>
-                    <tr>
-                      <th style={th}>Название</th>
-                      <th style={th}>Предел (₽)</th>
-                      <th style={th}>Стоимость (₽)</th>
-                      <th style={th}>Порядок</th>
-                      <th style={th}>Действия</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((tier) => {
-                      const draft = drafts[tier.id] || { label: '', amount: '', maxAmount: '', sortOrder: '' };
-                      const isSaving = savingId === tier.id;
-                      return (
-                        <tr key={tier.id}>
-                          <td style={td}>
-                            <input
-                              value={draft.label}
-                              onChange={(e) => updateDraft(tier.id, 'label', e.target.value)}
-                              style={inputStyle}
-                            />
-                          </td>
-                          <td style={td}>
-                            <input
-                              value={draft.maxAmount}
-                              onChange={(e) => updateDraft(tier.id, 'maxAmount', e.target.value)}
-                              placeholder="∞"
-                              style={inputStyle}
-                            />
-                          </td>
-                          <td style={td}>
-                            <input
-                              value={draft.amount}
-                              onChange={(e) => updateDraft(tier.id, 'amount', e.target.value)}
-                              style={inputStyle}
-                            />
-                          </td>
-                          <td style={td}>
-                            <input
-                              value={draft.sortOrder}
-                              onChange={(e) => updateDraft(tier.id, 'sortOrder', e.target.value)}
-                              style={inputStyle}
-                            />
-                          </td>
-                          <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                            <button onClick={() => saveTier(tier.id)} disabled={isSaving} className="button button-small">
-                              {isSaving ? 'Сохраняем…' : 'Сохранить'}
-                            </button>
-                            <button
-                              onClick={() => deleteTier(tier.id)}
-                              className="button button-small button-outline"
-                              style={{ marginLeft: 8 }}
-                              disabled={isSaving}
-                            >
-                              Удалить
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+        <div style={{ display: 'grid', gap: 24, maxWidth: 640 }}>
 
-          <section>
-            <h2 style={{ marginTop: 0 }}>Добавить тариф</h2>
-            <div style={{ display: 'grid', gap: 12, maxWidth: 600 }}>
-              <label style={labelStyle}>
-                Название тарифа
-                <input
-                  value={createDraft.label}
-                  onChange={(e) => setCreateDraft((prev) => ({ ...prev, label: e.target.value }))}
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Максимальная стоимость лота (₽, оставьте пустым для «без лимита»)
-                <input
-                  value={createDraft.maxAmount}
-                  onChange={(e) => setCreateDraft((prev) => ({ ...prev, maxAmount: e.target.value }))}
-                  style={inputStyle}
-                  placeholder="∞"
-                />
-              </label>
-              <label style={labelStyle}>
-                Стоимость услуги (₽)
-                <input
-                  value={createDraft.amount}
-                  onChange={(e) => setCreateDraft((prev) => ({ ...prev, amount: e.target.value }))}
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Порядок сортировки (опционально)
-                <input
-                  value={createDraft.sortOrder}
-                  onChange={(e) => setCreateDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
-                  style={inputStyle}
-                />
-              </label>
-              <div>
-                <button onClick={createTier} className="button" disabled={creating}>
-                  {creating ? 'Добавляем…' : 'Добавить тариф'}
-                </button>
-              </div>
+          <h2 style={{ marginTop: 0 }}>Процент к задатку</h2>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Клиент оплачивает задаток лота и нашу комиссию, рассчитанную как фиксированный процент от суммы задатка.
+            </p>
+            <label style={labelStyle}>
+              Процент к задатку, %
+              <input
+                value={depositPercent}
+                onChange={(e) => setDepositPercent(parsePercentInput(e.target.value))}
+                style={inputStyle}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button onClick={saveSettings} className="button" disabled={saving}>
+                {saving ? 'Сохраняем…' : 'Сохранить'}
+              </button>
+              {savedMessage && <span style={{ color: '#10b981' }}>{savedMessage}</span>}
             </div>
           </section>
 
           <section>
-            <h2 style={{ marginTop: 0 }}>Как видит пользователь</h2>
-            {previewTiers.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)' }}>Будут использованы тарифы по умолчанию.</div>
-            ) : (
-              <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text-muted)' }}>
-                {previewTiers.map((tier) => (
-                  <li key={`${tier.id || tier.label}`}>
-                    <strong>{tier.label}</strong>: {tier.rangeLabel}, стоимость {tier.amountFormatted} ₽
-                  </li>
-                ))}
-              </ul>
-            )}
+            <h2 style={{ marginTop: 0 }}>Пример расчёта</h2>
+            <p style={{ margin: '0 0 8px' }}>
+              При задатке {formatNumber(example.depositAmount)} ₽ комиссия составит {formatNumber(example.serviceFee)} ₽.
+            </p>
+            <p style={{ margin: 0 }}>
+              Клиенту к оплате: {formatNumber(example.final)} ₽ (задаток + комиссия).
+            </p>
           </section>
         </div>
       )}
     </AdminLayout>
   );
 }
-
-const th = {
-  textAlign: 'left',
-  borderBottom: '1px solid var(--line)',
-  padding: '8px',
-  fontWeight: 600,
-  background: 'var(--surface-2)',
-};
-
-const td = {
-  borderBottom: '1px solid var(--line)',
-  padding: '8px',
-  verticalAlign: 'top',
-};
 
 const inputStyle = {
   width: '100%',
