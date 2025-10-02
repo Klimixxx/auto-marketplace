@@ -3,23 +3,56 @@ import { pool, query } from '../db.js';
 
 import {
   PRO_DISCOUNT_PERCENT,
-  loadTradePriceTiers,
-  prepareTierForComputation,
+  loadTradePricingSettings,
+  normalizeDepositPercent,
 } from '../services/tradePricing.js';
 
 const router = express.Router();
 
 const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
 
-const PRICE_DETAIL_KEYS = [
+const LOT_PRICE_FIELDS = [
+  'current_price',
+  'start_price',
+  'min_price',
+  'max_price',
+  'price',
+  'amount',
+  'lot_price',
+  'lotPrice',
+];
+
+const LOT_PRICE_DETAIL_KEYS = [
   'current_price', 'currentPrice', 'current_price_number',
   'start_price', 'startPrice', 'starting_price', 'startingPrice',
   'min_price', 'minPrice', 'minimal_price', 'minimalPrice',
   'max_price', 'maxPrice', 'maximum_price', 'maximumPrice',
   'price', 'amount', 'value', 'sum', 'lot_price', 'lotPrice',
   'assessment_price', 'appraised_price', 'appraised_value',
-  'deposit', 'deposit_amount', 'depositAmount', 'guarantee_deposit', 'guaranteeDeposit',
 ];
+
+const DEPOSIT_FIELDS = [
+  'deposit',
+  'deposit_amount',
+  'depositAmount',
+  'guarantee_deposit',
+  'guaranteeDeposit',
+  'guarantee_deposit_amount',
+  'guaranteeDepositAmount',
+];
+
+const DEPOSIT_DETAIL_KEYS = [
+  'deposit',
+  'deposit_amount',
+  'depositAmount',
+  'guarantee_deposit',
+  'guaranteeDeposit',
+  'guarantee_deposit_amount',
+  'guaranteeDepositAmount',
+];
+
+const LOT_PRICE_DETAIL_KEYS_SET = new Set(LOT_PRICE_DETAIL_KEYS);
+const DEPOSIT_DETAIL_KEYS_SET = new Set(DEPOSIT_DETAIL_KEYS);
 
 const MAX_LISTING_ID_LENGTH = 160;
 
@@ -85,7 +118,7 @@ function findNumeric(values) {
   return null;
 }
 
-function collectDetailCandidates(details) {
+function collectDetailCandidates(details, allowedKeys) {
   if (!details || typeof details !== 'object') return [];
   const stack = [details];
   const candidates = [];
@@ -102,7 +135,7 @@ function collectDetailCandidates(details) {
       if (value && typeof value === 'object') {
         stack.push(value);
       }
-      if (PRICE_DETAIL_KEYS.includes(key)) {
+      if (!allowedKeys || allowedKeys.has(key)) {
         candidates.push(value);
       }
     }
@@ -114,67 +147,82 @@ function resolveLotPrice(listing) {
   if (!listing) return null;
 
   const candidates = [];
-  const fields = [
-    'current_price',
-    'start_price',
-    'min_price',
-    'max_price',
-    'price',
-    'amount',
-    'lot_price',
-    'lotPrice',
-  ];
-
-  for (const field of fields) {
+  for (const field of LOT_PRICE_FIELDS) {
     if (listing[field] !== undefined) candidates.push(listing[field]);
   }
 
-  const detailCandidates = collectDetailCandidates(listing.details);
+  const detailCandidates = collectDetailCandidates(listing.details, LOT_PRICE_DETAIL_KEYS_SET);
   candidates.push(...detailCandidates);
 
   return findNumeric(candidates);
 }
 
-function normalizeTiersForComputation(tiers) {
-  if (!Array.isArray(tiers) || !tiers.length) return [];
-  return tiers
-    .map((tier) => prepareTierForComputation(tier))
-    .filter((tier) => tier && Number.isFinite(tier.amount) && tier.amount >= 0);
-}
+function resolveDeposit(listing) {
+  if (!listing || typeof listing !== 'object') return null;
 
-function computePricing(listing, subscriptionStatus, tiers) {
-  const preparedTiers = normalizeTiersForComputation(tiers);
-  const fallbackTier = preparedTiers.length
-    ? preparedTiers[preparedTiers.length - 1]
-    : { label: 'Тариф', amount: 0, max: Number.POSITIVE_INFINITY };
+  const candidates = [];
 
-  const lotPrice = resolveLotPrice(listing);
-  let tier = fallbackTier;
-
-  if (lotPrice != null && Number.isFinite(lotPrice) && preparedTiers.length) {
-    for (const candidate of preparedTiers) {
-      if (lotPrice <= candidate.max) {
-        tier = candidate;
-        break;
-      }
+  for (const field of DEPOSIT_FIELDS) {
+    if (listing[field] !== undefined) {
+      candidates.push(listing[field]);
     }
-  } else if (preparedTiers.length > 1) {
-    tier = preparedTiers[1] || preparedTiers[0];
-  } else if (preparedTiers.length === 1) {
-    tier = preparedTiers[0];
   }
 
-  const basePrice = tier.amount;
+  const details = listing.details;
+  if (details && typeof details === 'object') {
+    candidates.push(...collectDetailCandidates(details, DEPOSIT_DETAIL_KEYS_SET));
+  }
+
+  return findNumeric(candidates);
+}
+
+function formatPercentLabel(percent) {
+  if (!Number.isFinite(percent)) return '0%';
+  const normalized = Math.round(percent * 100) / 100;
+  if (Number.isInteger(normalized)) {
+    return `${normalized}%`;
+  }
+  return `${normalized}`.replace(/\.0+$/, '') + '%';
+}
+
+function computePricing(listing, subscriptionStatus, settings) {
+  const lotPrice = resolveLotPrice(listing);
+  const depositRaw = resolveDeposit(listing);
+  const depositAmount = depositRaw != null && Number.isFinite(depositRaw) && depositRaw > 0
+    ? Math.round(depositRaw)
+    : 0;
+
+  const configuredPercent = normalizeDepositPercent(settings?.depositPercent);
+  const depositPercent = Number.isFinite(configuredPercent) ? configuredPercent : 0;
+
+  const serviceFeeBeforeDiscount = Math.round((depositAmount * depositPercent) / 100);
+
   const normalizedSubscription = String(subscriptionStatus || 'free').trim().toLowerCase();
   const discountPercent = normalizedSubscription === 'pro' ? PRO_DISCOUNT_PERCENT : 0;
-  const finalAmount = Math.max(0, Math.round((basePrice * (100 - discountPercent)) / 100));
+  const serviceFeeAfterDiscount = Math.max(
+    0,
+    Math.round((serviceFeeBeforeDiscount * (100 - discountPercent)) / 100)
+  );
+
+  const basePrice = depositAmount + serviceFeeBeforeDiscount;
+  const finalAmount = depositAmount + serviceFeeAfterDiscount;
+
+  const lotPriceEstimate = lotPrice != null && Number.isFinite(lotPrice)
+    ? Math.round(lotPrice)
+    : null;
+
+  const percentLabel = formatPercentLabel(depositPercent);
 
   return {
     basePrice,
+    depositAmount,
+    depositPercent,
+    serviceFeeBeforeDiscount,
+    serviceFeeAfterDiscount,
     discountPercent,
     finalAmount,
-    tierLabel: tier.label,
-    lotPriceEstimate: lotPrice != null && Number.isFinite(lotPrice) ? Math.round(lotPrice) : null,
+    tierLabel: `Задаток + ${percentLabel}`,
+    lotPriceEstimate,
   };
 }
 
@@ -242,8 +290,8 @@ router.post('/', async (req, res) => {
         .json({ error: 'BALANCE_FROZEN', message: 'Баланс пользователя заморожен' });
     }
 
-    const tiers = await loadTradePriceTiers(client);
-    const pricing = computePricing(listing, user.subscription_status, tiers);
+    const pricingSettings = await loadTradePricingSettings(client);
+    const pricing = computePricing(listing, user.subscription_status, pricingSettings);
 
     const currentBalanceRaw = user.balance;
     const currentBalance = parseMoneyLike(currentBalanceRaw);
