@@ -1,13 +1,7 @@
 import { query } from '../db.js';
 
 export const PRO_DISCOUNT_PERCENT = 30;
-
-export const DEFAULT_TRADE_PRICE_TIERS = [
-  { id: null, label: 'Лот до 500 000 ₽', maxAmount: 500_000, amount: 15_000, sortOrder: 10 },
-  { id: null, label: 'Лот до 1 500 000 ₽', maxAmount: 1_500_000, amount: 25_000, sortOrder: 20 },
-  { id: null, label: 'Лот до 3 000 000 ₽', maxAmount: 3_000_000, amount: 35_000, sortOrder: 30 },
-  { id: null, label: 'Лот свыше 3 000 000 ₽', maxAmount: null, amount: 50_000, sortOrder: 40 },
-];
+export const DEFAULT_DEPOSIT_PERCENT = 10;
 
 function parseNumeric(value) {
   if (value === null || value === undefined) return null;
@@ -26,94 +20,44 @@ function parseNumeric(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeSortOrder(value, fallback = 0) {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
-  const parsed = Number(String(value).trim());
-  return Number.isFinite(parsed) ? parsed : fallback;
+export function normalizeDepositPercent(value, fallback = DEFAULT_DEPOSIT_PERCENT) {
+  const numeric = parseNumeric(value);
+  if (numeric == null || !Number.isFinite(numeric)) return fallback;
+  const bounded = Math.min(100, Math.max(0, numeric));
+  return Math.round(bounded * 100) / 100;
 }
 
-function normalizeTier(row, fallbackSort = 0) {
-  if (!row) return null;
-  const label = String(row.label || '').trim();
-  if (!label) return null;
-  const amount = parseNumeric(row.amount);
-  if (amount == null || !Number.isFinite(amount) || amount < 0) return null;
-  const maxAmountRaw = parseNumeric(row.max_amount);
-  const sortOrder = normalizeSortOrder(row.sort_order, fallbackSort);
-
-  return {
-    id: row.id ?? null,
-    label,
-    amount: Math.round(amount),
-    maxAmount: maxAmountRaw != null && Number.isFinite(maxAmountRaw) && maxAmountRaw > 0
-      ? Math.round(maxAmountRaw)
-      : null,
-    sortOrder,
-  };
-}
-
-function dedupeAndSortTiers(list) {
-  const map = new Map();
-  for (const item of list) {
-    if (!item) continue;
-    const key = `${item.sortOrder}|${item.maxAmount ?? 'inf'}|${item.label}`;
-    if (!map.has(key)) map.set(key, item);
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-    if (a.maxAmount == null && b.maxAmount == null) return 0;
-    if (a.maxAmount == null) return 1;
-    if (b.maxAmount == null) return -1;
-    if (a.maxAmount !== b.maxAmount) return a.maxAmount - b.maxAmount;
-    return a.amount - b.amount;
-  });
-}
-
-function ensureFallbackTier(tiers) {
-  const hasInfinity = tiers.some((tier) => tier.maxAmount == null);
-  if (hasInfinity) return tiers;
-  const fallback = DEFAULT_TRADE_PRICE_TIERS.find((tier) => tier.maxAmount == null);
-  if (!fallback) return tiers;
-  const maxSort = tiers.reduce((acc, tier) => Math.max(acc, tier.sortOrder ?? 0), 0);
-  return [...tiers, { ...fallback, sortOrder: maxSort + 10 }];
-}
-
-export async function loadTradePriceTiers(client) {
+export async function loadTradePricingSettings(client) {
   try {
+    const sql = 'SELECT deposit_percent FROM trade_pricing_settings WHERE settings_key = $1 LIMIT 1';
+    const params = ['default'];
     const result = client
-      ? await client.query('SELECT * FROM trade_pricing_tiers ORDER BY sort_order ASC, max_amount ASC NULLS LAST, id ASC')
-      : await query('SELECT * FROM trade_pricing_tiers ORDER BY sort_order ASC, max_amount ASC NULLS LAST, id ASC');
-    const rows = Array.isArray(result?.rows) ? result.rows : [];
-    const normalized = rows.map((row, index) => normalizeTier(row, (index + 1) * 10)).filter(Boolean);
-    if (!normalized.length) {
-      return dedupeAndSortTiers(DEFAULT_TRADE_PRICE_TIERS.map((tier) => ({ ...tier })));
-    }
-    const tiersWithFallback = ensureFallbackTier(normalized);
-    return dedupeAndSortTiers(tiersWithFallback);
+      const result = client
+      ? await client.query(sql, params)
+      : await query(sql, params);
+
+    const depositPercent = normalizeDepositPercent(result?.rows?.[0]?.deposit_percent);
+    return { depositPercent };
   } catch (error) {
-    console.error('loadTradePriceTiers error:', error);
-    return dedupeAndSortTiers(DEFAULT_TRADE_PRICE_TIERS.map((tier) => ({ ...tier })));
+    console.error('loadTradePricingSettings error:', error);
+    return { depositPercent: DEFAULT_DEPOSIT_PERCENT };
   }
 }
 
-export function tierToPublicShape(tier) {
-  if (!tier) return null;
-  return {
-    id: tier.id,
-    label: tier.label,
-    amount: tier.amount,
-    maxAmount: tier.maxAmount,
-    sortOrder: tier.sortOrder,
-  };
-}
+export async function saveTradePricingSettings(depositPercent, client) {
+  const normalized = normalizeDepositPercent(depositPercent);
+  const sql = `
+    INSERT INTO trade_pricing_settings (settings_key, deposit_percent, created_at, updated_at)
+    VALUES ('default', $1, now(), now())
+    ON CONFLICT (settings_key)
+    DO UPDATE SET deposit_percent = EXCLUDED.deposit_percent, updated_at = now()
+    RETURNING deposit_percent
+  `;
 
-export function prepareTierForComputation(tier) {
-  if (!tier) return null;
-  return {
-    id: tier.id,
-    label: tier.label,
-    amount: tier.amount,
-    max: tier.maxAmount == null ? Number.POSITIVE_INFINITY : tier.maxAmount,
-  };
+  const result = client
+    ? await client.query(sql, [normalized])
+    : await query(sql, [normalized]);
+
+  const savedPercent = normalizeDepositPercent(result?.rows?.[0]?.deposit_percent, normalized);
+  return { depositPercent: savedPercent };
 }
