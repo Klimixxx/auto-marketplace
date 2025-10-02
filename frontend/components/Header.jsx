@@ -430,7 +430,7 @@ export default function Header({ user }) {
             alignItems: 'center',
             gap: 12,
             padding: '0 12px',
-            color: UI.topText,
+            color: 'var(--accent)',
           }}
         >
           <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
@@ -449,8 +449,8 @@ export default function Header({ user }) {
                 style={{
                   padding: '6px 12px',
                   borderRadius: 12,
-                  background: UI.pillBg,
-                  border: `1px solid ${UI.chipBorder}`,
+                  background: '#1e293b',   // тёмно-серый фон (не сольётся с чёрным)
+                  border: '1px solid var(--accent)', // синяя рамка
                   color: '#ffffff',
                   fontWeight: 600,
                   lineHeight: 1.2,
@@ -473,8 +473,8 @@ export default function Header({ user }) {
                   alignItems: 'center',
                   gap: 8,
                   padding: '6px 12px',
-                  background: UI.baseBg,
-                  border: `1px solid ${UI.menuBorder}`,
+                  background: '#1e293b',
+                  border: '1px solid var(--accent)',
                   borderRadius: 12,
                   cursor: 'pointer',
                   color: UI.topText,
@@ -515,8 +515,8 @@ export default function Header({ user }) {
                     position: 'absolute',
                     right: 0,
                     top: 'calc(100% + 8px)',
-                    background: UI.menuBg,
-                    border: `1px solid ${UI.menuBorder}`,
+                    background: '#1e293b',
+                    border: '1px solid var(--accent)',
                     borderRadius: 12,
                     boxShadow: '0 20px 45px rgba(15,23,42,0.12)',
                     minWidth: 260,
