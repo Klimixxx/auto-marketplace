@@ -650,11 +650,12 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
     event.currentTarget.style.borderColor = UI.btnSoftHoverBg;
     event.currentTarget.style.color = UI.link;
   };
-  const handleMouseLeave = (event) => {
-    event.currentTarget.style.background = UI.baseBg;
-    event.currentTarget.style.borderColor = UI.menuBorder;
-    event.currentTarget.style.color = UI.icon;
-  };
+const handleMouseLeave = (event) => {
+  event.currentTarget.style.background = '#1e293b';
+  event.currentTarget.style.borderColor = '#ffffff';
+  event.currentTarget.style.color = UI.icon;
+};
+
   return (
     <button
       aria-label={ariaLabel}
