@@ -1,3 +1,4 @@
+// pages/admin/trade-pricing.js
 import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { resolveApiUrl } from '../../lib/api';
@@ -140,8 +141,8 @@ export default function AdminTradePricingPage() {
 
       {!loading && !error && (
         <div style={{ display: 'grid', gap: 24, maxWidth: 640 }}>
-
-          <h2 style={{ marginTop: 0 }}>Процент к задатку</h2>
+          <section>
+            <h2 style={{ marginTop: 0 }}>Процент к задатку</h2>
             <p style={{ color: 'var(--text-muted)' }}>
               Клиент оплачивает задаток лота и нашу комиссию, рассчитанную как фиксированный процент от суммы задатка.
             </p>
