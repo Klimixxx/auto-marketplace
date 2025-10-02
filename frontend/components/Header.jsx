@@ -380,7 +380,7 @@ export default function Header({ user }) {
         href={href}
         className="nav-link"
         style={{
-          color: '#ffffff',
+          color: 'var(--accent)',
           textDecoration: 'none',
           display: 'inline-flex',
           alignItems: 'center',
