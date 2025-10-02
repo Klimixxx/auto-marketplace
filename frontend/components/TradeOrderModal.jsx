@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { computeTradeOrderPrice } from '../lib/tradePricing';
+import { computeTradeOrderPrice, DEFAULT_DEPOSIT_PERCENT } from '../lib/tradePricing';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 const TRADE_ORDER_ENDPOINT = API_BASE ? `${API_BASE}/api/trade-orders` : '/api/trade-orders';
@@ -53,7 +53,11 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
-  const [pricingConfig, setPricingConfig] = useState({ tiers: null, proDiscountPercent: 30, loaded: false });
+  const [pricingConfig, setPricingConfig] = useState({
+    depositPercent: DEFAULT_DEPOSIT_PERCENT,
+    proDiscountPercent: 30,
+    loaded: false,
+  });
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -98,10 +102,13 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
         if (!res.ok) throw new Error('status ' + res.status);
         const data = await res.json();
         if (ignore) return;
-        const rawPercent = Number(data?.proDiscountPercent);
+        const rawDiscountPercent = Number(data?.proDiscountPercent);
+        const rawDepositPercent = Number(data?.depositPercent);
         setPricingConfig({
-          tiers: Array.isArray(data?.tiers) && data.tiers.length ? data.tiers : null,
-          proDiscountPercent: Number.isFinite(rawPercent) ? rawPercent : 30,
+          depositPercent: Number.isFinite(rawDepositPercent)
+            ? rawDepositPercent
+            : DEFAULT_DEPOSIT_PERCENT,
+          proDiscountPercent: Number.isFinite(rawDiscountPercent) ? rawDiscountPercent : 30,
           loaded: true,
         });
       } catch (error) {
@@ -118,15 +125,15 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
     };
   }, [isOpen]);
 
-  const { tiers: pricingTiers, proDiscountPercent } = pricingConfig;
+  const { depositPercent, proDiscountPercent } = pricingConfig;
 
   const pricing = useMemo(() => {
     return computeTradeOrderPrice(listing || {}, {
       subscriptionStatus: subscriptionStatus || 'free',
       proDiscountPercent: proDiscountPercent ?? 30,
-      tiers: pricingTiers ?? undefined,
+      depositPercent: depositPercent ?? DEFAULT_DEPOSIT_PERCENT,
     });
-  }, [listing, subscriptionStatus, proDiscountPercent, pricingTiers]);
+  }, [listing, subscriptionStatus, proDiscountPercent, depositPercent]);
 
   if (!isOpen) return null;
 
@@ -184,10 +191,14 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
   }
 
   const tierLabel = pricing?.tierLabel;
-  const baseAmount = pricing?.baseAmount;
   const finalAmount = pricing?.finalAmount;
   const discountPercent = pricing?.discountPercent ?? 0;
   const estimatedPrice = pricing?.lotPrice;
+  const depositAmount = pricing?.depositAmount ?? 0;
+  const serviceFeeBeforeDiscount = pricing?.serviceFeeBeforeDiscount ?? 0;
+  const serviceFeeAfterDiscount = pricing?.serviceFeeAfterDiscount ?? 0;
+  const depositPercentValue = pricing?.depositPercent ?? DEFAULT_DEPOSIT_PERCENT;
+  const hasDeposit = depositAmount > 0;
 
   return (
     <div style={S.backdrop}>
@@ -204,19 +215,32 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
           </p>
           {tierLabel ? (
             <p style={{ margin: '0 0 4px' }}>
-              <strong>Тариф:</strong> {tierLabel}
+              <strong>Условия оплаты:</strong> {tierLabel}
               {estimatedPrice ? ` (оценочная стоимость лота ${fmtCurrency(estimatedPrice)})` : ''}
             </p>
           ) : null}
-          {baseAmount != null ? (
-            <p style={{ margin: 0 }}>
-              <strong>Стоимость услуги:</strong> {fmtCurrency(baseAmount)}
-              {discountPercent ? ` (для вас ${fmtCurrency(finalAmount)} с учётом скидки ${discountPercent}% PRO)` : ''}
-              {!discountPercent ? ` (итог к списанию ${fmtCurrency(finalAmount)})` : ''}
+          {hasDeposit ? (
+            <>
+              <p style={{ margin: '0 0 4px' }}>
+                <strong>Задаток:</strong> {fmtCurrency(depositAmount)}
+              </p>
+              <p style={{ margin: '0 0 4px' }}>
+                <strong>Комиссия сервиса ({depositPercentValue}%):</strong> {fmtCurrency(serviceFeeBeforeDiscount)}
+                {discountPercent
+                  ? ` (для вас ${fmtCurrency(serviceFeeAfterDiscount)} с учётом скидки ${discountPercent}% PRO)`
+                  : ''}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Итог к списанию:</strong> {fmtCurrency(finalAmount)}
+              </p>
+            </>
+          ) : (
+            <p style={{ margin: '0 0 4px', color: '#f59f00' }}>
+              Не удалось определить сумму задатка для этого лота. Итоговая стоимость может отличаться.
             </p>
-          ) : null}
+          )}
           <div style={{ color: '#A0A6B0', marginTop: 6 }}>
-            Подписка <b>PRO</b> даёт скидку {(proDiscountPercent ?? 30)}% на сопровождение торгов.
+            Подписка <b>PRO</b> даёт скидку {(proDiscountPercent ?? 30)}% на нашу комиссию сопровождения торгов.
           </div>
         </div>
 
