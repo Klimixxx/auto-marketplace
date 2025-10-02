@@ -450,7 +450,7 @@ export default function Header({ user }) {
                   padding: '6px 12px',
                   borderRadius: 12,
                   background: '#1e293b',   // тёмно-серый фон (не сольётся с чёрным)
-                  border: '1px solid var(--accent)', // синяя рамка
+                  border: '1px solid #ffffff',
                   color: '#ffffff',
                   fontWeight: 600,
                   lineHeight: 1.2,
@@ -474,7 +474,7 @@ export default function Header({ user }) {
                   gap: 8,
                   padding: '6px 12px',
                   background: '#1e293b',
-                  border: '1px solid var(--accent)',
+                  border: '1px solid #ffffff',
                   borderRadius: 12,
                   cursor: 'pointer',
                   color: UI.topText,
@@ -666,8 +666,8 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
         width: 36,
         height: 36,
         borderRadius: 10,
-        background: UI.baseBg,
-        border: `1px solid ${UI.menuBorder}`,
+        background: '#1e293b',
+        border: '1px solid #ffffff',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
