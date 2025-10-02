@@ -781,13 +781,13 @@ listing-card__more-button {
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
-  color: var(--accent) !important;
+  color: #ffffff !important;
   font-weight: 600;
 }
 
 .header-solid .nav-link:hover,
 .header-solid .nav-link.gradtext:hover {
-  color: var(--accent-hover) !important;
+  color: rgba(255,255,255,0.85) !important;
 }
 
 
