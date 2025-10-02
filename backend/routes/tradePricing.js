@@ -1,13 +1,13 @@
 import express from 'express';
-import { loadTradePriceTiers, tierToPublicShape, PRO_DISCOUNT_PERCENT } from '../services/tradePricing.js';
+import { PRO_DISCOUNT_PERCENT, loadTradePricingSettings } from '../services/tradePricing.js';
 
 const router = express.Router();
 
 router.get('/', async (_req, res) => {
   try {
-    const tiers = await loadTradePriceTiers();
+    const settings = await loadTradePricingSettings();
     res.json({
-      tiers: tiers.map(tierToPublicShape).filter(Boolean),
+      depositPercent: settings.depositPercent,
       proDiscountPercent: PRO_DISCOUNT_PERCENT,
     });
   } catch (error) {
