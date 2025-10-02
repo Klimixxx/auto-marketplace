@@ -770,7 +770,7 @@ listing-card__more-button {
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
   -webkit-background-clip:text;
   background-clip:text;
-  color:transparent;
+  color: transparent !important;
 }
 
 
