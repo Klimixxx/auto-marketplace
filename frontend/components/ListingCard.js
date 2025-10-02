@@ -953,9 +953,10 @@ export default function ListingCard({ l, onFav, fav, detailHref, sourceHref, fav
             overflow: 'hidden',
             background: '#e6eef8',
             position: 'relative',
-            minHeight: 160,
-            paddingTop: '75%',
-            aspectRatio: '4 / 3',
+            width: '100%',
+            height: 200,
+            minHeight: 200,
+            flexShrink: 0,
           }}
           onMouseMove={handlePhotoMouseMove}
           onMouseLeave={handlePhotoMouseLeave}
