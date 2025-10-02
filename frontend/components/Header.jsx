@@ -7,7 +7,7 @@ const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  topBg: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.92) 100%)',
+  topBg: '#000000',
   topText: 'var(--text-strong)',
   topMuted: 'var(--text-muted)',
   border: 'rgba(15,23,42,0.06)',
@@ -380,7 +380,7 @@ export default function Header({ user }) {
         href={href}
         className="nav-link gradtext"
         style={{
-          color: UI.topText,
+          color: 'var(--accent)',
           textDecoration: 'none',
           display: 'inline-flex',
           alignItems: 'center',
@@ -451,7 +451,7 @@ export default function Header({ user }) {
                   borderRadius: 12,
                   background: UI.pillBg,
                   border: `1px solid ${UI.chipBorder}`,
-                  color: UI.topText,
+                  color: #ffffff,
                   fontWeight: 600,
                   lineHeight: 1.2,
                 }}
@@ -756,7 +756,7 @@ function Logo({ onClick }) {
   return (
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
       <div style={{ color: 'var(--text-strong)', fontWeight: 900, letterSpacing: 0.3, fontSize: 18 }}>
-        AuctionA<span style={{ color: 'var(--accent)' }}>f</span>to
+        AuctionA<span style={{ color: '#ef4444' }}>f</span>to
       </div>
     </div>
   );
