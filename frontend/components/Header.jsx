@@ -378,7 +378,7 @@ export default function Header({ user }) {
     return (
       <a
         href={href}
-        className="nav-link gradtext"
+        className="nav-link"
         style={{
           color: '#ffffff',
           textDecoration: 'none',
