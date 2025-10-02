@@ -380,7 +380,7 @@ export default function Header({ user }) {
         href={href}
         className="nav-link"
         style={{
-          color: 'var(--accent)',
+          color: '#ffffff',
           textDecoration: 'none',
           display: 'inline-flex',
           alignItems: 'center',
@@ -430,7 +430,7 @@ export default function Header({ user }) {
             alignItems: 'center',
             gap: 12,
             padding: '0 12px',
-            color: 'var(--accent)',
+            color: '#ffffff',
           }}
         >
           <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
