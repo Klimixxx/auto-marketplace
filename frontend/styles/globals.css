@@ -781,7 +781,7 @@ listing-card__more-button {
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
-  color: var(--text-strong) !important;
+  color: #ffffff !important;
   font-weight: 600;
 }
 
