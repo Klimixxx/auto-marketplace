@@ -380,7 +380,7 @@ export default function Header({ user }) {
         href={href}
         className="nav-link gradtext"
         style={{
-          color: 'var(--accent)',
+          color: '#ffffff',
           textDecoration: 'none',
           display: 'inline-flex',
           alignItems: 'center',
