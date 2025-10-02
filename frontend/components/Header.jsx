@@ -451,7 +451,7 @@ export default function Header({ user }) {
                   borderRadius: 12,
                   background: UI.pillBg,
                   border: `1px solid ${UI.chipBorder}`,
-                  color: #ffffff,
+                  color: '#ffffff',
                   fontWeight: 600,
                   lineHeight: 1.2,
                 }}
