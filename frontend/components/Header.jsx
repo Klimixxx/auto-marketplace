@@ -631,7 +631,7 @@ export default function Header({ user }) {
                   onMouseEnter={(e) => (e.currentTarget.style.background = UI.btnHover)}
                   onMouseLeave={(e) => (e.currentTarget.style.background = UI.btnBg)}
                 >
-                  Найти
+                  Поиск
                 </button>
               </div>
             </form>
