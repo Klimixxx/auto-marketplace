@@ -781,19 +781,20 @@ listing-card__more-button {
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
-  color: #ffffff !important;
+  color: var(--text-strong) !important;
   font-weight: 600;
 }
 
 .header-solid .nav-link:hover,
 .header-solid .nav-link.gradtext:hover {
-  color: rgba(255,255,255,0.85) !important;
+  color: var(--accent-hover) !important;
 }
 
 
 
 .nav-link:hover {
-  text-shadow: 0 0 12px rgba(103,232,249,0.35);
+  color: var(--accent-hover);
+  text-shadow: none;
 }
 /* ===== Base UI Layer for Better Contrast on White ===== */
 body { color: var(--text); background: var(--page-bg); }
