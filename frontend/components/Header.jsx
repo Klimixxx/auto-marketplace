@@ -7,10 +7,10 @@ const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  topBg: '#000000',
+  topBg: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(244,247,255,0.9) 100%)',
   topText: 'var(--text-strong)',
   topMuted: 'var(--text-muted)',
-  border: 'rgba(15,23,42,0.06)',
+  border: 'rgba(15,23,42,0.08)',
   baseBg: 'var(--surface-1)',
 
   inputBg: '#ffffff',
@@ -32,7 +32,7 @@ const UI = {
   iconMuted: 'rgba(15,23,42,0.45)',
 
   menuBg: 'var(--surface-1)',
-  menuBorder: 'rgba(15,23,42,0.12)',
+  menuBorder: 'rgba(15,23,42,0.08)',
 
   heroBtn: 'var(--accent)',
   heroBtnHover: 'var(--accent-hover)',
@@ -380,13 +380,25 @@ export default function Header({ user }) {
         href={href}
         className="nav-link"
         style={{
-          color: '#ffffff',
+          color: UI.topText,
           textDecoration: 'none',
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
           fontWeight: 600,
-          transition: 'color 0.2s ease',
+          padding: '8px 12px',
+          borderRadius: 999,
+          transition: 'color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease',
+        }}
+        onMouseEnter={(event) => {
+          event.currentTarget.style.background = 'rgba(42,101,247,0.12)';
+          event.currentTarget.style.boxShadow = '0 8px 18px rgba(42,101,247,0.18)';
+          event.currentTarget.style.color = 'var(--accent)';
+        }}
+        onMouseLeave={(event) => {
+          event.currentTarget.style.background = 'transparent';
+          event.currentTarget.style.boxShadow = 'none';
+          event.currentTarget.style.color = UI.topText;
         }}
       >
         <span>{label}</span>
@@ -419,18 +431,25 @@ export default function Header({ user }) {
       style={{ width: '100%', position: 'sticky', top: 0, zIndex: 1000, borderBottom: 'none' }}
     >
       {/* Верхняя шапка */}
-      <div style={{ width: '100%', borderBottom: `1px solid ${UI.border}`, background: UI.topBg }}>
+      <div
+        style={{
+          width: '100%',
+          borderBottom: `1px solid ${UI.border}`,
+          background: UI.topBg,
+          backdropFilter: 'blur(18px)',
+        }}
+      >
         <div
           style={{
             maxWidth: MAXW,
             margin: '0 auto',
-            height: 44,
+            height: 56,
             display: 'grid',
             gridTemplateColumns: '1fr auto',
             alignItems: 'center',
-            gap: 12,
-            padding: '0 12px',
-            color: '#ffffff',
+            gap: 16,
+            padding: '0 16px',
+            color: UI.topText,
           }}
         >
           <nav style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 14 }}>
@@ -447,13 +466,16 @@ export default function Header({ user }) {
             {me && (
               <div
                 style={{
-                  padding: '6px 12px',
-                  borderRadius: 12,
-                  background: '#1e293b',   // тёмно-серый фон (не сольётся с чёрным)
-                  border: '1px solid #ffffff',
-                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  background: 'rgba(42,101,247,0.12)',
+                  border: '1px solid rgba(42,101,247,0.2)',
+                  color: 'var(--accent)',
                   fontWeight: 600,
                   lineHeight: 1.2,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
                 Баланс: {fmtRub.format(balance)}
@@ -472,13 +494,24 @@ export default function Header({ user }) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '6px 12px',
-                  background: '#1e293b',
-                  border: '1px solid #ffffff',
-                  borderRadius: 12,
+                  padding: '6px 14px',
+                  background: 'rgba(42,101,247,0.08)',
+                  border: '1px solid rgba(42,101,247,0.25)',
+                  borderRadius: 999,
                   cursor: 'pointer',
                   color: UI.topText,
-                  boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
+                  boxShadow: '0 12px 32px rgba(42,101,247,0.18)',
+                  transition: 'background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = 'rgba(42,101,247,0.18)';
+                  event.currentTarget.style.borderColor = 'rgba(42,101,247,0.35)';
+                  event.currentTarget.style.boxShadow = '0 16px 36px rgba(42,101,247,0.24)';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = 'rgba(42,101,247,0.08)';
+                  event.currentTarget.style.borderColor = 'rgba(42,101,247,0.25)';
+                  event.currentTarget.style.boxShadow = '0 12px 32px rgba(42,101,247,0.18)';
                 }}
               >
                 <span
@@ -487,10 +520,10 @@ export default function Header({ user }) {
                     width: 24,
                     height: 24,
                     borderRadius: '50%',
-                    background: UI.btnSoftBg,
+                    background: '#ffffff',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: `1px solid ${UI.btnSoftHoverBg}`,
+                    border: '1px solid rgba(42,101,247,0.2)',
                   }}
                 >
                   <IconUser size={16} color={UI.icon} />
@@ -515,10 +548,10 @@ export default function Header({ user }) {
                     position: 'absolute',
                     right: 0,
                     top: 'calc(100% + 8px)',
-                    background: '#1e293b',
-                    border: '1px solid var(--accent)',
-                    borderRadius: 12,
-                    boxShadow: '0 20px 45px rgba(15,23,42,0.12)',
+                    background: UI.menuBg,
+                    border: `1px solid ${UI.menuBorder}`,
+                    borderRadius: 16,
+                    boxShadow: '0 26px 48px rgba(15,23,42,0.14)',
                     minWidth: 260,
                     zIndex: 60,
                     overflow: 'hidden',
@@ -646,15 +679,15 @@ export default function Header({ user }) {
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const badgeText = badge > 99 ? '99+' : String(badge || '');
   const handleMouseEnter = (event) => {
-    event.currentTarget.style.background = UI.btnSoftBg;
-    event.currentTarget.style.borderColor = UI.btnSoftHoverBg;
+    event.currentTarget.style.background = 'rgba(42,101,247,0.18)';
+    event.currentTarget.style.borderColor = 'rgba(42,101,247,0.35)';
     event.currentTarget.style.color = UI.link;
   };
-const handleMouseLeave = (event) => {
-  event.currentTarget.style.background = '#1e293b';
-  event.currentTarget.style.borderColor = '#ffffff';
-  event.currentTarget.style.color = UI.icon;
-};
+  const handleMouseLeave = (event) => {
+    event.currentTarget.style.background = 'rgba(42,101,247,0.1)';
+    event.currentTarget.style.borderColor = 'rgba(42,101,247,0.25)';
+    event.currentTarget.style.color = UI.icon;
+  };
 
   return (
     <button
@@ -666,9 +699,9 @@ const handleMouseLeave = (event) => {
         position: 'relative',
         width: 36,
         height: 36,
-        borderRadius: 10,
-        background: '#1e293b',
-        border: '1px solid #ffffff',
+        borderRadius: 12,
+        background: 'rgba(42,101,247,0.1)',
+        border: '1px solid rgba(42,101,247,0.25)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
