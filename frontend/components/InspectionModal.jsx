@@ -109,7 +109,23 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
       <div style={S.modal} role="dialog" aria-modal="true" aria-labelledby="inspection-title">
         <div style={S.header}>
           <h3 id="inspection-title" style={S.title}>Заказать отчет по осмотру данной машины</h3>
-          <button onClick={onClose} style={S.close} aria-label="Закрыть">×</button>
+          <button
+            onClick={onClose}
+            style={S.close}
+            aria-label="Закрыть"
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = 'rgba(42,101,247,0.18)';
+              event.currentTarget.style.color = 'var(--accent)';
+              event.currentTarget.style.borderColor = 'rgba(42,101,247,0.35)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = 'rgba(42,101,247,0.08)';
+              event.currentTarget.style.color = 'var(--text-muted)';
+              event.currentTarget.style.borderColor = 'rgba(42,101,247,0.2)';
+            }}
+          >
+            ×
+          </button>
         </div>
 
         <div style={{marginTop:12}}>
@@ -119,7 +135,22 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
 
         <div style={{marginTop:12}}>
           <b>Пример отчета по машине</b><br/>
-          <a href="/reports/example_car_report.pdf" target="_blank" rel="noreferrer" style={S.link}>
+          <a
+            href="/reports/example_car_report.pdf"
+            target="_blank"
+            rel="noreferrer"
+            style={S.link}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = 'rgba(42,101,247,0.16)';
+              event.currentTarget.style.borderColor = 'rgba(42,101,247,0.35)';
+              event.currentTarget.style.color = 'var(--accent-hover)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = 'rgba(42,101,247,0.08)';
+              event.currentTarget.style.borderColor = 'rgba(42,101,247,0.25)';
+              event.currentTarget.style.color = 'var(--accent)';
+            }}
+          >
             Открыть пример (PDF)
           </a>
         </div>
@@ -135,10 +166,22 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
           </ul>
         </div>
 
-        {err && <div style={{color:'#b00020', marginTop:8}}>{err}</div>}
+        {err && <div style={{ color: 'var(--danger)', marginTop: 8, fontWeight: 600 }}>{err}</div>}
 
         <div style={{marginTop:14, display:'flex', justifyContent:'flex-end', gap:8}}>
-          <button onClick={order} disabled={loading} style={S.primary}>
+          <button
+            onClick={order}
+            disabled={loading}
+            style={S.primary}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = 'var(--accent-hover)';
+              event.currentTarget.style.boxShadow = '0 16px 36px rgba(42,101,247,0.32)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = 'var(--accent)';
+              event.currentTarget.style.boxShadow = '0 14px 32px rgba(42,101,247,0.28)';
+            }}
+          >
             {loading ? 'Оформляем…' : 'Заказать отчет'}
           </button>
         </div>
@@ -149,20 +192,64 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
 
 const S = {
   backdrop: {
-    position:'fixed', inset:0, background:'rgba(2, 6, 12, 0.85)',
-    display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(15, 23, 42, 0.45)',
+    backdropFilter: 'blur(6px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: 16,
   },
   modal: {
-    background:'#0F1115', color:'#EDEDED',
-    border:'1px solid #232634',
-    borderRadius:12, padding:20,
-    width:'min(720px, 92vw)',
-    boxShadow:'0 10px 30px rgba(0,0,0,.45)'
+    background: 'var(--surface-1)',
+    color: 'var(--text)',
+    border: '1px solid rgba(15,23,42,0.08)',
+    borderRadius: 20,
+    padding: 28,
+    width: 'min(720px, 92vw)',
+    boxShadow: '0 28px 60px rgba(15,23,42,0.18)',
   },
-  header: { display:'flex', alignItems:'center', justifyContent:'space-between' },
-  close: { fontSize:22, background:'transparent', color:'#A0A6B0', border:'none', cursor:'pointer', lineHeight:1 },
-  link: { display:'inline-block', border:'1px solid #2A2F3B', color:'#EDEDED',
-          padding:'8px 12px', borderRadius:8, textDecoration:'none', background:'#141823' },
-  primary: { background:'#1E90FF', color:'#fff', border:'none', borderRadius:8, padding:'10px 16px', cursor:'pointer' }
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { margin: 0, fontSize: 24, color: 'var(--text-strong)' },
+  close: {
+    width: 36,
+    height: 36,
+    fontSize: 22,
+    background: 'rgba(42,101,247,0.08)',
+    color: 'var(--text-muted)',
+    border: '1px solid rgba(42,101,247,0.2)',
+    borderRadius: 12,
+    cursor: 'pointer',
+    lineHeight: '32px',
+    display: 'grid',
+    placeItems: 'center',
+    transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
+  },
+  link: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    border: '1px solid rgba(42,101,247,0.25)',
+    color: 'var(--accent)',
+    padding: '10px 14px',
+    borderRadius: 12,
+    textDecoration: 'none',
+    background: 'rgba(42,101,247,0.08)',
+    fontWeight: 600,
+    transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+  },
+  primary: {
+    background: 'var(--accent)',
+    color: 'var(--text-on-accent)',
+    border: 'none',
+    borderRadius: 14,
+    padding: '12px 20px',
+    cursor: 'pointer',
+    fontWeight: 600,
+    boxShadow: '0 14px 32px rgba(42,101,247,0.28)',
+    transition: 'background 0.2s ease, box-shadow 0.2s ease',
+  }
 };
 
