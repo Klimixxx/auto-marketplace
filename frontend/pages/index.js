@@ -13,17 +13,20 @@ import { useRouter } from 'next/router';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
 const UI = {
-  title: '#ffffff',
-  text: 'rgba(255,255,255,0.75)',
-  cardBg: 'rgba(255,255,255,0.03)',
-  border: 'rgba(255,255,255,0.10)',
+  title: 'var(--text-strong)',
+  text: 'var(--text-600)',
+  cardBg: 'var(--surface-1)',
+  border: 'var(--border)',
   red: '#EF4444',
   gradFrom: '#67e8f9',
-  gradTo: '#c4b5fd',
-  button: '#67e8f9',
-  buttonHover: '#a5f3fc',
+  gradTo: '#3b82f6',
+  button: 'var(--accent)',
+  buttonHover: 'var(--accent-hover)',
+  buttonText: 'var(--text-on-accent)',
+  chipBg: 'rgba(42,101,247,0.12)',
+  chipBorder: 'rgba(42,101,247,0.24)',
+  iconBg: 'rgba(42,101,247,0.1)',
 };
-
 const fmtNumber = new Intl.NumberFormat('ru-RU');
 const fmtCurrency = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
 
@@ -41,7 +44,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.04)',
+        background: UI.cardBg,
         border: `1px solid ${UI.border}`,
         borderRadius: 12,
         padding: 14,
@@ -57,8 +60,8 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
           width: 52,
           height: 52,
           borderRadius: 10,
-          background: 'rgba(255,255,255,0.06)',
-          border: `1px solid ${UI.border}`,
+          background: UI.iconBg,
+          border: `1px solid ${UI.chipBorder}`,
           display: 'grid',
           placeItems: 'center',
         }}
@@ -66,8 +69,8 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
         <Icon />
       </div>
       <div>
-        <div style={{ color: 'var(--text-900)', fontSize: 13 }}>{title}</div>
-        <div style={{ color: 'var(--text-900)', fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
+        <div style={{ color: UI.text, fontSize: 13 }}>{title}</div>
+        <div style={{ color: UI.title, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{display}</div>
       </div>
     </div>
   );
@@ -82,7 +85,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
           aspectRatio: '1527 / 768',
           borderRadius: 16,
           border: `1px solid ${UI.border}`,
-          background: 'rgba(255,255,255,0.03)',
+          background: UI.cardBg,
           display: 'grid',
           placeItems: 'center',
           color: UI.text,
@@ -107,6 +110,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: 'hidden',
+        background: UI.cardBg,
         backgroundImage: 'url(/maps/russia-fo.svg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -126,22 +130,22 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
             type="button"
             onMouseEnter={() => onHover(region)}
             onFocus={() => onHover(region)}
-            style={{
-              position: 'absolute',
-              left: `${x}%`,
-              top: `${y}%`,
-              transform: 'translate(-50%, -50%)',
-              width: isActive ? 28 : 22,
-              height: isActive ? 28 : 22,
-              borderRadius: '50%',
-              border: `2px solid ${isActive ? '#0f172a' : 'transparent'}`,
-              background: isActive ? UI.button : 'rgba(255,255,255,0.35)',
-              boxShadow: isActive ? '0 0 18px rgba(103,232,249,0.45)' : '0 2px 6px rgba(0,0,0,0.25)',
-              cursor: 'pointer',
-              transition: 'transform 0.2s ease, background 0.2s ease',
-            }}
-            aria-label={region.region}
-          />
+          style={{
+            position: 'absolute',
+            left: `${x}%`,
+            top: `${y}%`,
+            transform: 'translate(-50%, -50%)',
+            width: isActive ? 28 : 22,
+            height: isActive ? 28 : 22,
+            borderRadius: '50%',
+            border: `2px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+            background: isActive ? UI.button : 'rgba(42,101,247,0.18)',
+            boxShadow: isActive ? '0 0 0 6px rgba(42,101,247,0.15)' : '0 1px 4px rgba(15,23,42,0.12)',
+            cursor: 'pointer',
+            transition: 'transform 0.2s ease, background 0.2s ease',
+          }}
+          aria-label={region.region}
+        />
         );
       })}
 
@@ -152,18 +156,18 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
             left: 16,
             bottom: 16,
             right: 16,
-            background: 'rgba(10,14,25,0.78)',
+            background: 'rgba(255,255,255,0.92)',
             borderRadius: 12,
             padding: '12px 14px',
             border: `1px solid ${UI.border}`,
-            backdropFilter: 'blur(6px)',
+            backdropFilter: 'blur(8px)',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>{activeRegion.region}</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: UI.title }}>{activeRegion.region}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 13, color: UI.text }}>
-            <span>Лотов: <strong style={{ color: '#fff' }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
-            <span>Сумма: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
-            <span>Средняя цена: <strong style={{ color: '#fff' }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
+            <span>Лотов: <strong style={{ color: UI.title }}>{fmtNumber.format(activeRegion.listings || 0)}</strong></span>
+            <span>Сумма: <strong style={{ color: UI.title }}>{fmtCurrency.format(activeRegion.totalValue || 0)}</strong></span>
+            <span>Средняя цена: <strong style={{ color: UI.title }}>{fmtCurrency.format(activeRegion.averagePrice || 0)}</strong></span>
           </div>
         </div>
       ) : null}
@@ -197,8 +201,8 @@ function RegionList({ regions, activeRegion, onHover }) {
             style={{
               textAlign: 'left',
               border: `1px solid ${isActive ? UI.button : UI.border}`,
-              background: isActive ? 'rgba(103,232,249,0.12)' : 'rgba(255,255,255,0.03)',
-              color: '#fff',
+              background: isActive ? UI.chipBg : 'transparent',
+              color: isActive ? 'var(--accent)' : UI.title,
               padding: '10px 12px',
               borderRadius: 12,
               cursor: 'pointer',
@@ -206,13 +210,13 @@ function RegionList({ regions, activeRegion, onHover }) {
               gap: 4,
             }}
           >
-            <div style={{ fontWeight: 600 }}>{region.region}</div>
+            <div style={{ fontWeight: 600, color: isActive ? 'var(--accent)' : UI.title }}>{region.region}</div>
             <div style={{ fontSize: 12, color: UI.text, display: 'flex', gap: 12 }}>
               <span>Лотов: {fmtNumber.format(region.listings || 0)}</span>
               <span>Сумма: {fmtCurrency.format(region.totalValue || 0)}</span>
             </div>
           </button>
-        );
+      );
       })}
     </div>
   );
@@ -295,8 +299,8 @@ function navButtonStyle(disabled) {
     height: 36,
     borderRadius: 10,
     border: `1px solid ${UI.border}`,
-    background: disabled ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)',
-    color: '#fff',
+    background: disabled ? 'rgba(42,101,247,0.08)' : 'rgba(42,101,247,0.15)',
+    color: 'var(--accent)',
     cursor: disabled ? 'default' : 'pointer',
     display: 'grid',
     placeItems: 'center',
@@ -343,13 +347,13 @@ function BestOfferCard({ item, width }) {
         minWidth: width,
         borderRadius: 14,
         border: `1px solid ${UI.border}`,
-        background: 'rgba(13,18,33,0.72)',
+        background: UI.cardBg,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      <div style={{ position: 'relative', paddingBottom: '56%', background: '#0b1220' }}>
+      <div style={{ position: 'relative', paddingBottom: '56%', background: 'var(--surface-3)' }}>
         {cover ? (
           <img
             src={cover}
@@ -366,27 +370,27 @@ function BestOfferCard({ item, width }) {
             position: 'absolute',
             left: 12,
             top: 12,
-            background: 'rgba(15,23,42,0.85)',
+            background: UI.chipBg,
             borderRadius: 999,
             padding: '4px 10px',
             fontSize: 12,
-            border: `1px solid ${UI.border}`,
+            border: `1px solid ${UI.chipBorder}`,
           }}
         >
           {tradeType}
         </span>
       </div>
       <div style={{ padding: '14px 16px', display: 'grid', gap: 8, flex: '1 1 auto' }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{item.title || 'Лот'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: UI.title }}>{item.title || 'Лот'}</div>
         {location ? <div style={{ fontSize: 13, color: UI.text }}>{location}</div> : null}
-        <div style={{ fontWeight: 700, fontSize: 16 }}>{price}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: UI.title }}>{price}</div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
           <a
             href={`/trades/${item.id}`}
             style={{
               flex: 1,
               background: UI.button,
-              color: '#0f172a',
+              color: UI.buttonText,
               borderRadius: 10,
               textAlign: 'center',
               padding: '8px 10px',
@@ -407,7 +411,7 @@ function BestOfferCard({ item, width }) {
                 borderRadius: 10,
                 textAlign: 'center',
                 padding: '8px 10px',
-                color: '#fff',
+                color: UI.title,
                 textDecoration: 'none',
               }}
             >
@@ -428,11 +432,11 @@ function EducationFeature({ title, Icon }) {
         gridTemplateColumns: 'auto 1fr',
         gap: 12,
         alignItems: 'center',
-        background: 'rgba(255,255,255,0.04)',   // фон как у статистики
-        border: '1px solid rgba(0,0,0,0.15)',   // рамка серо-темная
+        background: UI.cardBg,
+        border: `1px solid ${UI.border}`,
         borderRadius: 12,
         padding: 14,
-        minHeight: 88,                          // выравнивание по высоте
+        minHeight: 88,
       }}
     >
       <div
@@ -440,15 +444,15 @@ function EducationFeature({ title, Icon }) {
           width: 52,
           height: 52,
           borderRadius: 10,
-          background: 'rgba(255,255,255,0.06)', // фон иконки как в статистике
-          border: '1px solid rgba(0,0,0,0.15)', // рамка иконки
+          background: UI.iconBg,
+          border: `1px solid ${UI.chipBorder}`,
           display: 'grid',
           placeItems: 'center',
         }}
       >
         <Icon />
       </div>
-      <div style={{ color: 'var(--text-900)', fontSize: 15.5, fontWeight: 600 }}>
+      <div style={{ color: UI.title, fontSize: 15.5, fontWeight: 600 }}>
         {title}
       </div>
     </div>
@@ -881,9 +885,9 @@ export default function Home() {
 <section style={{ margin: '32px 0' }}>
 <div
   style={{
-    background: 'transparent',
-    border: 'none',
-    borderRadius: 0,
+    background: UI.cardBg,
+    border: `1px solid ${UI.border}`,
+    borderRadius: 16,
     padding: 18,
     display: 'grid',
     gridTemplateColumns: 'auto 1fr',
@@ -956,8 +960,8 @@ export default function Home() {
 <section style={{ margin: '32px 0' }}>
   <div
   style={{
-    background: 'rgba(0,0,0,0.04)',    // тот же фон, что в "О нас"
-    border: '1px solid rgba(0,0,0,0.15)', // серо-тёмная рамка
+    background: UI.cardBg,
+    border: `1px solid ${UI.border}`,
     borderRadius: 16,
     padding: 18,
     display: 'grid',
