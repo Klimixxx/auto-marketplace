@@ -2613,88 +2613,89 @@ export default function AdminParserTradeCard() {
 
       {Array.isArray(d.prices) && d.prices.length > 0 && (
         <section style={{ marginTop: 24 }}>
-          <h2>История цен</h2>
-          <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-              <thead>
-                <tr>
-                  <th style={PRICE_TABLE_HEADER_STYLE}>Этап</th>
-                  <th style={PRICE_TABLE_HEADER_STYLE}>Цена</th>
-                  <th style={PRICE_TABLE_HEADER_STYLE}>Дата</th>
-                  <th style={PRICE_TABLE_HEADER_STYLE}>Комментарий</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.prices.map((entry, index) => {
-                  const stage =
-                    entry.stage ||
-                    entry.stage_name ||
-                    entry.stageName ||
-                    entry.round ||
-                    entry.type ||
-                    entry.name ||
-                    entry.title ||
-                    `Запись ${index + 1}`;
-                  const stageText = translateValueByKey('stage', stage) || stage;
-                  const rawPrice =
-                    entry.price ||
-                    entry.currentPrice ||
-                    entry.current_price ||
-                    entry.startPrice ||
-                    entry.start_price ||
-                    entry.value ||
-                    entry.amount ||
-                    null;
-                  const numericPrice =
-                    rawPrice != null ? Number(String(rawPrice).replace(/\s/g, '').replace(',', '.')) : null;
-                  const priceText =
-                    Number.isFinite(numericPrice)
-                      ? fmtPrice(numericPrice)
-                      : rawPrice != null
-                      ? String(rawPrice)
-                      : '—';
-                  const dateValue =
-                    entry.date ||
-                    entry.date_start ||
-                    entry.dateStart ||
-                    entry.date_finish ||
-                    entry.dateFinish ||
-                    entry.updated_at ||
-                    entry.updatedAt ||
-                    null;
-                  const comment =
-                    entry.comment ||
-                    entry.description ||
-                    entry.note ||
-                    entry.status ||
-                    entry.info ||
-                    null;
-                  const commentText =
-                    comment && typeof comment === 'object'
-                      ? JSON.stringify(comment, null, 2)
-                      : comment
-                      ? String(comment)
-                      : '—';
-                  const commentMultiline = commentText.includes('\n');
-                  return (
-                    <tr key={entry.id || `${stage}-${index}`}>
-                      <td style={PRICE_TABLE_CELL_STYLE}>{stageText}</td>
-                      <td style={PRICE_TABLE_CELL_STYLE}>{priceText}</td>
-                      <td style={PRICE_TABLE_CELL_STYLE}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
-                      <td style={PRICE_TABLE_CELL_STYLE}>
-                        {commentMultiline ? (
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{commentText}</pre>
-                        ) : (
-                          commentText
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <h2>История цен</h2>
+        <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+            <thead>
+              <tr>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Этап</th>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Цена</th>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Дата</th>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.prices.map((entry, index) => {
+                const stage =
+                  entry.stage ||
+                  entry.stage_name ||
+                  entry.stageName ||
+                  entry.round ||
+                  entry.type ||
+                  entry.name ||
+                  entry.title ||
+                  `Запись ${index + 1}`;
+                const stageText = translateValueByKey('stage', stage) || stage;
+                const rawPrice =
+                  entry.price ||
+                  entry.currentPrice ||
+                  entry.current_price ||
+                  entry.startPrice ||
+                  entry.start_price ||
+                  entry.value ||
+                  entry.amount ||
+                  null;
+                const numericPrice =
+                  rawPrice != null ? Number(String(rawPrice).replace(/\s/g, '').replace(',', '.')) : null;
+                const priceText =
+                  Number.isFinite(numericPrice)
+                    ? fmtPrice(numericPrice)
+                    : rawPrice != null
+                    ? String(rawPrice)
+                    : '—';
+                const dateValue =
+                  entry.date ||
+                  entry.date_start ||
+                  entry.dateStart ||
+                  entry.date_finish ||
+                  entry.dateFinish ||
+                  entry.updated_at ||
+                  entry.updatedAt ||
+                  null;
+                const comment =
+                  entry.comment ||
+                  entry.description ||
+                  entry.note ||
+                  entry.status ||
+                  entry.info ||
+                  null;
+                const commentText =
+                  comment && typeof comment === 'object'
+                    ? JSON.stringify(comment, null, 2)
+                    : comment
+                    ? String(comment)
+                    : '—';
+                const commentMultiline = commentText.includes('\n');
+                return (
+                  <tr key={entry.id || `${stage}-${index}`}>
+                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{stageText}</td>
+                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{priceText}</td>
+                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
+                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>
+                      {commentMultiline ? (
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#111827 !important' }}>{commentText}</pre>
+                      ) : (
+                        commentText
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      
       )}
 
       {Array.isArray(d.documents) && d.documents.length > 0 && (

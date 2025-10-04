@@ -384,34 +384,33 @@ export default function Header({ user }) {
   const renderNavLink = (href, label, badge = 0) => {
     const badgeValue = Number(badge) || 0;
     const badgeText = badgeValue > 99 ? '99+' : String(badgeValue);
+    
+    const baseStyle = {
+      color: '#2a65f7 !important',
+      textDecoration: 'none !important',
+      display: 'inline-flex !important',
+      alignItems: 'center !important',
+      gap: '6px !important',
+      fontWeight: '600 !important',
+      padding: '8px 0 !important',
+      background: 'transparent !important',
+      border: 'none !important',
+      borderRadius: '0 !important',
+      transition: 'color 0.2s ease !important',
+    };
+    
     return (
       <a
         href={href}
-        style={{
-          color: '#ffffff',
-          textDecoration: 'none',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          fontWeight: 600,
-          padding: '8px 16px',
-          borderRadius: 999,
-          background: '#2a65f7',
-          border: '1px solid #2a65f7',
-          transition: 'all 0.2s ease',
-        }}
+        style={baseStyle}
         onMouseEnter={(event) => {
-          event.currentTarget.style.setProperty('background', '#1f4fe3', 'important');
-          event.currentTarget.style.setProperty('border-color', '#1f4fe3', 'important');
-          event.currentTarget.style.setProperty('color', '#ffffff', 'important');
+          event.currentTarget.style.setProperty('color', '#1f4fe3', 'important');
         }}
         onMouseLeave={(event) => {
-          event.currentTarget.style.setProperty('background', '#2a65f7', 'important');
-          event.currentTarget.style.setProperty('border-color', '#2a65f7', 'important');
-          event.currentTarget.style.setProperty('color', '#ffffff', 'important');
+          event.currentTarget.style.setProperty('color', '#2a65f7', 'important');
         }}
       >
-        <span>{label}</span>
+        <span style={{ color: 'inherit !important' }}>{label}</span>
         {badgeValue > 0 && (
           <span
             style={{
@@ -422,8 +421,8 @@ export default function Header({ user }) {
               height: 20,
               padding: '0 6px',
               borderRadius: 999,
-              background: '#ff4444',
-              color: '#fff',
+              background: '#ff4444 !important',
+              color: '#fff !important',
               fontSize: 11,
               fontWeight: 700,
             }}
@@ -435,6 +434,7 @@ export default function Header({ user }) {
     );
   };
   
+
   return (
     <header
       className="header-solid"

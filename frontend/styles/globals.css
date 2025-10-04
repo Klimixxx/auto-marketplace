@@ -633,7 +633,7 @@ listing-card__more-button {
 
 .detail-summary__status {
   font-size: 14px;
-  color: rgba(232, 237, 242, 0.85);
+  color: black;
   display: grid;
   gap: 4px;
 }
