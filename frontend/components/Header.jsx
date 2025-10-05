@@ -412,38 +412,33 @@ export default function Header({ user }) {
     const baseStyle = {
       color: "#fff !important",
       textDecoration: "none !important",
-      display: "inline-flex !important",
+      display: "flex !important",
       alignItems: "center !important",
-      gap: "6px !important",
+      gap: "3px !important",
       fontWeight: "600 !important",
       padding: "8px 0 !important",
       background: "transparent !important",
       border: "none !important",
       borderRadius: "0 !important",
       transition: "color 0.2s ease !important",
+      position: "relative"
     };
 
     return (
       <a href={href} style={baseStyle}>
-        <span style={{ color: "#fff" }}>{label}</span>
+        <span style={{ color: "#fff", fontWeight: 600 }}>{label}</span>
         {badgeValue > 0 && (
-          <span
+          <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minWidth: 20,
-              height: 20,
-              padding: "0 6px",
-              borderRadius: 999,
-              background: "#ff4444 !important",
-              color: "#fff !important",
-              fontSize: 11,
-              fontWeight: 700,
+              width: 6,
+              height: 6,
+              background: "#ff4444",
+              borderRadius: "50%",
+              position: "absolute",
+              right: -6,
+              top: 0
             }}
-          >
-            {badgeText}
-          </span>
+          />
         )}
       </a>
     );
