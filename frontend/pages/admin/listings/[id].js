@@ -2306,7 +2306,7 @@ export default function AdminParserTradeCard() {
                 let control = null;
                 if (row?.type === 'select' && Array.isArray(row.options)) {
                   control = (
-                    <select␊
+                    <select
                       className="input"
                       value={row.value ?? ''}
                       onChange={(e) => updateLotFieldValue(index, e.target.value)}
@@ -3145,8 +3145,8 @@ export default function AdminParserTradeCard() {
       )}
 
       {!isOpenAuction && Array.isArray(d.prices) && d.prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>␊
-        <h2>История цен</h2>␊
+        <section style={{ marginTop: 24 }}>
+        <h2>История цен</h2>
         <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
             <thead>
@@ -3288,6 +3288,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
