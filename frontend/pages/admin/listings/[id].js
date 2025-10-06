@@ -2303,7 +2303,7 @@ export default function AdminParserTradeCard() {
                   || rawValue.length > 160
                   || rawValue.includes('\n');
                 const rowsCount = rawValue.length > 200 ? 6 : rawValue.length > 160 ? 4 : 2;
-                let control = null;␊
+                let control = null;
                 if (row?.type === 'select' && Array.isArray(row.options)) {
                   control = (
                     <select␊
@@ -3288,5 +3288,6 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
