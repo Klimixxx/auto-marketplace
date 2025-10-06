@@ -340,25 +340,9 @@ const LOT_FIELD_PRESETS = [
   { key: 'asset_name', label: 'Наименование актива' },
   { key: 'lot_number', label: 'Номер лота' },
   { key: 'inventory_number', label: 'Инвентарный номер' },
-  { key: 'mileage', label: 'Пробег, км', numeric: true },
-  { key: 'engine', label: 'Двигатель' },
-  { key: 'engine_type', label: 'Тип двигателя' },
-  { key: 'engine_volume', label: 'Объём двигателя, л' },
-  { key: 'engine_power', label: 'Мощность двигателя (л.с.)', numeric: true },
-  { key: 'engine_power_kw', label: 'Мощность двигателя (кВт)', numeric: true },
-  { key: 'fuel_type', label: 'Тип топлива' },
-  { key: 'transmission', label: 'Коробка передач' },
-  { key: 'drive', label: 'Тип привода' },
-  { key: 'steering', label: 'Расположение руля' },
-  { key: 'body_type', label: 'Тип кузова' },
-  { key: 'color', label: 'Цвет' },
-  { key: 'doors', label: 'Количество дверей', numeric: true },
-  { key: 'seats', label: 'Количество мест', numeric: true },
   { key: 'condition', label: 'Состояние' },
-  { key: 'equipment', label: 'Комплектация' },
-  { key: 'options', label: 'Опции' },
   { key: 'extras', label: 'Дополнительно' },
-  { key: 'restrictions', label: 'Ограничения' },
+  { key: 'options', label: 'Опции' },
   { key: 'encumbrances', label: 'Обременения' },
   { key: 'documents_required', label: 'Требуемые документы' },
   { key: 'auction_url', label: 'Ссылка на торги' },
@@ -532,26 +516,8 @@ function createLotFieldRows(lot) {
       options: preset.options || null,
       placeholder: preset.placeholder,
       value: toFormString(base[preset.key]),
-      isCustom: false,
       numeric: Boolean(preset.numeric),
     });
-  });
-
-  Object.entries(base).forEach(([key, value]) => {
-    if (usedKeys.has(key) || LOT_FIELDS_EXCLUDE.has(key)) return;
-    const label = translateValueByKey(key) || key;
-    const isMultiline =
-      (typeof value === 'string' && (value.includes('\n') || value.length > 160))
-      || (value && typeof value === 'object');
-    rows.push({
-      key,
-      label,
-      type: isMultiline ? 'textarea' : 'text',
-      value: toFormString(value),
-      isCustom: true,
-      numeric: false,
-    });
-    usedKeys.add(key);
   });
 
   return rows;
@@ -1658,31 +1624,6 @@ export default function AdminParserTradeCard() {
     });
   }, []);
 
-  const updateLotFieldKey = useCallback((index, key) => {
-    setLotFields((prev) => {
-      const next = [...prev];
-      if (!next[index]) return prev;
-      const normalizedKey = key != null ? String(key) : '';
-      next[index] = {
-        ...next[index],
-        key: normalizedKey,
-        label: normalizedKey ? translateValueByKey(normalizedKey) || normalizedKey : 'Новое поле',
-      };
-      return next;
-    });
-  }, []);
-
-  const removeLotField = useCallback((index) => {
-    setLotFields((prev) => prev.filter((_, idx) => idx !== index));
-  }, []);
-
-  const addLotField = useCallback(() => {
-    setLotFields((prev) => [
-      ...prev,
-      { key: '', label: 'Новое поле', type: 'text', value: '', isCustom: true, numeric: false },
-    ]);
-  }, []);
-
   const updateContactValue = useCallback((key, value) => {
     setContactState((prev) => ({
       values: { ...prev.values, [key]: value },
@@ -1879,7 +1820,7 @@ export default function AdminParserTradeCard() {
   const isAuction = isOpenAuction || normalizedTradeType === 'auction';
   const shouldUseStartPrice = !isPublicOffer || publicOfferPriceMode === 'start_price';
   const shouldIncludePeriods = isPublicOffer && publicOfferPriceMode === 'period_price';
-  const shouldIncludeAuctionExtras = !isOpenAuction;
+  const shouldIncludeAuctionExtras = true;
 
   useEffect(() => {
     if (!isPublicOffer && publicOfferPriceMode === 'period_price') {
@@ -1902,7 +1843,7 @@ export default function AdminParserTradeCard() {
     );
     const contact = sectionStateToObject(contactState);
     const debtor = sectionStateToObject(debtorState);
-    const pricesPayload = buildPriceHistoryPayload(priceHistory);
+    const pricesPayload = isOpenAuction ? [] : buildPriceHistoryPayload(priceHistory);
     const documentsPayload = buildDocumentsPayload(documents);
     const photosPayload = buildPhotosPayload(photos);
 
@@ -1959,7 +1900,7 @@ export default function AdminParserTradeCard() {
         );
         const contactPayload = sectionStateToObject(contactState);
         const debtorPayload = sectionStateToObject(debtorState);
-        const pricesPayload = buildPriceHistoryPayload(priceHistory);
+        const pricesPayload = isOpenAuction ? [] : buildPriceHistoryPayload(priceHistory);
         const documentsPayload = buildDocumentsPayload(documents);
         const photosPayload = buildPhotosPayload(photos);
 
@@ -2248,100 +2189,106 @@ export default function AdminParserTradeCard() {
       {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
 
       <form onSubmit={onSubmit} className="panel" style={{ display: 'grid', gap: 12 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Заголовок</span>
-          <input className="input" value={form.title} onChange={updateFormField('title')} />
-        </label>
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Сведения по лоту</h3>
+          </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Категория</span>
-            <input className="input" value={form.category} onChange={updateFormField('category')} />
+            <span className="muted">Заголовок</span>
+            <input className="input" value={form.title} onChange={updateFormField('title')} />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Регион</span>
-            <input className="input" value={form.region} onChange={updateFormField('region')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Марка</span>
-            <input className="input" value={form.brand} onChange={updateFormField('brand')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Модель</span>
-            <input className="input" value={form.model} onChange={updateFormField('model')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Год</span>
-            <input className="input" value={form.year} onChange={updateFormField('year')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">VIN</span>
-            <input className="input" value={form.vin} onChange={updateFormField('vin')} />
-          </label>
-          {shouldUseStartPrice ? (
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Стартовая цена</span>
+              <span className="muted">Категория</span>
+              <input className="input" value={form.category} onChange={updateFormField('category')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Регион</span>
+              <input className="input" value={form.region} onChange={updateFormField('region')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Марка</span>
+              <input className="input" value={form.brand} onChange={updateFormField('brand')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Модель</span>
+              <input className="input" value={form.model} onChange={updateFormField('model')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Год</span>
+              <input className="input" value={form.year} onChange={updateFormField('year')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">VIN</span>
+              <input className="input" value={form.vin} onChange={updateFormField('vin')} />
+            </label>
+            {shouldUseStartPrice ? (
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted">Стартовая цена</span>
+                <input
+                  className="input"
+                  value={form.start_price}
+                  onChange={updateFormField('start_price')}
+                  placeholder="Например, 1500000"
+                  inputMode="numeric"
+                />
+              </label>
+            ) : null}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Кол-во заявок</span>
               <input
                 className="input"
-                value={form.start_price}
-                onChange={updateFormField('start_price')}
-                placeholder="Например, 1500000"
-                inputMode="numeric"
+                value={form.applications_count}
+                onChange={updateFormField('applications_count')}
+                type="number"
+                min="0"
               />
             </label>
-          ) : null}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Кол-во заявок</span>
-            <input
-              className="input"
-              value={form.applications_count}
-              onChange={updateFormField('applications_count')}
-              type="number"
-              min="0"
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Дата начала</span>
-            <input
-              className="input"
-              value={form.date_start}
-              onChange={updateFormField('date_start')}
-              type="datetime-local"
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Дата окончания</span>
-            <input
-              className="input"
-              value={form.date_finish}
-              onChange={updateFormField('date_finish')}
-              type="datetime-local"
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Площадка</span>
-            <input className="input" value={form.trade_place} onChange={updateFormField('trade_place')} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Ссылка на источник</span>
-            <input className="input" value={form.source_url} onChange={updateFormField('source_url')} type="url" />
-          </label>
-        </div>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Дата начала</span>
+              <input
+                className="input"
+                value={form.date_start}
+                onChange={updateFormField('date_start')}
+                type="datetime-local"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Дата окончания</span>
+              <input
+                className="input"
+                value={form.date_finish}
+                onChange={updateFormField('date_finish')}
+                type="datetime-local"
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Площадка</span>
+              <input className="input" value={form.trade_place} onChange={updateFormField('trade_place')} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Ссылка на источник</span>
+              <input className="input" value={form.source_url} onChange={updateFormField('source_url')} type="url" />
+            </label>
+          </div>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted">Описание</span>
-          <textarea
-            className="textarea"
-            rows={4}
-            value={form.description}
-            onChange={updateFormField('description')}
-            placeholder="Текст описания для публикации"
-          />
-        </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">Описание</span>
+            <textarea
+              className="textarea"
+              rows={4}
+              value={form.description}
+              onChange={updateFormField('description')}
+              placeholder="Текст описания для публикации"
+            />
+          </label>
+        </section>
 
         <section style={{ display: 'grid', gap: 12, paddingTop: 8 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h3 style={{ margin: 0 }}>Характеристики лота</h3>
+            <h3 style={{ margin: 0 }}>Характеристики автомобиля</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
               Укажите технические параметры и дополнительные поля. Поле «Тип торгов» влияет на блоки цен ниже.
             </p>
@@ -2356,10 +2303,10 @@ export default function AdminParserTradeCard() {
                   || rawValue.length > 160
                   || rawValue.includes('\n');
                 const rowsCount = rawValue.length > 200 ? 6 : rawValue.length > 160 ? 4 : 2;
-                let control = null;
+                let control = null;␊
                 if (row?.type === 'select' && Array.isArray(row.options)) {
                   control = (
-                    <select
+                    <select␊
                       className="input"
                       value={row.value ?? ''}
                       onChange={(e) => updateLotFieldValue(index, e.target.value)}
@@ -2403,31 +2350,12 @@ export default function AdminParserTradeCard() {
                       <div style={{ fontWeight: 600 }} title={row.key || undefined}>
                         {fieldLabel}
                       </div>
-                      {row.isCustom ? (
-                        <label style={{ display: 'grid', gap: 4 }}>
-                          <span className="muted" style={{ fontSize: 12 }}>Код поля</span>
-                          <input
-                            className="input"
-                            value={row.key || ''}
-                            onChange={(e) => updateLotFieldKey(index, e.target.value)}
-                            placeholder="Например, engine_power"
-                          />
-                        </label>
-                      ) : (
-                        <div className="muted" style={{ fontSize: 12 }}>Код: {row.key}</div>
-                      )}
+                      <div className="muted" style={{ fontSize: 12 }}>Код: {row.key}</div>
                     </div>
                     <label style={{ flex: '2 1 260px', display: 'grid', gap: 4 }}>
                       <span className="muted" style={{ fontSize: 12 }}>Значение</span>
                       {control}
                     </label>
-                    {row.isCustom ? (
-                      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-start' }}>
-                        <button type="button" className="button outline" onClick={() => removeLotField(index)}>
-                          Удалить
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
                 );
               })}
@@ -2435,11 +2363,6 @@ export default function AdminParserTradeCard() {
           ) : (
             <div className="muted" style={{ fontSize: 13 }}>Поля ещё не добавлены.</div>
           )}
-          <div>
-            <button type="button" className="button outline" onClick={addLotField}>
-              Добавить характеристику
-            </button>
-          </div>
         </section>
 
         <section style={{ display: 'grid', gap: 12 }}>
@@ -2815,7 +2738,8 @@ export default function AdminParserTradeCard() {
           )}
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
+        {!isOpenAuction ? (
+          <section style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>История изменений цены</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
@@ -2879,6 +2803,7 @@ export default function AdminParserTradeCard() {
             </div>
           )}
         </section>
+        ) : null}
 
         {isPublicOffer ? (
           <section style={{ display: 'grid', gap: 12 }}>
@@ -3048,7 +2973,37 @@ export default function AdminParserTradeCard() {
                 inputMode="numeric"
               />
             </label>
-            {!isOpenAuction && (
+            {isOpenAuction ? (
+              <>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Шаг аукциона</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.step || ''}
+                    onChange={updateAuctionField('step')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Задаток</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.deposit || ''}
+                    onChange={updateAuctionField('deposit')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Валюта</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.currency || ''}
+                    onChange={updateAuctionField('currency')}
+                    placeholder="Например, RUB"
+                  />
+                </label>
+              </>
+            ) : (
               <>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span className="muted">Текущая цена</span>
@@ -3189,9 +3144,9 @@ export default function AdminParserTradeCard() {
         </section>
       )}
 
-      {Array.isArray(d.prices) && d.prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-        <h2>История цен</h2>
+      {!isOpenAuction && Array.isArray(d.prices) && d.prices.length > 0 && (
+        <section style={{ marginTop: 24 }}>␊
+        <h2>История цен</h2>␊
         <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
             <thead>
@@ -3333,4 +3288,5 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
