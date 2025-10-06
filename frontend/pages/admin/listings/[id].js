@@ -521,6 +521,41 @@ const CONTACT_ALIASES = {
   website_url: 'website',
 };
 
+const ADMIN_SECTION_FORBIDDEN_KEYS = [
+  'sro_name',
+  'sroName',
+  'sro',
+  'trading_id',
+  'tradingId',
+  'manager_inn',
+  'managerInn',
+  'manager_name',
+  'managerName',
+  'procedure_date',
+  'procedureDate',
+  'bankruptcy_case',
+  'bankruptcyCase',
+  'bankruptcy_case_number',
+  'bankruptcyCaseNumber',
+  'bankruptcy_id',
+  'bankruptcyId',
+  'publication_date',
+  'publicationDate',
+  'arbitration_court',
+  'arbitrationCourt',
+];
+
+const ADMIN_SECTION_FORBIDDEN_KEY_SET = new Set(
+  ADMIN_SECTION_FORBIDDEN_KEYS.map((key) => (typeof key === 'string' ? key.trim().toLowerCase() : '')).filter(Boolean),
+);
+
+function isForbiddenSectionKey(key) {
+  if (key === undefined || key === null) return false;
+  const text = String(key).trim();
+  if (!text) return false;
+  return ADMIN_SECTION_FORBIDDEN_KEY_SET.has(text.toLowerCase());
+}
+
 const DEBTOR_FIELDS = [
   { key: 'debtor_name', label: 'Должник' },
   { key: 'debtor_type', label: 'Тип должника' },
@@ -636,31 +671,70 @@ function createLotFieldRows(lot) {
 function sectionStateFromObject(source, fieldDefs, options = {}) {
   const base = source && typeof source === 'object' && !Array.isArray(source) ? { ...source } : {};
   const { aliases = {}, exclude = [] } = options;
-  const excludeSet = new Set(exclude);
 
-  Object.entries(aliases).forEach(([alias, target]) => {
-    if (base[alias] != null && (base[target] == null || base[target] === '')) {
-      base[target] = base[alias];
-    }
-    excludeSet.add(alias);
-    if (alias in base) {
-      delete base[alias];
-    }
-  });
-
-  const values = {};
-  fieldDefs.forEach(({ key }) => {
-    values[key] = toFormString(base[key]);
-    if (key in base) {
+  Object.keys(base).forEach((key) => {
+    if (isForbiddenSectionKey(key)) {
       delete base[key];
     }
   });
 
+  const excludeList = Array.isArray(exclude) ? exclude.filter(Boolean) : exclude ? [exclude] : [];
+  const excludeSet = new Set(
+    excludeList
+      .map((value) => (value != null ? String(value).trim().toLowerCase() : ''))
+      .filter(Boolean),
+  );
+  ADMIN_SECTION_FORBIDDEN_KEY_SET.forEach((key) => excludeSet.add(key));
+
+  const fieldLookup = new Set(
+    (Array.isArray(fieldDefs) ? fieldDefs : [])
+      .map((field) => (field?.key != null ? String(field.key).trim().toLowerCase() : ''))
+      .filter(Boolean),
+  );
+
+  Object.entries(aliases || {}).forEach(([alias, target]) => {
+    const aliasKey = alias != null ? String(alias).trim() : '';
+    const targetKey = target != null ? String(target).trim() : '';
+    if (!aliasKey) return;
+    const aliasLookup = aliasKey.toLowerCase();
+    const targetLookup = targetKey ? targetKey.toLowerCase() : '';
+    const aliasValue = base[aliasKey];
+    if (aliasValue != null) {
+      if (targetKey) {
+        const targetValue = base[targetKey];
+        if (targetValue == null || targetValue === '') {
+          base[targetKey] = aliasValue;
+        }
+      }
+      delete base[aliasKey];
+    }
+    excludeSet.add(aliasLookup);
+    if (targetLookup) {
+      excludeSet.add(targetLookup);
+    }
+  });
+
+  const values = {};
+  (Array.isArray(fieldDefs) ? fieldDefs : []).forEach(({ key }) => {
+    const normalizedKey = key != null ? String(key).trim() : '';
+    if (!normalizedKey) return;
+    const lookupKey = normalizedKey.toLowerCase();
+    values[normalizedKey] = toFormString(base[normalizedKey]);
+    if (normalizedKey in base) {
+      delete base[normalizedKey];
+    }
+    excludeSet.add(lookupKey);
+  });
+
   const extras = [];
   Object.entries(base).forEach(([key, value]) => {
-    if (excludeSet.has(key)) return;
-    if (fieldDefs.some((field) => field.key === key)) return;
-    extras.push({ key, value: toFormString(value) });
+    const normalizedKey = key != null ? String(key).trim() : '';
+    if (!normalizedKey) return;
+    const lookupKey = normalizedKey.toLowerCase();
+    if (excludeSet.has(lookupKey)) return;
+    if (fieldLookup.has(lookupKey)) return;
+    if (isForbiddenSectionKey(normalizedKey)) return;
+    extras.push({ key: normalizedKey, value: toFormString(value) });
   });
 
   return { values, extras };
@@ -1073,6 +1147,7 @@ function sectionStateToObject(section) {
   Object.entries(values).forEach(([key, value]) => {
     const normalizedKey = key != null ? String(key).trim() : '';
     if (!normalizedKey) return;
+    if (isForbiddenSectionKey(normalizedKey)) return;
     const trimmedValue = trimOrNull(value);
     if (trimmedValue != null) {
       result[normalizedKey] = trimmedValue;
@@ -1083,6 +1158,7 @@ function sectionStateToObject(section) {
     if (!entry) return;
     const key = entry.key != null ? String(entry.key).trim() : '';
     if (!key) return;
+    if (isForbiddenSectionKey(key)) return;
     const valueRaw = entry.value;
     if (valueRaw === undefined || valueRaw === null || valueRaw === '') return;
     if (typeof valueRaw === 'string') {
@@ -3406,6 +3482,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
