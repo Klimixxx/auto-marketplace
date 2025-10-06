@@ -117,6 +117,68 @@ function ensureAbsoluteFileUrl(url) {
   }
 }
 
+function normalizeFedresursCandidate(candidate) {
+  if (!candidate) return null;
+  const text = String(candidate).trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (!lower.includes('fedresurs')) return null;
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    return text;
+  }
+  if (lower.startsWith('//')) {
+    return `https:${text}`;
+  }
+  if (lower.startsWith('www.')) {
+    return `https://${text}`;
+  }
+  return `https://${text.replace(/^\/+/, '')}`;
+}
+
+function resolveFedresursUrl(trade) {
+  if (!trade) return null;
+  const meta = trade.raw_payload?.fedresurs_data || trade.fedresurs_meta || {};
+  const candidates = [
+    trade.fedresurs_url,
+    trade.fedresursUrl,
+    trade.source_url,
+    trade.sourceUrl,
+    trade.lot_details?.fedresurs_url,
+    trade.lot_details?.source_url,
+    meta?.url,
+    meta?.link,
+    meta?.card_url,
+    meta?.cardUrl,
+    meta?.trade_url,
+    meta?.tradeUrl,
+    meta?.possible_url,
+    meta?.possibleUrl,
+    meta?.document_url,
+    meta?.documentUrl,
+    meta?.links?.card,
+    meta?.links?.detail,
+    meta?.links?.self,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeFedresursCandidate(candidate);
+    if (normalized) return normalized;
+  }
+
+  const idCandidates = [
+    trade.fedresurs_id,
+    trade.fedresursId,
+    meta?.guid,
+    meta?.number,
+    meta?.id,
+  ];
+  for (const idCandidate of idCandidates) {
+    const text = idCandidate != null ? String(idCandidate).trim() : '';
+    if (!text) continue;
+    return `https://fedresurs.ru/trade/${encodeURIComponent(text)}`;
+  }
+  return null;
+}
+
 const TRADE_TYPE_OPTIONS = [
   { value: '', label: 'Не указано' },
   { value: 'public_offer', label: 'Публичное предложение' },
@@ -1875,6 +1937,8 @@ export default function AdminParserTradeCard() {
     shouldIncludeAuctionExtras,
   ]);
 
+  const fedresursUrl = useMemo(() => resolveFedresursUrl(d || item), [d, item]);
+
   const saveTrade = useCallback(
     async ({ showAlert = true } = {}) => {
       if (!id) return null;
@@ -2282,44 +2346,95 @@ export default function AdminParserTradeCard() {
               Укажите технические параметры и дополнительные поля. Поле «Тип торгов» влияет на блоки цен ниже.
             </p>
           </div>
-          {lotFields.some((row) => row?.isCustom) ? (
+          {lotFields.length > 0 ? (
             <div style={{ display: 'grid', gap: 12 }}>
               {lotFields.map((row, index) => {
-                if (!row?.isCustom) return null;
+                const fieldLabel = row?.label || translateValueByKey(row?.key) || row?.key || 'Поле';
+                const rawValue = row?.value != null ? String(row.value) : '';
+                const isTextarea =
+                  row?.type === 'textarea'
+                  || rawValue.length > 160
+                  || rawValue.includes('\n');
+                const rowsCount = rawValue.length > 200 ? 6 : rawValue.length > 160 ? 4 : 2;
+                let control = null;
+                if (row?.type === 'select' && Array.isArray(row.options)) {
+                  control = (
+                    <select
+                      className="input"
+                      value={row.value ?? ''}
+                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                    >
+                      {row.options.map((option) => (
+                        <option key={option.value ?? option.label} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                } else if (isTextarea) {
+                  control = (
+                    <textarea
+                      className="textarea"
+                      rows={rowsCount}
+                      value={row.value || ''}
+                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                      placeholder={row.placeholder || ''}
+                    />
+                  );
+                } else {
+                  control = (
+                    <input
+                      className="input"
+                      value={row.value || ''}
+                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
+                      placeholder={row.placeholder || ''}
+                      inputMode={row.numeric ? 'decimal' : undefined}
+                    />
+                  );
+                }
+
                 return (
                   <div
-                    key={`${row.key || 'custom'}-${index}`}
+                    key={`${row.key || 'field'}-${index}`}
                     className="panel"
-                    style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}
+                    style={{ padding: 12, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' }}
                   >
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Название поля</span>
-                      <input
-                        className="input"
-                        value={row.key || ''}
-                        onChange={(e) => updateLotFieldKey(index, e.target.value)}
-                        placeholder="Например, mileage"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Значение</span>
-                      <textarea
-                        className="textarea"
-                        rows={row.value && String(row.value).length > 160 ? 4 : 2}
-                        value={row.value || ''}
-                        onChange={(e) => updateLotFieldValue(index, e.target.value)}
-                      />
-                    </label>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button type="button" className="button outline" onClick={() => removeLotField(index)}>
-                        Удалить
-                      </button>
+                    <div style={{ flex: '1 1 220px', display: 'grid', gap: 8 }}>
+                      <div style={{ fontWeight: 600 }} title={row.key || undefined}>
+                        {fieldLabel}
+                      </div>
+                      {row.isCustom ? (
+                        <label style={{ display: 'grid', gap: 4 }}>
+                          <span className="muted" style={{ fontSize: 12 }}>Код поля</span>
+                          <input
+                            className="input"
+                            value={row.key || ''}
+                            onChange={(e) => updateLotFieldKey(index, e.target.value)}
+                            placeholder="Например, engine_power"
+                          />
+                        </label>
+                      ) : (
+                        <div className="muted" style={{ fontSize: 12 }}>Код: {row.key}</div>
+                      )}
                     </div>
+                    <label style={{ flex: '2 1 260px', display: 'grid', gap: 4 }}>
+                      <span className="muted" style={{ fontSize: 12 }}>Значение</span>
+                      {control}
+                    </label>
+                    {row.isCustom ? (
+                      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-start' }}>
+                        <button type="button" className="button outline" onClick={() => removeLotField(index)}>
+                          Удалить
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
-            ) : null}
+          ) : (
+            <div className="muted" style={{ fontSize: 13 }}>Поля ещё не добавлены.</div>
+          )}
           <div>
             <button type="button" className="button outline" onClick={addLotField}>
               Добавить характеристику
@@ -2362,33 +2477,45 @@ export default function AdminParserTradeCard() {
           </div>
           {contactState.extras && contactState.extras.length > 0 ? (
             <div style={{ display: 'grid', gap: 12 }}>
-              {contactState.extras.map((extra, index) => (
-                <div key={`contact-extra-${index}`} className="panel" style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Название поля</span>
-                    <input
-                      className="input"
-                      value={extra.key || ''}
-                      onChange={(e) => updateContactExtra(index, 'key', e.target.value)}
-                      placeholder="Например, WhatsApp"
-                    />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Значение</span>
-                    <textarea
-                      className="textarea"
-                      rows={extra.value && extra.value.length > 160 ? 4 : 2}
-                      value={extra.value || ''}
-                      onChange={(e) => updateContactExtra(index, 'value', e.target.value)}
-                    />
-                  </label>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="button" className="button outline" onClick={() => removeContactExtra(index)}>
-                      Удалить
-                    </button>
+              {contactState.extras.map((extra, index) => {
+                const fieldLabel =
+                  translateValueByKey(extra?.key) || extra?.key || `Доп. поле ${index + 1}`;
+                const rowsCount = extra?.value && extra.value.length > 200 ? 6 : extra?.value && extra.value.length > 160 ? 4 : 2;
+                return (
+                  <div
+                    key={`contact-extra-${index}`}
+                    className="panel"
+                    style={{ padding: 12, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' }}
+                  >
+                    <div style={{ flex: '1 1 220px', display: 'grid', gap: 8 }}>
+                      <div style={{ fontWeight: 600 }} title={extra?.key || undefined}>{fieldLabel}</div>
+                      <label style={{ display: 'grid', gap: 4 }}>
+                        <span className="muted" style={{ fontSize: 12 }}>Код поля</span>
+                        <input
+                          className="input"
+                          value={extra?.key || ''}
+                          onChange={(e) => updateContactExtra(index, 'key', e.target.value)}
+                          placeholder="Например, whatsapp"
+                        />
+                      </label>
+                    </div>
+                    <label style={{ flex: '2 1 260px', display: 'grid', gap: 4 }}>
+                      <span className="muted" style={{ fontSize: 12 }}>Значение</span>
+                      <textarea
+                        className="textarea"
+                        rows={rowsCount}
+                        value={extra?.value || ''}
+                        onChange={(e) => updateContactExtra(index, 'value', e.target.value)}
+                      />
+                    </label>
+                    <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-start' }}>
+                      <button type="button" className="button outline" onClick={() => removeContactExtra(index)}>
+                        Удалить
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </section>
@@ -2419,33 +2546,44 @@ export default function AdminParserTradeCard() {
           </div>
           {debtorState.extras && debtorState.extras.length > 0 ? (
             <div style={{ display: 'grid', gap: 12 }}>
-              {debtorState.extras.map((extra, index) => (
-                <div key={`debtor-extra-${index}`} className="panel" style={{ padding: 12, display: 'grid', gap: 8, gridTemplateColumns: 'minmax(160px,1fr) minmax(220px,2fr) auto', alignItems: 'end' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Название поля</span>
-                    <input
-                      className="input"
-                      value={extra.key || ''}
-                      onChange={(e) => updateDebtorExtra(index, 'key', e.target.value)}
-                      placeholder="Например, СНИЛС"
-                    />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Значение</span>
-                    <textarea
-                      className="textarea"
-                      rows={extra.value && extra.value.length > 160 ? 4 : 2}
-                      value={extra.value || ''}
-                      onChange={(e) => updateDebtorExtra(index, 'value', e.target.value)}
-                    />
-                  </label>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="button" className="button outline" onClick={() => removeDebtorExtra(index)}>
-                      Удалить
-                    </button>
+              {debtorState.extras.map((extra, index) => {
+                const fieldLabel = translateValueByKey(extra?.key) || extra?.key || `Доп. поле ${index + 1}`;
+                const rowsCount = extra?.value && extra.value.length > 200 ? 6 : extra?.value && extra.value.length > 160 ? 4 : 2;
+                return (
+                  <div
+                    key={`debtor-extra-${index}`}
+                    className="panel"
+                    style={{ padding: 12, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' }}
+                  >
+                    <div style={{ flex: '1 1 220px', display: 'grid', gap: 8 }}>
+                      <div style={{ fontWeight: 600 }} title={extra?.key || undefined}>{fieldLabel}</div>
+                      <label style={{ display: 'grid', gap: 4 }}>
+                        <span className="muted" style={{ fontSize: 12 }}>Код поля</span>
+                        <input
+                          className="input"
+                          value={extra?.key || ''}
+                          onChange={(e) => updateDebtorExtra(index, 'key', e.target.value)}
+                          placeholder="Например, СНИЛС"
+                        />
+                      </label>
+                    </div>
+                    <label style={{ flex: '2 1 260px', display: 'grid', gap: 4 }}>
+                      <span className="muted" style={{ fontSize: 12 }}>Значение</span>
+                      <textarea
+                        className="textarea"
+                        rows={rowsCount}
+                        value={extra?.value || ''}
+                        onChange={(e) => updateDebtorExtra(index, 'value', e.target.value)}
+                      />
+                    </label>
+                    <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-start' }}>
+                      <button type="button" className="button outline" onClick={() => removeDebtorExtra(index)}>
+                        Удалить
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </section>
@@ -2575,11 +2713,18 @@ export default function AdminParserTradeCard() {
         </section>
 
         <section style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h3 style={{ margin: 0 }}>Документы</h3>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Загрузите файлы (PDF, Word, Excel, изображения) или укажите ссылки вручную.
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Документы</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Загрузите файлы (PDF, Word, Excel, изображения) или укажите ссылки вручную.
+              </p>
+            </div>
+            {fedresursUrl ? (
+              <a className="button outline" href={fedresursUrl} target="_blank" rel="noreferrer">
+                Перейти на Федресурс
+              </a>
+            ) : null}
           </div>
           <div className="admin-upload">
             <div className="admin-upload__row">
@@ -3188,3 +3333,4 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
