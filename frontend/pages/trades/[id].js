@@ -769,6 +769,20 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
+          {debtorEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Информация о должнике</h2>
+              <KeyValueGrid entries={debtorEntries} />
+            </section>
+          )}
+
+          {contactEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Информация об организаторе</h2>
+              <KeyValueGrid entries={contactEntries} />
+            </section>
+          )}
+
           {periodScheduleEntries.length > 0 && (
             <section className="detail-section">
               <h2>График снижения цены</h2>
@@ -1007,6 +1021,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
