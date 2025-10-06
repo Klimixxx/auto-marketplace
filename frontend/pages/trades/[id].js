@@ -6,7 +6,7 @@ import {
   formatValueForDisplay,
   translateFieldKey,
   translateValueByKey,
-} from "../../lib/lotFormatting";␊
+} from "../../lib/lotFormatting";
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from "../../lib/tradeTypes";
 import computeTradeTiming from "../../lib/tradeTiming";
 
@@ -1007,5 +1007,6 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
