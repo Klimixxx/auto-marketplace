@@ -104,7 +104,7 @@ function extractPhotos(trade) {
   return urls;
 }
 
-function ensureAbsolutePhotoUrl(url) {
+function ensureAbsoluteFileUrl(url) {
   if (!url) return '';
   const trimmed = String(url).trim();
   if (!trimmed) return '';
@@ -124,6 +124,112 @@ const TRADE_TYPE_OPTIONS = [
   { value: 'auction', label: 'Аукцион' },
   { value: 'offer', label: 'Торговое предложение' },
 ];
+
+const LOT_DETAIL_ALIASES = {
+  object_name: 'title',
+  objectName: 'title',
+  object_title: 'title',
+  objectTitle: 'title',
+  lot_name: 'title',
+  lotName: 'title',
+  item_name: 'asset_name',
+  itemName: 'asset_name',
+  asset_name: 'asset_name',
+  assetName: 'asset_name',
+  asset_full_name: 'asset_name',
+  assetFullName: 'asset_name',
+  asset_title: 'asset_name',
+  assetTitle: 'asset_name',
+  full_name: 'asset_name',
+  fullName: 'asset_name',
+  name: 'asset_name',
+  lotNumber: 'lot_number',
+  lot_no: 'lot_number',
+  lotNo: 'lot_number',
+  inventoryNumber: 'inventory_number',
+  inventory_no: 'inventory_number',
+  inventoryNo: 'inventory_number',
+  mileage_km: 'mileage',
+  mileageKm: 'mileage',
+  mileage_value: 'mileage',
+  mileageValue: 'mileage',
+  run: 'mileage',
+  probeg: 'mileage',
+  engine_capacity: 'engine_volume',
+  engineCapacity: 'engine_volume',
+  engineVolume: 'engine_volume',
+  engine_volume_l: 'engine_volume',
+  engine_volume_liters: 'engine_volume',
+  engineVolumeLiters: 'engine_volume',
+  engine_power_hp: 'engine_power',
+  enginePowerHp: 'engine_power',
+  engine_hp: 'engine_power',
+  engineHp: 'engine_power',
+  power_hp: 'engine_power',
+  powerHp: 'engine_power',
+  power_ps: 'engine_power',
+  powerPs: 'engine_power',
+  engine_power_kw: 'engine_power_kw',
+  enginePowerKw: 'engine_power_kw',
+  power_kw: 'engine_power_kw',
+  powerKw: 'engine_power_kw',
+  fuel: 'fuel_type',
+  fuelType: 'fuel_type',
+  transmission_type: 'transmission',
+  transmissionType: 'transmission',
+  gearbox: 'transmission',
+  kpp: 'transmission',
+  drive_type: 'drive',
+  driveType: 'drive',
+  drive_unit: 'drive',
+  driveUnit: 'drive',
+  wheel: 'steering',
+  wheel_position: 'steering',
+  wheelPosition: 'steering',
+  steering_wheel: 'steering',
+  steeringWheel: 'steering',
+  steering_position: 'steering',
+  steeringPosition: 'steering',
+  wheel_side: 'steering',
+  wheelSide: 'steering',
+  steering_side: 'steering',
+  steeringSide: 'steering',
+  body: 'body_type',
+  bodyType: 'body_type',
+  color_name: 'color',
+  colorName: 'color',
+  doors_count: 'doors',
+  doorsCount: 'doors',
+  seats_count: 'seats',
+  seatsCount: 'seats',
+  condition_state: 'condition',
+  conditionState: 'condition',
+  extras_list: 'extras',
+  extrasList: 'extras',
+  options_list: 'options',
+  optionsList: 'options',
+  restrictions_list: 'restrictions',
+  restrictionsList: 'restrictions',
+  encumbrances_list: 'encumbrances',
+  encumbrancesList: 'encumbrances',
+  documents_required_list: 'documents_required',
+  documentsRequired: 'documents_required',
+  auctionLink: 'auction_url',
+  auction_url: 'auction_url',
+  sourceLink: 'source_url',
+  sourceLinkUrl: 'source_url',
+  tradeType: 'trade_type',
+  trade_type: 'trade_type',
+  startPrice: 'start_price',
+  startprice: 'start_price',
+  minPrice: 'min_price',
+  minprice: 'min_price',
+  maxPrice: 'max_price',
+  maxprice: 'max_price',
+  applicationCount: 'applications_count',
+  applications: 'applications_count',
+  application_total: 'applications_count',
+};
 
 const LOT_FIELDS_EXCLUDE = new Set([
   'title',
@@ -154,6 +260,16 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'contact_details',
   'debtor_details',
   'raw_payload',
+  'object_name',
+  'objectName',
+  'object_title',
+  'lot_name',
+  'lotName',
+  'item_name',
+  'itemName',
+  'asset_title',
+  'assetTitle',
+  'name',
 ]);
 
 const LOT_FIELD_PRESETS = [
@@ -167,12 +283,10 @@ const LOT_FIELD_PRESETS = [
   { key: 'engine_type', label: 'Тип двигателя' },
   { key: 'engine_volume', label: 'Объём двигателя, л' },
   { key: 'engine_power', label: 'Мощность двигателя (л.с.)', numeric: true },
-  { key: 'engine_power_hp', label: 'Мощность двигателя (л.с.)', numeric: true },
   { key: 'engine_power_kw', label: 'Мощность двигателя (кВт)', numeric: true },
   { key: 'fuel_type', label: 'Тип топлива' },
   { key: 'transmission', label: 'Коробка передач' },
   { key: 'drive', label: 'Тип привода' },
-  { key: 'wheel', label: 'Расположение руля' },
   { key: 'steering', label: 'Расположение руля' },
   { key: 'body_type', label: 'Тип кузова' },
   { key: 'color', label: 'Цвет' },
@@ -193,6 +307,7 @@ const CONTACT_FIELDS = [
   { key: 'organizer_inn', label: 'ИНН организатора' },
   { key: 'organizer_ogrn', label: 'ОГРН организатора' },
   { key: 'organizer_ogrnip', label: 'ОГРНИП организатора' },
+  { key: 'organizer_type', label: 'Тип организатора' },
   { key: 'manager', label: 'Менеджер' },
   { key: 'contact_name', label: 'Контактное лицо' },
   { key: 'phone', label: 'Телефон' },
@@ -205,8 +320,52 @@ const CONTACT_FIELDS = [
   { key: 'inspection_address', label: 'Адрес осмотра' },
 ];
 
+const CONTACT_ALIASES = {
+  organizer: 'organizer_name',
+  organizerName: 'organizer_name',
+  organizer_full_name: 'organizer_name',
+  organizerFullName: 'organizer_name',
+  organizer_title: 'organizer_name',
+  organizerTitle: 'organizer_name',
+  organisation: 'organizer_name',
+  organization: 'organizer_name',
+  company: 'organizer_name',
+  company_name: 'organizer_name',
+  companyName: 'organizer_name',
+  short_name: 'organizer_name',
+  shortName: 'organizer_name',
+  name: 'organizer_name',
+  full_name: 'organizer_name',
+  fullname: 'organizer_name',
+  fullName: 'organizer_name',
+  inn: 'organizer_inn',
+  inn_number: 'organizer_inn',
+  innNumber: 'organizer_inn',
+  ogrn: 'organizer_ogrn',
+  ogrn_number: 'organizer_ogrn',
+  ogrnNumber: 'organizer_ogrn',
+  ogrnip: 'organizer_ogrnip',
+  ogrn_ip: 'organizer_ogrnip',
+  ogrnipNumber: 'organizer_ogrnip',
+  type: 'organizer_type',
+  organizer_type: 'organizer_type',
+  organizerType: 'organizer_type',
+  tel: 'phone',
+  telephone: 'phone',
+  phone_number: 'phone',
+  contact: 'contact_name',
+  contact_person: 'contact_name',
+  manager_name: 'manager',
+  representative: 'manager',
+  mail: 'email',
+  site: 'website',
+  url: 'website',
+  website_url: 'website',
+};
+
 const DEBTOR_FIELDS = [
   { key: 'debtor_name', label: 'Должник' },
+  { key: 'debtor_type', label: 'Тип должника' },
   { key: 'debtor_inn', label: 'ИНН должника' },
   { key: 'debtor_ogrn', label: 'ОГРН должника' },
   { key: 'debtor_ogrnip', label: 'ОГРНИП должника' },
@@ -216,6 +375,54 @@ const DEBTOR_FIELDS = [
   { key: 'debtor_email', label: 'Email должника' },
   { key: 'debtor_manager', label: 'Представитель должника' },
 ];
+
+const DEBTOR_ALIASES = {
+  name: 'debtor_name',
+  full_name: 'debtor_name',
+  fullname: 'debtor_name',
+  fullName: 'debtor_name',
+  short_name: 'debtor_name',
+  shortName: 'debtor_name',
+  debtor_full_name: 'debtor_name',
+  debtorFullName: 'debtor_name',
+  organization: 'debtor_name',
+  organisation: 'debtor_name',
+  company: 'debtor_name',
+  debtor_company: 'debtor_name',
+  debtorCompany: 'debtor_name',
+  type: 'debtor_type',
+  debtor_type: 'debtor_type',
+  debtorType: 'debtor_type',
+  debtor_category: 'debtor_type',
+  debtorCategory: 'debtor_type',
+  inn: 'debtor_inn',
+  inn_number: 'debtor_inn',
+  innNumber: 'debtor_inn',
+  ogrn: 'debtor_ogrn',
+  ogrn_number: 'debtor_ogrn',
+  ogrnNumber: 'debtor_ogrn',
+  ogrnip: 'debtor_ogrnip',
+  ogrn_ip: 'debtor_ogrnip',
+  ogrnipNumber: 'debtor_ogrnip',
+  snils: 'debtor_snils',
+  snils_number: 'debtor_snils',
+  snilsNumber: 'debtor_snils',
+  address: 'debtor_address',
+  location: 'debtor_address',
+  registered_address: 'debtor_address',
+  registeredAddress: 'debtor_address',
+  tel: 'debtor_phone',
+  telephone: 'debtor_phone',
+  phone: 'debtor_phone',
+  phone_number: 'debtor_phone',
+  mail: 'debtor_email',
+  email_address: 'debtor_email',
+  emailAddress: 'debtor_email',
+  representative: 'debtor_manager',
+  representative_name: 'debtor_manager',
+  representativeName: 'debtor_manager',
+  manager: 'debtor_manager',
+};
 
 function toFormString(value) {
   if (value === undefined || value === null) return '';
@@ -240,7 +447,17 @@ function parseNumericInput(value) {
 }
 
 function createLotFieldRows(lot) {
-  const base = lot && typeof lot === 'object' && !Array.isArray(lot) ? lot : {};
+  const base = lot && typeof lot === 'object' && !Array.isArray(lot) ? { ...lot } : {};
+
+  Object.entries(LOT_DETAIL_ALIASES).forEach(([alias, target]) => {
+    if (base[alias] != null && (base[target] == null || base[target] === '')) {
+      base[target] = base[alias];
+    }
+    if (alias in base) {
+      delete base[alias];
+    }
+  });
+
   const rows = [];
   const usedKeys = new Set();
 
@@ -278,15 +495,32 @@ function createLotFieldRows(lot) {
   return rows;
 }
 
-function sectionStateFromObject(source, fieldDefs) {
-  const base = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+function sectionStateFromObject(source, fieldDefs, options = {}) {
+  const base = source && typeof source === 'object' && !Array.isArray(source) ? { ...source } : {};
+  const { aliases = {}, exclude = [] } = options;
+  const excludeSet = new Set(exclude);
+
+  Object.entries(aliases).forEach(([alias, target]) => {
+    if (base[alias] != null && (base[target] == null || base[target] === '')) {
+      base[target] = base[alias];
+    }
+    excludeSet.add(alias);
+    if (alias in base) {
+      delete base[alias];
+    }
+  });
+
   const values = {};
   fieldDefs.forEach(({ key }) => {
     values[key] = toFormString(base[key]);
+    if (key in base) {
+      delete base[key];
+    }
   });
 
   const extras = [];
   Object.entries(base).forEach(([key, value]) => {
+    if (excludeSet.has(key)) return;
     if (fieldDefs.some((field) => field.key === key)) return;
     extras.push({ key, value: toFormString(value) });
   });
@@ -375,34 +609,63 @@ function buildPriceHistoryPayload(history) {
 
 function normalizeDocuments(documents) {
   if (!Array.isArray(documents)) return [];
-  return documents.map((doc, index) => {
-    const obj = doc && typeof doc === 'object' ? doc : {};
-    const knownKeys = new Set(['id', 'title', 'description', 'type', 'date', 'url']);
-    const extra = {};
-    Object.entries(obj).forEach(([key, value]) => {
-      if (!knownKeys.has(key)) extra[key] = value;
-    });
-    return {
-      id: obj.id || `document-${index}`,
-      title: toFormString(obj.title),
-      description: toFormString(obj.description),
-      type: toFormString(obj.type),
-      date: toFormString(obj.date),
-      url: toFormString(obj.url),
-      extra,
-    };
-  });
+  const seen = new Set();
+  return documents
+    .map((doc, index) => {
+      const obj = doc && typeof doc === 'object' ? doc : {};
+      const rawUrl =
+        obj.url
+        || obj.href
+        || obj.link
+        || obj.download_url
+        || obj.path
+        || obj.file
+        || '';
+      const absoluteUrl = rawUrl ? ensureAbsoluteFileUrl(rawUrl) : '';
+      const title = toFormString(obj.title || obj.name || obj.filename || obj.originalName);
+      const description = toFormString(obj.description || obj.comment || obj.note);
+      const extra = { ...obj };
+      delete extra.url;
+      delete extra.href;
+      delete extra.link;
+      delete extra.download_url;
+      delete extra.path;
+      delete extra.file;
+      delete extra.title;
+      delete extra.name;
+      delete extra.filename;
+      delete extra.originalName;
+      delete extra.description;
+      delete extra.comment;
+      delete extra.note;
+      delete extra.id;
+
+      const id = obj.id || absoluteUrl || `document-${index}`;
+      if (absoluteUrl && seen.has(absoluteUrl)) {
+        return null;
+      }
+      if (absoluteUrl) {
+        seen.add(absoluteUrl);
+      }
+
+      return {
+        id,
+        title,
+        description,
+        url: absoluteUrl,
+        extra,
+      };
+    })
+    .filter((entry) => entry && (entry.title || entry.url || entry.description));
 }
 
 function buildDocumentsPayload(docs) {
   return docs
-    .filter((doc) => doc && (doc.title || doc.url || doc.description || doc.type || doc.date))
+    .filter((doc) => doc && (doc.title || doc.url || doc.description))
     .map((doc) => {
       const payload = { ...doc.extra };
       if (doc.title) payload.title = doc.title;
       if (doc.description) payload.description = doc.description;
-      if (doc.type) payload.type = doc.type;
-      if (doc.date) payload.date = doc.date;
       if (doc.url) payload.url = doc.url;
       return payload;
     });
@@ -705,35 +968,43 @@ function sectionStateToObject(section) {
   return result;
 }
 
-function buildLotDetailsFromState(lotFields, preserved, form, auctionPricing, publicOfferPeriods) {
+function buildLotDetailsFromState(
+  lotFields,
+  preserved,
+  form,
+  auctionPricing,
+  publicOfferPeriods,
+  options = {},
+) {
+  const { includeStartPrice = true, includePeriodPrices = true, includeAuctionExtras = true } = options;
   const base = lotFieldsToObject(lotFields, preserved);
 
   const auction = auctionPricing || {};
-  if (auction.start_price) {
+  if (includeStartPrice && auction.start_price) {
     const numeric = parseNumericInput(auction.start_price);
     base.start_price = numeric != null ? numeric : auction.start_price;
   } else {
     delete base.start_price;
   }
-  if (auction.current_price) {
+  if (includeAuctionExtras && auction.current_price) {
     const numeric = parseNumericInput(auction.current_price);
     base.current_price = numeric != null ? numeric : auction.current_price;
   } else {
     delete base.current_price;
   }
-  if (auction.min_price) {
+  if (includeAuctionExtras && auction.min_price) {
     const numeric = parseNumericInput(auction.min_price);
     base.min_price = numeric != null ? numeric : auction.min_price;
   } else {
     delete base.min_price;
   }
-  if (auction.max_price) {
+  if (includeAuctionExtras && auction.max_price) {
     const numeric = parseNumericInput(auction.max_price);
     base.max_price = numeric != null ? numeric : auction.max_price;
   } else {
     delete base.max_price;
   }
-  if (auction.step) {
+  if (includeAuctionExtras && auction.step) {
     const numeric = parseNumericInput(auction.step);
     const stepValue = numeric != null ? numeric : String(auction.step).trim();
     base.price_step = stepValue;
@@ -742,14 +1013,18 @@ function buildLotDetailsFromState(lotFields, preserved, form, auctionPricing, pu
     delete base.price_step;
     delete base.auction_step;
   }
-  if (auction.deposit) {
+  if (includeAuctionExtras && auction.deposit) {
     const numeric = parseNumericInput(auction.deposit);
     base.deposit = numeric != null ? numeric : auction.deposit;
   } else {
     delete base.deposit;
   }
-  if (auction.currency) {
-    base.currency = String(auction.currency).trim();
+  if (includeAuctionExtras) {
+    if (auction.currency) {
+      base.currency = String(auction.currency).trim();
+    } else {
+      delete base.currency;
+    }
   } else {
     delete base.currency;
   }
@@ -760,8 +1035,8 @@ function buildLotDetailsFromState(lotFields, preserved, form, auctionPricing, pu
     delete base.application_deadline;
   }
 
-  const periodsPayload = buildPublicOfferPeriodsPayload(publicOfferPeriods || []);
-  if (periodsPayload.length) {
+  const periodsPayload = includePeriodPrices ? buildPublicOfferPeriodsPayload(publicOfferPeriods || []) : [];
+  if (includePeriodPrices && periodsPayload.length) {
     base.period_prices = periodsPayload;
     base.price_schedule = periodsPayload;
   } else {
@@ -769,7 +1044,7 @@ function buildLotDetailsFromState(lotFields, preserved, form, auctionPricing, pu
     delete base.price_schedule;
   }
 
-  const synced = syncLotDetailsWithForm(base, form);
+  const synced = syncLotDetailsWithForm(base, form, { includeStartPrice });
   return synced;
 }
 
@@ -788,13 +1063,18 @@ const LOT_DETAIL_SYNC_MAP = {
   source_url: 'source_url',
 };
 
-function syncLotDetailsWithForm(lot, form) {
+function syncLotDetailsWithForm(lot, form, options = {}) {
+  const { includeStartPrice = true } = options;
   const base = lot && typeof lot === 'object' && !Array.isArray(lot) ? { ...lot } : {};
   if (!form || typeof form !== 'object') return base;
 
   Object.entries(LOT_DETAIL_SYNC_MAP).forEach(([formKey, lotKey]) => {
     if (!(formKey in form)) return;
     const value = form[formKey];
+    if (lotKey === 'start_price' && !includeStartPrice) {
+      delete base[lotKey];
+      return;
+    }
     if (value === '' || value === null || value === undefined) {
       delete base[lotKey];
       return;
@@ -970,10 +1250,14 @@ export default function AdminParserTradeCard() {
     application_deadline: '',
   });
   const [publicOfferPeriods, setPublicOfferPeriods] = useState([]);
+  const [publicOfferPriceMode, setPublicOfferPriceMode] = useState('start_price');
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const singleFileInputRef = useRef(null);
   const multipleFileInputRef = useRef(null);
+  const [uploadingDocuments, setUploadingDocuments] = useState(false);
+  const [documentUploadError, setDocumentUploadError] = useState(null);
+  const documentFileInputRef = useRef(null);
 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -988,19 +1272,19 @@ export default function AdminParserTradeCard() {
     const lotDetails = trade.lot_details && typeof trade.lot_details === 'object' ? trade.lot_details : {};
 
     setForm({
-      title: trade.title || '',
+      title: trade.title || lotDetails.title || lotDetails.object_name || '',
       description: trade.description || lotDetails.description || '',
-      category: trade.category || '',
-      region: trade.region || '',
-      brand: trade.brand || '',
-      model: trade.model || '',
-      year: trade.year || '',
+      category: trade.category || lotDetails.category || '',
+      region: trade.region || lotDetails.region || '',
+      brand: trade.brand || lotDetails.brand || '',
+      model: trade.model || lotDetails.model || '',
+      year: trade.year || lotDetails.year || '',
       vin: trade.vin || lotDetails.vin || '',
       start_price: trade.start_price ?? lotDetails.start_price ?? '',
       applications_count: trade.applications_count ?? 0,
       date_start: toInputDate(trade.date_start || trade.dateStart),
       date_finish: toInputDate(trade.date_finish || trade.dateFinish),
-      trade_place: trade.trade_place || trade.tradePlace || '',
+      trade_place: trade.trade_place || trade.tradePlace || lotDetails.trade_place || '',
       source_url: trade.source_url || trade.url || trade.source || '',
     });
 
@@ -1014,15 +1298,19 @@ export default function AdminParserTradeCard() {
     setLotFields(rows);
     setLotPreserved(preserved);
 
-    setContactState(sectionStateFromObject(trade.contact_details, CONTACT_FIELDS));
-    setDebtorState(sectionStateFromObject(trade.debtor_details, DEBTOR_FIELDS));
+    setContactState(sectionStateFromObject(trade.contact_details, CONTACT_FIELDS, { aliases: CONTACT_ALIASES }));
+    setDebtorState(sectionStateFromObject(trade.debtor_details, DEBTOR_FIELDS, { aliases: DEBTOR_ALIASES }));
     setPriceHistory(normalizePriceHistory(trade.prices));
     setDocuments(normalizeDocuments(trade.documents));
     setPhotos(normalizePhotosForEditing(trade));
     setAuctionPricing(normalizeAuctionPricing(trade, lotDetails));
-    setPublicOfferPeriods(normalizePublicOfferPeriods(lotDetails));
+    const normalizedPeriods = normalizePublicOfferPeriods(lotDetails);
+    setPublicOfferPeriods(normalizedPeriods);
+    setPublicOfferPriceMode(normalizedPeriods.length > 0 ? 'period_price' : 'start_price');
     setUploadError(null);
     setUploadingPhotos(false);
+    setDocumentUploadError(null);
+    setUploadingDocuments(false);
   }, []);
 
   // fetch trade
@@ -1124,7 +1412,7 @@ export default function AdminParserTradeCard() {
         }
 
         const urls = uploaded
-          .map((item) => ensureAbsolutePhotoUrl(item.url || item.path))
+          .map((item) => ensureAbsoluteFileUrl(item.url || item.path))
           .filter(Boolean);
 
         if (!urls.length) {
@@ -1136,7 +1424,7 @@ export default function AdminParserTradeCard() {
           const next = [...previous];
           const seen = new Set(previous.map((photo) => photo.url));
           uploaded.forEach((item) => {
-            const url = ensureAbsolutePhotoUrl(item.url || item.path);
+            const url = ensureAbsoluteFileUrl(item.url || item.path);
             if (!url || seen.has(url)) return;
             seen.add(url);
             next.push({
@@ -1186,6 +1474,98 @@ export default function AdminParserTradeCard() {
       }
     },
     [uploadPhotos],
+  );
+
+  const triggerDocumentUpload = useCallback(() => {
+    setDocumentUploadError(null);
+    documentFileInputRef.current?.click();
+  }, []);
+
+  const uploadDocuments = useCallback(
+    async (fileList) => {
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (!files.length) return;
+      if (!id) {
+        alert('Сначала сохраните объявление, чтобы добавить документы.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Требуется авторизация администратора.');
+        return;
+      }
+
+      setUploadingDocuments(true);
+      setDocumentUploadError(null);
+      try {
+        const formData = new FormData();
+        files.forEach((file) => {
+          if (file) formData.append('documents', file);
+        });
+
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/documents/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось загрузить документы');
+        }
+
+        const uploaded = Array.isArray(data.documents) ? data.documents : [];
+        if (!uploaded.length) {
+          throw new Error('Файлы не загружены');
+        }
+
+        setDocuments((prev) => {
+          const previous = Array.isArray(prev) ? prev : [];
+          const next = [...previous];
+          const seen = new Set(previous.map((doc) => doc.url).filter(Boolean));
+          uploaded.forEach((item) => {
+            const url = ensureAbsoluteFileUrl(item.url || item.path);
+            if (!url || seen.has(url)) return;
+            seen.add(url);
+            next.push({
+              id: url,
+              url,
+              title: item.originalName || item.filename || item.name || '',
+              description: '',
+              extra: {},
+            });
+          });
+          return next;
+        });
+      } catch (uploadErrorInstance) {
+        console.error('upload documents error:', uploadErrorInstance);
+        const message =
+          uploadErrorInstance instanceof Error
+            ? uploadErrorInstance.message
+            : 'Не удалось загрузить документы';
+        setDocumentUploadError(message);
+        alert(message);
+      } finally {
+        setUploadingDocuments(false);
+      }
+    },
+    [id],
+  );
+
+  const handleDocumentFileChange = useCallback(
+    (event) => {
+      const files = event.target?.files;
+      if (files && files.length) {
+        uploadDocuments(files);
+      }
+      if (event.target) {
+        event.target.value = '';
+      }
+    },
+    [uploadDocuments],
   );
 
   const updateFormField = useCallback(
@@ -1364,7 +1744,7 @@ export default function AdminParserTradeCard() {
   const addDocumentEntry = useCallback(() => {
     setDocuments((prev) => [
       ...prev,
-      { id: `document-${Date.now()}`, title: '', type: '', date: '', url: '', description: '', extra: {} },
+      { id: `document-${Date.now()}`, title: '', url: '', description: '', extra: {} },
     ]);
   }, []);
 
@@ -1408,43 +1788,6 @@ export default function AdminParserTradeCard() {
 
   const descriptionPreview = useMemo(() => (form?.description || '').trim(), [form?.description]);
 
-  const d = useMemo(() => {
-    const lot = buildLotDetailsFromState(lotFields, lotPreserved, form, auctionPricing, publicOfferPeriods);
-    const contact = sectionStateToObject(contactState);
-    const debtor = sectionStateToObject(debtorState);
-    const pricesPayload = buildPriceHistoryPayload(priceHistory);
-    const documentsPayload = buildDocumentsPayload(documents);
-    const photosPayload = buildPhotosPayload(photos);
-
-    const merged = {
-      ...(item || {}),
-      ...form,
-      lot_details: lot,
-      contact_details: contact,
-      debtor_details: debtor,
-      prices: pricesPayload,
-      documents: documentsPayload,
-      photos: photosPayload,
-    };
-
-    // keep original payload for debug if present
-    if (item?.raw_payload) merged.raw_payload = item.raw_payload;
-
-    return merged;
-  }, [
-    item,
-    form,
-    lotFields,
-    lotPreserved,
-    contactState,
-    debtorState,
-    priceHistory,
-    documents,
-    photos,
-    auctionPricing,
-    publicOfferPeriods,
-  ]);
-
   const tradeType = useMemo(() => {
     const row = lotFields.find((entry) => entry.key === 'trade_type');
     if (!row || row.value == null) return '';
@@ -1469,8 +1812,68 @@ export default function AdminParserTradeCard() {
     return null;
   }, [item, tradeType]);
 
+  const isOpenAuction = normalizedTradeType === 'open_auction';
   const isPublicOffer = normalizedTradeType === 'public_offer';
-  const isAuction = normalizedTradeType === 'open_auction' || normalizedTradeType === 'auction';
+  const isAuction = isOpenAuction || normalizedTradeType === 'auction';
+  const shouldUseStartPrice = !isPublicOffer || publicOfferPriceMode === 'start_price';
+  const shouldIncludePeriods = isPublicOffer && publicOfferPriceMode === 'period_price';
+  const shouldIncludeAuctionExtras = !isOpenAuction;
+
+  useEffect(() => {
+    if (!isPublicOffer && publicOfferPriceMode === 'period_price') {
+      setPublicOfferPriceMode('start_price');
+    }
+  }, [isPublicOffer, publicOfferPriceMode]);
+
+  const d = useMemo(() => {
+    const lot = buildLotDetailsFromState(
+      lotFields,
+      lotPreserved,
+      form,
+      auctionPricing,
+      publicOfferPeriods,
+      {
+        includeStartPrice: shouldUseStartPrice,
+        includePeriodPrices: shouldIncludePeriods,
+        includeAuctionExtras: shouldIncludeAuctionExtras,
+      },
+    );
+    const contact = sectionStateToObject(contactState);
+    const debtor = sectionStateToObject(debtorState);
+    const pricesPayload = buildPriceHistoryPayload(priceHistory);
+    const documentsPayload = buildDocumentsPayload(documents);
+    const photosPayload = buildPhotosPayload(photos);
+
+    const merged = {
+      ...(item || {}),
+      ...form,
+      lot_details: lot,
+      contact_details: contact,
+      debtor_details: debtor,
+      prices: pricesPayload,
+      documents: documentsPayload,
+      photos: photosPayload,
+    };
+
+    if (item?.raw_payload) merged.raw_payload = item.raw_payload;
+
+    return merged;
+  }, [
+    item,
+    form,
+    lotFields,
+    lotPreserved,
+    contactState,
+    debtorState,
+    priceHistory,
+    documents,
+    photos,
+    auctionPricing,
+    publicOfferPeriods,
+    shouldUseStartPrice,
+    shouldIncludePeriods,
+    shouldIncludeAuctionExtras,
+  ]);
 
   const saveTrade = useCallback(
     async ({ showAlert = true } = {}) => {
@@ -1484,6 +1887,11 @@ export default function AdminParserTradeCard() {
           form,
           auctionPricing,
           publicOfferPeriods,
+          {
+            includeStartPrice: shouldUseStartPrice,
+            includePeriodPrices: shouldIncludePeriods,
+            includeAuctionExtras: shouldIncludeAuctionExtras,
+          },
         );
         const contactPayload = sectionStateToObject(contactState);
         const debtorPayload = sectionStateToObject(debtorState);
@@ -1491,11 +1899,12 @@ export default function AdminParserTradeCard() {
         const documentsPayload = buildDocumentsPayload(documents);
         const photosPayload = buildPhotosPayload(photos);
 
-        const effectiveStartPrice =
-          auctionPricing?.start_price && auctionPricing.start_price !== ''
+        const effectiveStartPrice = shouldUseStartPrice
+          ? auctionPricing?.start_price && auctionPricing.start_price !== ''
             ? auctionPricing.start_price
-            : form?.start_price;
-        const startPriceNumeric = parseNumericInput(effectiveStartPrice);
+            : form?.start_price
+          : null;
+        const startPriceNumeric = shouldUseStartPrice ? parseNumericInput(effectiveStartPrice) : null;
         const applicationsCountNumeric =
           form?.applications_count === '' || form?.applications_count == null
             ? 0
@@ -1575,6 +1984,9 @@ export default function AdminParserTradeCard() {
       auctionPricing,
       publicOfferPeriods,
       applyTrade,
+      shouldUseStartPrice,
+      shouldIncludePeriods,
+      shouldIncludeAuctionExtras,
     ],
   );
 
@@ -1802,16 +2214,18 @@ export default function AdminParserTradeCard() {
             <span className="muted">VIN</span>
             <input className="input" value={form.vin} onChange={updateFormField('vin')} />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">Стартовая цена</span>
-            <input
-              className="input"
-              value={form.start_price}
-              onChange={updateFormField('start_price')}
-              placeholder="Например, 1500000"
-              inputMode="numeric"
-            />
-          </label>
+          {shouldUseStartPrice ? (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Стартовая цена</span>
+              <input
+                className="input"
+                value={form.start_price}
+                onChange={updateFormField('start_price')}
+                placeholder="Например, 1500000"
+                inputMode="numeric"
+              />
+            </label>
+          ) : null}
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Кол-во заявок</span>
             <input
@@ -2164,51 +2578,64 @@ export default function AdminParserTradeCard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Документы</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Прикрепите файлы и ссылки, которые должны отображаться в карточке объявления.
+              Загрузите файлы (PDF, Word, Excel, изображения) или укажите ссылки вручную.
             </p>
           </div>
-          <button type="button" className="button outline" onClick={addDocumentEntry}>
-            Добавить документ
-          </button>
+          <div className="admin-upload">
+            <div className="admin-upload__row">
+              <div className="admin-upload__text">
+                <div className="admin-upload__title">Загрузить документы</div>
+                <p className="admin-upload__description">
+                  Поддерживаются файлы до 20&nbsp;МБ каждый. После загрузки документы появятся в списке ниже.
+                </p>
+              </div>
+              <div className="admin-upload__actions">
+                <button
+                  type="button"
+                  className="button button-small"
+                  onClick={triggerDocumentUpload}
+                  disabled={uploadingDocuments}
+                >
+                  Выбрать файлы
+                </button>
+              </div>
+            </div>
+            {uploadingDocuments ? <div className="admin-upload__status">Загрузка документов…</div> : null}
+            {documentUploadError ? <div className="admin-upload__error">{documentUploadError}</div> : null}
+            <div className="admin-upload__hint">Можно выбрать сразу несколько файлов.</div>
+            <input
+              ref={documentFileInputRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleDocumentFileChange}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="button outline" onClick={addDocumentEntry}>
+              Добавить ссылку вручную
+            </button>
+          </div>
           {documents.length === 0 ? (
             <div className="muted" style={{ fontSize: 13 }}>Документы пока не добавлены.</div>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {documents.map((doc, index) => (
                 <div key={doc.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Название</span>
+                      <span className="muted">Название документа</span>
                       <input
                         className="input"
                         value={doc.title || ''}
                         onChange={(e) => updateDocumentEntry(index, { title: e.target.value })}
-                        placeholder="Например, Перечень имущества"
+                        placeholder="Например, Проект договора"
                       />
                     </label>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Тип / категория</span>
+                      <span className="muted">Ссылка на документ</span>
                       <input
                         className="input"
-                        value={doc.type || ''}
-                        onChange={(e) => updateDocumentEntry(index, { type: e.target.value })}
-                        placeholder="Например, Договор"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Дата</span>
-                      <input
-                        className="input"
-                        value={doc.date || ''}
-                        onChange={(e) => updateDocumentEntry(index, { date: e.target.value })}
-                        placeholder="Например, 01.04.2025"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Ссылка на файл</span>
-                      <input
-                        className="input"
-                        type="url"
                         value={doc.url || ''}
                         onChange={(e) => updateDocumentEntry(index, { url: e.target.value })}
                         placeholder="https://example.ru/document.pdf"
@@ -2216,15 +2643,23 @@ export default function AdminParserTradeCard() {
                     </label>
                   </div>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Описание</span>
+                    <span className="muted">Комментарий</span>
                     <textarea
                       className="textarea"
                       rows={doc.description && doc.description.length > 160 ? 4 : 2}
                       value={doc.description || ''}
                       onChange={(e) => updateDocumentEntry(index, { description: e.target.value })}
+                      placeholder="Дополнительная информация или примечание"
                     />
                   </label>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {doc.url ? (
+                      <a className="link" href={doc.url} target="_blank" rel="noreferrer">
+                        Открыть документ
+                      </a>
+                    ) : (
+                      <span className="muted" style={{ fontSize: 12 }}>Укажите ссылку или загрузите файл.</span>
+                    )}
                     <button type="button" className="button outline" onClick={() => removeDocumentEntry(index)}>
                       Удалить
                     </button>
@@ -2300,119 +2735,161 @@ export default function AdminParserTradeCard() {
           )}
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h3 style={{ margin: 0 }}>График снижения цены (публичное предложение)</h3>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Укажите периоды изменения цены. Эти данные используются для отображения расписания предложения.
-              {!isPublicOffer ? ' График можно подготовить заранее и выбрать тип «Публичное предложение» позже.' : ''}
-            </p>
-          </div>
-          {publicOfferPeriods.length === 0 ? (
-            <div className="muted" style={{ fontSize: 13 }}>Периоды пока не добавлены.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
-              {publicOfferPeriods.map((period, index) => (
-                <div key={period.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <div className="muted" style={{ fontWeight: 600 }}>Период {index + 1}</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="button outline"
-                        onClick={() => movePeriodEntry(index, -1)}
-                        disabled={index === 0}
-                        style={{ padding: '6px 10px' }}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="button outline"
-                        onClick={() => movePeriodEntry(index, 1)}
-                        disabled={index === publicOfferPeriods.length - 1}
-                        style={{ padding: '6px 10px' }}
-                      >
-                        ↓
-                      </button>
-                      <button type="button" className="button outline" onClick={() => removePeriodEntry(index)}>
-                        Удалить
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Дата начала</span>
-                      <input
-                        className="input"
-                        type="datetime-local"
-                        value={period.date_start || ''}
-                        onChange={(e) => updatePeriodEntry(index, { date_start: e.target.value })}
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Дата окончания</span>
-                      <input
-                        className="input"
-                        type="datetime-local"
-                        value={period.date_end || ''}
-                        onChange={(e) => updatePeriodEntry(index, { date_end: e.target.value })}
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Цена, руб.</span>
-                      <input
-                        className="input"
-                        value={period.price || ''}
-                        onChange={(e) => updatePeriodEntry(index, { price: e.target.value })}
-                        inputMode="numeric"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Минимальная цена</span>
-                      <input
-                        className="input"
-                        value={period.min_price || ''}
-                        onChange={(e) => updatePeriodEntry(index, { min_price: e.target.value })}
-                        inputMode="numeric"
-                      />
-                    </label>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span className="muted">Задаток, руб.</span>
-                      <input
-                        className="input"
-                        value={period.deposit || ''}
-                        onChange={(e) => updatePeriodEntry(index, { deposit: e.target.value })}
-                        inputMode="numeric"
-                      />
-                    </label>
-                  </div>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span className="muted">Комментарий / примечание</span>
-                    <textarea
-                      className="textarea"
-                      rows={period.comment && period.comment.length > 160 ? 4 : 2}
-                      value={period.comment || ''}
-                      onChange={(e) => updatePeriodEntry(index, { comment: e.target.value })}
-                    />
-                  </label>
-                </div>
-              ))}
+        {isPublicOffer ? (
+          <section style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Цена публичного предложения</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Выберите формат цены: фиксированная стартовая или график снижения.
+              </p>
             </div>
-          )}
-          <div>
-            <button type="button" className="button outline" onClick={addPeriodEntry}>
-              Добавить период
-            </button>
-          </div>
-        </section>
+            <div className="panel" style={{ display: 'grid', gap: 12 }}>
+              <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="public-offer-price-mode"
+                  value="start_price"
+                  checked={publicOfferPriceMode === 'start_price'}
+                  onChange={() => setPublicOfferPriceMode('start_price')}
+                  style={{ marginTop: 4 }}
+                />
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontWeight: 600 }}>Стартовая цена</div>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    Показывать только стартовую цену без расписания снижения.
+                  </div>
+                </div>
+              </label>
+              <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="public-offer-price-mode"
+                  value="period_price"
+                  checked={publicOfferPriceMode === 'period_price'}
+                  onChange={() => setPublicOfferPriceMode('period_price')}
+                  style={{ marginTop: 4 }}
+                />
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontWeight: 600 }}>График снижения цены</div>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    Укажите периоды с датами и ценами. Они будут показаны покупателям по порядку.
+                  </div>
+                </div>
+              </label>
+            </div>
+            {shouldIncludePeriods ? (
+              <>
+                {publicOfferPeriods.length === 0 ? (
+                  <div className="muted" style={{ fontSize: 13 }}>Периоды пока не добавлены.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {publicOfferPeriods.map((period, index) => (
+                      <div key={period.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <div className="muted" style={{ fontWeight: 600 }}>Период {index + 1}</div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="button outline"
+                              onClick={() => movePeriodEntry(index, -1)}
+                              disabled={index === 0}
+                              style={{ padding: '6px 10px' }}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline"
+                              onClick={() => movePeriodEntry(index, 1)}
+                              disabled={index === publicOfferPeriods.length - 1}
+                              style={{ padding: '6px 10px' }}
+                            >
+                              ↓
+                            </button>
+                            <button type="button" className="button outline" onClick={() => removePeriodEntry(index)}>
+                              Удалить
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="muted">Дата начала</span>
+                            <input
+                              className="input"
+                              type="datetime-local"
+                              value={period.date_start || ''}
+                              onChange={(e) => updatePeriodEntry(index, { date_start: e.target.value })}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="muted">Дата окончания</span>
+                            <input
+                              className="input"
+                              type="datetime-local"
+                              value={period.date_end || ''}
+                              onChange={(e) => updatePeriodEntry(index, { date_end: e.target.value })}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="muted">Цена, руб.</span>
+                            <input
+                              className="input"
+                              value={period.price || ''}
+                              onChange={(e) => updatePeriodEntry(index, { price: e.target.value })}
+                              inputMode="numeric"
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="muted">Минимальная цена</span>
+                            <input
+                              className="input"
+                              value={period.min_price || ''}
+                              onChange={(e) => updatePeriodEntry(index, { min_price: e.target.value })}
+                              inputMode="numeric"
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="muted">Задаток, руб.</span>
+                            <input
+                              className="input"
+                              value={period.deposit || ''}
+                              onChange={(e) => updatePeriodEntry(index, { deposit: e.target.value })}
+                              inputMode="numeric"
+                            />
+                          </label>
+                        </div>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span className="muted">Комментарий / примечание</span>
+                          <textarea
+                            className="textarea"
+                            rows={period.comment && period.comment.length > 160 ? 4 : 2}
+                            value={period.comment || ''}
+                            onChange={(e) => updatePeriodEntry(index, { comment: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <button type="button" className="button outline" onClick={addPeriodEntry}>
+                    Добавить период
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="muted" style={{ fontSize: 13 }}>
+                Используется только стартовая цена. При необходимости переключитесь на режим «График снижения цены».
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Цены для открытого аукциона</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Заполните значения, если торги проходят в формате открытого аукциона.
-              {!isAuction ? ' Блок можно оставить пустым для других типов торгов.' : ''}
+              Укажите стартовую цену и дополнительные параметры аукциона при необходимости.
             </p>
           </div>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
@@ -2426,60 +2903,64 @@ export default function AdminParserTradeCard() {
                 inputMode="numeric"
               />
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Текущая цена</span>
-              <input
-                className="input"
-                value={auctionPricing.current_price || ''}
-                onChange={updateAuctionField('current_price')}
-                inputMode="numeric"
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Минимальная цена</span>
-              <input
-                className="input"
-                value={auctionPricing.min_price || ''}
-                onChange={updateAuctionField('min_price')}
-                inputMode="numeric"
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Максимальная цена</span>
-              <input
-                className="input"
-                value={auctionPricing.max_price || ''}
-                onChange={updateAuctionField('max_price')}
-                inputMode="numeric"
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Шаг аукциона</span>
-              <input
-                className="input"
-                value={auctionPricing.step || ''}
-                onChange={updateAuctionField('step')}
-                inputMode="numeric"
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Задаток</span>
-              <input
-                className="input"
-                value={auctionPricing.deposit || ''}
-                onChange={updateAuctionField('deposit')}
-                inputMode="numeric"
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Валюта</span>
-              <input
-                className="input"
-                value={auctionPricing.currency || ''}
-                onChange={updateAuctionField('currency')}
-                placeholder="Например, RUB"
-              />
-            </label>
+            {!isOpenAuction && (
+              <>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Текущая цена</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.current_price || ''}
+                    onChange={updateAuctionField('current_price')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Минимальная цена</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.min_price || ''}
+                    onChange={updateAuctionField('min_price')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Максимальная цена</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.max_price || ''}
+                    onChange={updateAuctionField('max_price')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Шаг аукциона</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.step || ''}
+                    onChange={updateAuctionField('step')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Задаток</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.deposit || ''}
+                    onChange={updateAuctionField('deposit')}
+                    inputMode="numeric"
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="muted">Валюта</span>
+                  <input
+                    className="input"
+                    value={auctionPricing.currency || ''}
+                    onChange={updateAuctionField('currency')}
+                    placeholder="Например, RUB"
+                  />
+                </label>
+              </>
+            )}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Крайний срок подачи заявок</span>
               <input
