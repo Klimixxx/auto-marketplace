@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import TradeOrderModal from "../../components/TradeOrderModal";
-import InspectionModal from "../../components/InspectionModal";
-import {
-  formatValueForDisplay,
-  translateFieldKey,
-  translateValueByKey,
-} from "../../lib/lotFormatting";
-import { formatTradeTypeLabel } from "../../lib/tradeTypes";
+import { useEffect, useState } from "react";␊
+import TradeOrderModal from "../../components/TradeOrderModal";␊
+import InspectionModal from "../../components/InspectionModal";␊
+import {␊
+  formatValueForDisplay,␊
+  translateFieldKey,␊
+  translateValueByKey,␊
+} from "../../lib/lotFormatting";␊
+import { formatTradeTypeLabel, normalizeTradeTypeCode } from "../../lib/tradeTypes";
 import computeTradeTiming from "../../lib/tradeTiming";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || "";
@@ -187,6 +187,36 @@ function normalizeDocuments(list) {
       };
     })
     .filter(Boolean);
+}
+
+function resolveAuctionStep(details, item) {
+  const lotDetails = details?.lot_details && typeof details.lot_details === "object"
+    ? details.lot_details
+    : {};
+  const listingLot = item?.lot_details && typeof item.lot_details === "object" ? item.lot_details : {};
+  const candidates = [
+    lotDetails.price_step,
+    lotDetails.auction_step,
+    lotDetails.step,
+    lotDetails.bid_step,
+    lotDetails.increase_step,
+    lotDetails.step_value,
+    listingLot.price_step,
+    listingLot.auction_step,
+    listingLot.step,
+    listingLot.bid_step,
+    listingLot.increase_step,
+    listingLot.step_value,
+    item?.price_step,
+    item?.auction_step,
+    item?.step,
+  ];
+  for (const candidate of candidates) {
+    if (candidate != null && candidate !== "") {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 function renderContactValue(entry) {
@@ -503,6 +533,14 @@ export default function ListingPage({ item }) {
   const tradeTypeLabel =
     item?.trade_type_label ||
     formatTradeType(item?.trade_type_resolved ?? item?.trade_type);
+  const normalizedTradeType = normalizeTradeTypeCode(
+    item?.trade_type_resolved ?? item?.trade_type,
+  );
+  const isOpenAuction = normalizedTradeType === "open_auction";
+  const summaryAuctionStepRaw = resolveAuctionStep(details, item);
+  const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
+  const summaryAuctionStep =
+    summaryAuctionStepNumber != null ? summaryAuctionStepNumber : summaryAuctionStepRaw;
 
   return (
     <div className="container detail-page">
@@ -590,9 +628,18 @@ export default function ListingPage({ item }) {
                 </div>
               </div>
               <div className="detail-summary__price">
-                <div className="detail-summary__price-label">Текущая цена</div>
+                <div className="detail-summary__price-label">
+                  {isOpenAuction ? "Шаг аукциона" : "Текущая цена"}
+                </div>
                 <div className="detail-summary__price-value">
-                  {fmtPrice(summaryCurrentPrice, currency)}
+                  {fmtPrice(
+                    isOpenAuction
+                      ? summaryAuctionStep != null && summaryAuctionStep !== ""
+                        ? summaryAuctionStep
+                        : summaryCurrentPrice
+                      : summaryCurrentPrice,
+                    currency,
+                  )}
                 </div>
               </div>
             </div>
@@ -801,7 +848,7 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {Array.isArray(prices) && prices.length > 0 && (
+          {!isOpenAuction && Array.isArray(prices) && prices.length > 0 && (
             <section className="detail-section">
               <h2>История цен</h2>
               <div className="panel table-scroll" style={{ padding: 0 }}>
@@ -960,3 +1007,4 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
