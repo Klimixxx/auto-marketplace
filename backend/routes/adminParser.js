@@ -188,7 +188,7 @@ async function upsertParserTrade(item) {
   const debtor = parsed.debtor_details || {};
   const contact = parsed.contact_details || {};
   const prices = Array.isArray(parsed.prices) ? parsed.prices : [];
-  const documents = Array.isArray(parsed.documents) ? parsed.documents : [];
+  const documents = [];
 
   const fedresursId = parsed.fedresurs_id || fedresurs.guid || fedresurs.number || parsed.bidding_number || null;
   const biddingNumber = parsed.bidding_number || null;
