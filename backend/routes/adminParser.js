@@ -11,12 +11,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const listingPhotosDir = path.join(__dirname, '..', 'uploads', 'listing-photos');
+const listingDocumentsDir = path.join(__dirname, '..', 'uploads', 'listing-documents');
 fs.mkdirSync(listingPhotosDir, { recursive: true });
+fs.mkdirSync(listingDocumentsDir, { recursive: true });
 
 const listingPhotoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, listingPhotosDir),
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname || '').toLowerCase()) || '.jpg';
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}${ext}`);
+  },
+});
+
+const listingDocumentStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, listingDocumentsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.pdf';
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     cb(null, `${unique}${ext}`);
   },
@@ -32,6 +43,11 @@ const listingPhotoUpload = multer({
     }
     cb(new Error('ONLY_IMAGES'));
   },
+});
+
+const listingDocumentUpload = multer({
+  storage: listingDocumentStorage,
+  limits: { fileSize: 20 * 1024 * 1024, files: 20 },
 });
 
 const DEFAULT_LIMIT = 15;
@@ -483,6 +499,7 @@ router.post('/actions/ingest', async (req, res) => {
 });
 
 const handlePhotoUpload = listingPhotoUpload.array('photos', 12);
+const handleDocumentUpload = listingDocumentUpload.array('documents', 20);
 
 router.post('/parser-trades/:id/photos/upload', (req, res) => {
   handlePhotoUpload(req, res, async (err) => {
@@ -512,6 +529,37 @@ router.post('/parser-trades/:id/photos/upload', (req, res) => {
       return res.json({ ok: true, photos });
     } catch (error) {
       console.error('parser-trades photos upload error:', error);
+      return res.status(500).json({ error: 'failed' });
+    }
+  });
+});
+
+router.post('/parser-trades/:id/documents/upload', (req, res) => {
+  handleDocumentUpload(req, res, async (err) => {
+    if (err) {
+      console.error('parser-trades documents upload error:', err);
+      let message = 'Не удалось загрузить файлы';
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        message = 'Размер файла не должен превышать 20 МБ';
+      }
+      return res.status(400).json({ error: message });
+    }
+
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'Файлы не получены' });
+      }
+
+      const documents = req.files.map((file) => ({
+        url: `/uploads/listing-documents/${file.filename}`,
+        originalName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      }));
+
+      return res.json({ ok: true, documents });
+    } catch (error) {
+      console.error('parser-trades documents upload error:', error);
       return res.status(500).json({ error: 'failed' });
     }
   });
