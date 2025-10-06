@@ -292,9 +292,9 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
         }
 
-        setItems(Array.isArray(data.items) ? data.items : []);␊
-        setPage(data.page || nextPage);␊
-        setPageCount(data.pageCount || 1);␊
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setPage(data.page || nextPage);
+        setPageCount(data.pageCount || 1);
         setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
       } catch (error) {
         console.error('loadPage error:', error);
@@ -726,4 +726,5 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
