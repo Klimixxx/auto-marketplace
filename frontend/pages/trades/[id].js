@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { useEffect, useState } from "react";␊
-import TradeOrderModal from "../../components/TradeOrderModal";␊
-import InspectionModal from "../../components/InspectionModal";␊
-import {␊
-  formatValueForDisplay,␊
-  translateFieldKey,␊
-  translateValueByKey,␊
+import { useEffect, useState } from "react";
+import TradeOrderModal from "../../components/TradeOrderModal";
+import InspectionModal from "../../components/InspectionModal";
+import {
+  formatValueForDisplay,
+  translateFieldKey,
+  translateValueByKey,
 } from "../../lib/lotFormatting";␊
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from "../../lib/tradeTypes";
 import computeTradeTiming from "../../lib/tradeTiming";
@@ -1007,4 +1007,5 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
