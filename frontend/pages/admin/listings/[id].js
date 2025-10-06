@@ -179,14 +179,6 @@ function resolveFedresursUrl(trade) {
   return null;
 }
 
-const TRADE_TYPE_OPTIONS = [
-  { value: '', label: 'Не указано' },
-  { value: 'public_offer', label: 'Публичное предложение' },
-  { value: 'open_auction', label: 'Открытый аукцион' },
-  { value: 'auction', label: 'Аукцион' },
-  { value: 'offer', label: 'Торговое предложение' },
-];
-
 const LOT_DETAIL_ALIASES = {
   object_name: 'title',
   objectName: 'title',
@@ -308,6 +300,39 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'date_finish',
   'trade_place',
   'source_url',
+  'trade_type',
+  'tradeType',
+  'asset_type',
+  'assetType',
+  'asset_name',
+  'assetName',
+  'asset_title',
+  'assetTitle',
+  'lot_number',
+  'lotNumber',
+  'lot_no',
+  'lotNo',
+  'inventory_number',
+  'inventoryNumber',
+  'inventory_no',
+  'inventoryNo',
+  'condition',
+  'condition_state',
+  'conditionState',
+  'extras',
+  'extras_list',
+  'extrasList',
+  'options',
+  'options_list',
+  'optionsList',
+  'encumbrances',
+  'encumbrances_list',
+  'encumbrancesList',
+  'documents_required',
+  'documents_required_list',
+  'documentsRequired',
+  'auction_url',
+  'auctionLink',
   'prices',
   'documents',
   'photos',
@@ -334,19 +359,7 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'name',
 ]);
 
-const LOT_FIELD_PRESETS = [
-  { key: 'trade_type', label: 'Тип торгов', type: 'select', options: TRADE_TYPE_OPTIONS },
-  { key: 'asset_type', label: 'Тип актива' },
-  { key: 'asset_name', label: 'Наименование актива' },
-  { key: 'lot_number', label: 'Номер лота' },
-  { key: 'inventory_number', label: 'Инвентарный номер' },
-  { key: 'condition', label: 'Состояние' },
-  { key: 'extras', label: 'Дополнительно' },
-  { key: 'options', label: 'Опции' },
-  { key: 'encumbrances', label: 'Обременения' },
-  { key: 'documents_required', label: 'Требуемые документы' },
-  { key: 'auction_url', label: 'Ссылка на торги' },
-];
+const LOT_FIELD_PRESETS = [];
 
 const CONTACT_FIELDS = [
   { key: 'organizer_name', label: 'Организатор' },
@@ -505,10 +518,8 @@ function createLotFieldRows(lot) {
   });
 
   const rows = [];
-  const usedKeys = new Set();
 
   LOT_FIELD_PRESETS.forEach((preset) => {
-    usedKeys.add(preset.key);
     rows.push({
       key: preset.key,
       label: preset.label,
@@ -1793,27 +1804,35 @@ export default function AdminParserTradeCard() {
 
   const tradeType = useMemo(() => {
     const row = lotFields.find((entry) => entry.key === 'trade_type');
-    if (!row || row.value == null) return '';
-    return String(row.value).trim();
-  }, [lotFields]);
+    if (row?.value != null && row.value !== '') {
+      return String(row.value).trim();
+    }
+    const preservedValue =
+      lotPreserved?.trade_type != null && lotPreserved.trade_type !== ''
+        ? lotPreserved.trade_type
+        : lotPreserved?.tradeType;
+    if (preservedValue != null && preservedValue !== '') {
+      return String(preservedValue).trim();
+    }
+    return '';
+  }, [lotFields, lotPreserved]);
 
   const normalizedTradeType = useMemo(() => {
-    const fromRow = normalizeTradeTypeCode(tradeType);
-    if (fromRow) return fromRow;
-
-    if (!item) return null;
     const candidates = [
-      item.trade_type,
-      item.tradeType,
-      item.lot_details?.trade_type,
-      item.lot_details?.tradeType,
+      tradeType,
+      lotPreserved?.trade_type,
+      lotPreserved?.tradeType,
+      item?.trade_type,
+      item?.tradeType,
+      item?.lot_details?.trade_type,
+      item?.lot_details?.tradeType,
     ];
     for (const candidate of candidates) {
       const normalized = normalizeTradeTypeCode(candidate);
       if (normalized) return normalized;
     }
     return null;
-  }, [item, tradeType]);
+  }, [item, lotPreserved, tradeType]);
 
   const isOpenAuction = normalizedTradeType === 'open_auction';
   const isPublicOffer = normalizedTradeType === 'public_offer';
@@ -2290,7 +2309,7 @@ export default function AdminParserTradeCard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Характеристики автомобиля</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Укажите технические параметры и дополнительные поля. Поле «Тип торгов» влияет на блоки цен ниже.
+              Укажите технические параметры и дополнительные поля.
             </p>
           </div>
           {lotFields.length > 0 ? (
@@ -3288,6 +3307,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
