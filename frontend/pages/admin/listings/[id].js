@@ -359,7 +359,85 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'name',
 ]);
 
-const LOT_FIELD_PRESETS = [];
+const LOT_FIELD_PRESETS = [
+  {
+    key: 'mileage',
+    label: 'Пробег, км',
+    placeholder: 'Например, 125000',
+    numeric: true,
+  },
+  {
+    key: 'engine_volume',
+    label: 'Объём двигателя, л',
+    placeholder: 'Например, 2.0',
+  },
+  {
+    key: 'engine_power',
+    label: 'Мощность, л.с.',
+    placeholder: 'Например, 150',
+    numeric: true,
+  },
+  {
+    key: 'engine_power_kw',
+    label: 'Мощность, кВт',
+    placeholder: 'Например, 110',
+    numeric: true,
+  },
+  {
+    key: 'fuel_type',
+    label: 'Тип топлива',
+    placeholder: 'Например, Бензин',
+  },
+  {
+    key: 'transmission',
+    label: 'Коробка передач',
+    placeholder: 'Например, Автомат',
+  },
+  {
+    key: 'drive',
+    label: 'Привод',
+    placeholder: 'Например, Полный',
+  },
+  {
+    key: 'steering',
+    label: 'Расположение руля',
+    placeholder: 'Например, Левый',
+  },
+  {
+    key: 'body_type',
+    label: 'Тип кузова',
+    placeholder: 'Например, Седан',
+  },
+  {
+    key: 'color',
+    label: 'Цвет',
+    placeholder: 'Например, Чёрный',
+  },
+  {
+    key: 'doors',
+    label: 'Количество дверей',
+    placeholder: 'Например, 5',
+    numeric: true,
+  },
+  {
+    key: 'seats',
+    label: 'Количество мест',
+    placeholder: 'Например, 5',
+    numeric: true,
+  },
+  {
+    key: 'owners_count',
+    label: 'Количество владельцев',
+    placeholder: 'Например, 2',
+    numeric: true,
+  },
+  {
+    key: 'restrictions',
+    label: 'Ограничения',
+    type: 'textarea',
+    placeholder: 'Например, ограничения на регистрационные действия',
+  },
+];
 
 const CONTACT_FIELDS = [
   { key: 'organizer_name', label: 'Организатор' },
@@ -3307,6 +3385,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
