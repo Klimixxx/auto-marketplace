@@ -193,7 +193,9 @@ function resolveFedresursUrl(trade) {
   for (const idCandidate of idCandidates) {
     const text = idCandidate != null ? String(idCandidate).trim() : '';
     if (!text) continue;
-    return `https://fedresurs.ru/trade/${encodeURIComponent(text)}`;
+    const isGuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text);
+    const basePath = isGuid ? 'biddings' : 'trade';
+    return `https://fedresurs.ru/${basePath}/${encodeURIComponent(text)}`;
   }
   return null;
 }
@@ -3404,6 +3406,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
