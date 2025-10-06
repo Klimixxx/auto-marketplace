@@ -7,7 +7,12 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
-export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
+export default function FilterBar({
+  onSearch,
+  initial,
+  favoritesCount = 0,
+  showFavoritesLink = true,
+}) {
   const [q, setQ] = useState(initial?.q || '');
   const [region, setRegion] = useState(initial?.region || '');
   const [city, setCity] = useState(initial?.city || '');
@@ -236,18 +241,20 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
   </button>
 
   {/* Кнопка "Мои избранные" — вправо и с нейтральным стилем */}
-  <Link
-    href="/favorites"
-    className="btn ghost fav-btn"
-    style={{
-      background: '#ffffff',          // принудительно белая
-      color: '#374151',               // серо-графитовый текст
-      border: '1px solid #D1D5DB',    // светло-серый бордер
-      whiteSpace: 'nowrap',
-    }}
-  >
-    Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
-  </Link>
+  {showFavoritesLink ? (
+    <Link
+      href="/favorites"
+      className="btn ghost fav-btn"
+      style={{
+        background: '#ffffff',          // принудительно белая
+        color: '#374151',               // серо-графитовый текст
+        border: '1px solid #D1D5DB',    // светло-серый бордер
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
+    </Link>
+  ) : null}
 </div>
 </div> 
 
@@ -418,3 +425,4 @@ export default function FilterBar({ onSearch, initial, favoritesCount = 0 }) {
     </form>
   );
 }
+
