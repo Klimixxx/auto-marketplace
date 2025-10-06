@@ -93,6 +93,114 @@ function toFinite(value) {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function cleanText(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function normalizeTradeTypeCode(value) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
+  if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
+  if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) {
+    return 'public_offer';
+  }
+  if (
+    lower === 'auction'
+    || lower.includes('аукцион')
+    || lower.includes('auction')
+    || lower.includes('торг')
+    || lower.includes('bidding')
+  ) {
+    return 'open_auction';
+  }
+  return lower;
+}
+
+function addTradeTypeFilter(whereClauses, params, rawValue) {
+  const normalized = normalizeTradeTypeCode(rawValue);
+  if (!normalized) return;
+
+  const lowerFields = [
+    "lower(coalesce(lot_details->>'trade_type',''))",
+    "lower(coalesce(lot_details->>'tradeType',''))",
+    "lower(coalesce(lot_details->>'type',''))",
+    "lower(coalesce(lot_details->>'auction_type',''))",
+    "lower(coalesce(lot_details->>'auctionType',''))",
+  ];
+  const textFields = [
+    "lower(coalesce(lot_details::text, ''))",
+    "lower(coalesce(raw_payload::text, ''))",
+  ];
+
+  let equalityValues = [];
+  let likeValues = [];
+
+  if (normalized === 'public_offer') {
+    equalityValues = [
+      'public_offer',
+      'offer',
+      'public offer',
+      'public-offer',
+      'публичное предложение',
+      'торговое предложение',
+    ];
+    likeValues = ['%публич%', '%предлож%', '%public offer%', '%public_offer%', '%торговое предложение%'];
+  } else if (normalized === 'open_auction') {
+    equalityValues = [
+      'open_auction',
+      'auction',
+      'open auction',
+      'open-auction',
+      'аукцион',
+      'открытый аукцион',
+      'торги',
+      'торг',
+    ];
+    likeValues = ['%аукцион%', '%auction%', '%торг%', '%open auction%'];
+  } else {
+    equalityValues = [normalized];
+    likeValues = [`%${normalized}%`];
+  }
+
+  const equalityPlaceholders = [];
+  equalityValues.forEach((value) => {
+    params.push(value.toLowerCase());
+    equalityPlaceholders.push(`$${params.length}`);
+  });
+
+  const likePlaceholders = [];
+  likeValues.forEach((value) => {
+    params.push(value.toLowerCase());
+    likePlaceholders.push(`$${params.length}`);
+  });
+
+  const clauses = [];
+  if (equalityPlaceholders.length) {
+    const arrayExpr = `ARRAY[${equalityPlaceholders.join(', ')}]::text[]`;
+    lowerFields.forEach((field) => {
+      clauses.push(`${field} = ANY(${arrayExpr})`);
+    });
+  }
+  if (likePlaceholders.length) {
+    const arrayExpr = `ARRAY[${likePlaceholders.join(', ')}]::text[]`;
+    textFields.forEach((field) => {
+      clauses.push(`${field} LIKE ANY(${arrayExpr})`);
+    });
+  }
+
+  if (clauses.length) {
+    whereClauses.push(`(${clauses.join(' OR ')})`);
+  }
+}
+
 function pickResultsArray(payload) {
   if (!payload || typeof payload !== 'object') return null;
   if (Array.isArray(payload.results)) return payload.results;
@@ -277,7 +385,18 @@ async function upsertParserTrade(item) {
 
 router.get('/parser-trades', async (req, res) => {
   try {
-    const { q, page = 1, limit = 20, status } = req.query;
+    const {
+      q,
+      page = 1,
+      limit = 20,
+      status,
+      region,
+      city,
+      brand,
+      trade_type: tradeType,
+      minPrice,
+      maxPrice,
+    } = req.query;
     const filters = [];
     const params = [];
 
@@ -285,6 +404,54 @@ router.get('/parser-trades', async (req, res) => {
       params.push(`%${q}%`);
       filters.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
     }
+
+    if (region) {
+      params.push(region);
+      filters.push(`region = $${params.length}`);
+    }
+
+    if (brand) {
+      const brandTerm = String(brand).trim();
+      if (brandTerm) {
+        params.push(`%${brandTerm}%`);
+        filters.push(`brand ILIKE $${params.length}`);
+      }
+    }
+
+    if (city) {
+      const cityText = String(city).trim();
+      if (cityText) {
+        const normalizedCity = cityText.toLowerCase();
+        params.push(normalizedCity);
+        const eqPlaceholder = `$${params.length}`;
+        params.push(`%${normalizedCity}%`);
+        const likePlaceholder = `$${params.length}`;
+        const cityClauses = [
+          `lower(coalesce(lot_details->>'city','')) = ${eqPlaceholder}`,
+          `lower(coalesce(lot_details->>'City','')) = ${eqPlaceholder}`,
+          `lower(coalesce(lot_details->>'город','')) = ${eqPlaceholder}`,
+          `lower(coalesce(lot_details->>'location','')) LIKE ${likePlaceholder}`,
+          `lower(coalesce(lot_details->>'address','')) LIKE ${likePlaceholder}`,
+          `lower(coalesce(lot_details::text, '')) LIKE ${likePlaceholder}`,
+        ];
+        filters.push(`(${cityClauses.join(' OR ')})`);
+      }
+    }
+
+    addTradeTypeFilter(filters, params, tradeType);
+
+    const minPriceNumber = toNumberSafe(minPrice);
+    if (minPriceNumber != null) {
+      params.push(minPriceNumber);
+      filters.push(`start_price >= $${params.length}`);
+    }
+
+    const maxPriceNumber = toNumberSafe(maxPrice);
+    if (maxPriceNumber != null) {
+      params.push(maxPriceNumber);
+      filters.push(`start_price <= $${params.length}`);
+    }
+    
     const statusRaw = typeof status === 'string' ? status.trim().toLowerCase() : '';
     let effectiveStatus = 'drafts';
     if (statusRaw === 'published') {
