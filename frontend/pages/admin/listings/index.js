@@ -1,7 +1,8 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import FilterBar from '../../../components/FilterBar';
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -83,17 +84,41 @@ function resolveSearchTerm(value) {
   return trimmed || DEFAULT_SEARCH_TERM;
 }
 
+function cleanFilters(input = {}) {
+  const result = {};
+  Object.entries(input || {}).forEach(([key, rawValue]) => {
+    if (rawValue == null) return;
+    const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+    if (value === '') return;
+    result[key] = value;
+  });
+  return result;
+}
+
+function formatNumber(value) {
+  if (value == null) return DASH;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    try {
+      return new Intl.NumberFormat('ru-RU').format(numeric);
+    } catch {
+      return String(numeric);
+    }
+  }
+  return String(value);
+}
+
 export default function AdminParserTradesPage() {
   const router = useRouter();
   const [items, setItems] = useState([]);
-  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({});
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
   const [unpublishingId, setUnpublishingId] = useState(null);
-  const [featuringId, setFeaturingId] = useState(null);
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
   const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
@@ -229,7 +254,7 @@ export default function AdminParserTradesPage() {
   );
 
   const loadPage = useCallback(
-    async (nextPage = 1) => {
+    async (nextPage = 1, filtersOverride) => {
       if (!API_BASE) {
         console.warn('NEXT_PUBLIC_API_BASE is not configured.');
         return;
@@ -242,10 +267,14 @@ export default function AdminParserTradesPage() {
       }
 
       const params = new URLSearchParams();
-      const trimmed = query.trim();
-      if (trimmed) {
-        params.set('q', trimmed);
-      }
+      const activeFilters = cleanFilters(filtersOverride ?? filters);
+      if (activeFilters.q) params.set('q', activeFilters.q);
+      if (activeFilters.region) params.set('region', activeFilters.region);
+      if (activeFilters.city) params.set('city', activeFilters.city);
+      if (activeFilters.brand) params.set('brand', activeFilters.brand);
+      if (activeFilters.trade_type) params.set('trade_type', activeFilters.trade_type);
+      if (activeFilters.minPrice) params.set('minPrice', activeFilters.minPrice);
+      if (activeFilters.maxPrice) params.set('maxPrice', activeFilters.maxPrice);
       params.set('page', String(nextPage));
       params.set('limit', String(PAGE_SIZE));
       params.set('status', view === 'published' ? 'published' : 'drafts');
@@ -263,9 +292,10 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
         }
 
-        setItems(Array.isArray(data.items) ? data.items : []);
-        setPage(data.page || nextPage);
-        setPageCount(data.pageCount || 1);
+        setItems(Array.isArray(data.items) ? data.items : []);␊
+        setPage(data.page || nextPage);␊
+        setPageCount(data.pageCount || 1);␊
+        setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
       } catch (error) {
         console.error('loadPage error:', error);
         alert(error.message || 'Ошибка запроса');
@@ -273,7 +303,7 @@ export default function AdminParserTradesPage() {
         setListLoading(false);
       }
     },
-    [query, view],
+    [filters, view],
   );
 
   useEffect(() => {
@@ -282,18 +312,17 @@ export default function AdminParserTradesPage() {
 
   useEffect(() => {
     if (view === 'drafts') {
-      fetchProgress();
+      const searchTerm = resolveSearchTerm(filters.q || '');
+      fetchProgress(searchTerm);
     } else {
       applyProgress(null);
     }
-  }, [view, fetchProgress, applyProgress]);
+  }, [view, fetchProgress, applyProgress, filters.q]);
 
-  const handleSearch = useCallback(() => {
-    loadPage(1);
-    if (view === 'drafts') {
-      fetchProgress(resolveSearchTerm(query));
-    }
-  }, [loadPage, fetchProgress, query, view]);
+  const handleFilterSearch = useCallback((nextFilters) => {
+    setFilters(cleanFilters(nextFilters));
+    setPage(1);
+  }, []);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -309,7 +338,7 @@ export default function AdminParserTradesPage() {
         return;
       }
 
-      const searchTerm = resolveSearchTerm(query);
+      const searchTerm = resolveSearchTerm(filters.q || '');
       const offsetToUse = reset ? 0 : nextOffset;
 
       setIngesting(true);
@@ -368,7 +397,7 @@ export default function AdminParserTradesPage() {
         setIngesting(false);
       }
     },
-    [query, loadPage, nextOffset, applyProgress, fetchProgress, view],
+    [filters, loadPage, nextOffset, applyProgress, fetchProgress, view],
   );
 
   const publish = useCallback(
@@ -458,57 +487,14 @@ export default function AdminParserTradesPage() {
     [page, loadPage, view],
   );
 
-  const toggleFeatured = useCallback(
-    async (id, nextState) => {
-      if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан.');
-        return;
-      }
-
-      const token = readToken();
-      if (!token) {
-        alert('Сначала войдите в админ-аккаунт.');
-        return;
-      }
-
-      setFeaturingId(id);
-      try {
-        const res = await fetch(`${API_BASE}/api/listings/${id}/feature`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ is_featured: nextState }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error((data && data.error) || 'failed');
-        }
-
-        setItems((prev) =>
-          prev.map((item) => (item.id === id ? { ...item, is_featured: nextState } : item)),
-        );
-      } catch (error) {
-        console.error('feature toggle error:', error);
-        alert('Не удалось обновить статус «Лучшее предложение».');
-      } finally {
-        setFeaturingId(null);
-      }
-    },
-    [],
-  );
-
   const isPublishedView = view === 'published';
   const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const searchButtonLabel = listLoading ? 'Поиск…' : 'Найти';
-  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые';
-  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё';
-  const searchDisabled = listLoading;
+  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые с Федресурса';
+  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё с парсера';
   const ingestDisabled = ingesting;
+  const filterInitial = useMemo(() => ({ ...filters }), [filters]);
 
   return (
     <div className="container">
@@ -541,56 +527,43 @@ export default function AdminParserTradesPage() {
           </button>
         </div>
 
-        <div className="admin-filters">
-          <div className="admin-filters__search">
-            <label className="admin-label" htmlFor="admin-trades-search">
-              Поиск по объявлениям
-            </label>
-            <input
-              id="admin-trades-search"
-              className="input admin-filters__input"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  handleSearch();
-                }
-              }}
-              placeholder="Название, регион, марка, модель или VIN"
-            />
-          </div>
-          <div className="admin-filters__actions">
+        <div style={{ marginTop: 16 }}>
+          <FilterBar
+            onSearch={handleFilterSearch}
+            initial={filterInitial}
+            favoritesCount={0}
+            showFavoritesLink={false}
+          />
+        </div>
+
+        {!isPublishedView ? (
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              marginTop: 12,
+              alignItems: 'center',
+            }}
+          >
             <button
               type="button"
-              className="button button-small"
-              onClick={handleSearch}
-              disabled={searchDisabled}
+              className="button button-small button-outline"
+              onClick={() => runIngest({ reset: true })}
+              disabled={ingestDisabled}
             >
-              {searchButtonLabel}
+              {ingestPrimaryLabel}
             </button>
-            {!isPublishedView && (
-              <>
-                <button
-                  type="button"
-                  className="button button-small button-outline"
-                  onClick={() => runIngest({ reset: true })}
-                  disabled={ingestDisabled}
-                >
-                  {ingestPrimaryLabel}
-                </button>
-                <button
-                  type="button"
-                  className="button button-small button-outline"
-                  onClick={() => runIngest({ reset: false })}
-                  disabled={ingestDisabled}
-                >
-                  {ingestMoreLabel}
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              className="button button-small button-outline"
+              onClick={() => runIngest({ reset: false })}
+              disabled={ingestDisabled}
+            >
+              {ingestMoreLabel}
+            </button>
           </div>
-        </div>
+        ) : null}
 
         {isPublishedView ? (
           <div className="admin-hint-card">
@@ -602,40 +575,25 @@ export default function AdminParserTradesPage() {
         ) : (
           <div className="admin-hint-card">
             <div className="admin-hint-card__title">Статус загрузки парсера</div>
-            <p className="admin-hint-card__text">
-              Парсер обрабатывает данные блоками по {PARSER_PAGE_SIZE}. Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset{' '}
-              <strong>{nextOffset}</strong>.
-              {lastIngest?.totalFound != null ? (
-                <>
-                  {' '}
-                  Всего найдено: <strong>{lastIngest.totalFound}</strong>.
-                </>
-              ) : null}
-            </p>
-            {lastIngest ? (
-              <>
-                <div className="admin-hint-card__meta">
-                  <span>Получено: <strong>{lastIngest.received}</strong></span>
-                  <span>Обновлено: <strong>{lastIngest.upserted}</strong></span>
-                  <span>Последний offset: <strong>{lastIngest.offset}</strong></span>
-                  <span>Следующий offset: <strong>{lastIngest.nextOffset}</strong></span>
-                </div>
-                {lastIngest.updatedAt ? (
-                  <div className="admin-hint-card__note">
-                    Обновлено: {formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="admin-hint-card__note">
-                Используйте кнопки «Получить новые» или «Получить ещё», чтобы загрузить свежие объявления по текущему запросу.
-              </div>
-            )}
-            {lastIngest && lastIngest.totalFound != null && lastIngest.hasMore === false && (
+            <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 8 }}>
+              <span>
+                Обьявлений в базе парсера: <strong>{formatNumber(lastIngest?.totalFound ?? totalCount ?? 0)}</strong>
+              </span>
+              <span>
+                Обьявлений в категории «Непопубликованные»: <strong>{formatNumber(totalCount)}</strong>
+              </span>
+              <span>
+                Обновлено: {lastIngest?.updatedAt ? formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt : DASH}
+              </span>
+            </div>
+            <div className="admin-hint-card__note">
+              Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset <strong>{nextOffset}</strong>.
+            </div>
+            {!lastIngest ? (
               <div className="admin-hint-card__footer">
-                Новых объявлений в текущей выборке больше нет. Запустите «Получить новые», чтобы начать заново или измените запрос.
+                Используйте кнопки выше, чтобы загрузить актуальные объявления по выбранному фильтру.
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -649,14 +607,13 @@ export default function AdminParserTradesPage() {
                   <th>ТС</th>
                   <th>Стартовая цена</th>
                   <th>Окончание</th>
-                  <th>Лучшее</th>
                   <th>Действия</th>
-                </tr>
+              </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td className="admin-table__empty" colSpan={7}>
+                    <td className="admin-table__empty" colSpan={6}>
                       {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
                     </td>
                   </tr>
@@ -666,8 +623,6 @@ export default function AdminParserTradesPage() {
                     const publishedAt = formatCreatedAt(item.published_at);
                     const isPublishing = publishingId === item.id;
                     const isUnpublishing = unpublishingId === item.id;
-                    const isFeatured = Boolean(item.is_featured);
-                    const isFeaturing = featuringId === item.id;
                     const detailHref = {
                       pathname: '/admin/listings/[id]',
                       query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
@@ -699,17 +654,6 @@ export default function AdminParserTradesPage() {
                         <td>
                           <div className="admin-table__value">{formatDate(item.date_finish)}</div>
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className={isFeatured ? 'button button-small' : 'button button-small button-outline'}
-                            style={isFeatured ? { background: '#0f766e', borderColor: '#0f766e' } : undefined}
-                            onClick={() => toggleFeatured(item.id, !isFeatured)}
-                            disabled={isFeaturing || listLoading}
-                          >
-                            {isFeatured ? 'В лучших' : 'Добавить'}
-                          </button>
                         </td>
                         <td>
                           <div className="admin-table__actions">
@@ -782,3 +726,4 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
