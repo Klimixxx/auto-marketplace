@@ -135,10 +135,29 @@ function normalizeFedresursCandidate(candidate) {
   return `https://${text.replace(/^\/+/, '')}`;
 }
 
+function formatFedresursUrl(url) {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.host.replace(/^www\./i, '').toLowerCase();
+    if (host === 'fedresurs.ru') {
+      const match = parsed.pathname.match(/\/(?:biddings|trade|trades)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        parsed.pathname = `/biddings/${match[1]}`;
+        return parsed.toString();
+      }
+    }
+  } catch (error) {
+    // Ignore URL parsing errors and fall back to the original value.
+  }
+  return url;
+}
+
 function resolveFedresursUrl(trade) {
   if (!trade) return null;
   const meta = trade.raw_payload?.fedresurs_data || trade.fedresurs_meta || {};
   const candidates = [
+    trade.fedresurs_url,
     trade.fedresurs_url,
     trade.fedresursUrl,
     trade.source_url,
@@ -161,7 +180,7 @@ function resolveFedresursUrl(trade) {
   ];
   for (const candidate of candidates) {
     const normalized = normalizeFedresursCandidate(candidate);
-    if (normalized) return normalized;
+    if (normalized) return formatFedresursUrl(normalized);
   }
 
   const idCandidates = [
@@ -3385,6 +3404,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
