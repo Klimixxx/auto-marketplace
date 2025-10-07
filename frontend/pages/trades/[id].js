@@ -12,6 +12,99 @@ import computeTradeTiming from "../../lib/tradeTiming";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || "";
 
+const VEHICLE_LABELS = new Set(
+  [
+    "марка",
+    "модель",
+    "поколение",
+    "модификация",
+    "год выпуска",
+    "пробег",
+    "двигатель",
+    "тип двигателя",
+    "объём двигателя",
+    "мощность двигателя",
+    "мощность",
+    "коробка передач",
+    "тип коробки передач",
+    "кпп",
+    "тип привода",
+    "расположение руля",
+    "тип кузова",
+    "кузов",
+    "количество дверей",
+    "количество мест",
+    "цвет",
+    "интерьер",
+    "отделка салона",
+    "состояние",
+    "vin",
+    "номер шасси",
+    "номер рамы",
+    "регистрационный номер",
+    "госномер",
+    "количество владельцев",
+    "комплектация",
+    "опции",
+    "особенности",
+    "дополнительно",
+    "ограничения",
+    "обременения",
+    "залог",
+    "залоги",
+    "страхование",
+    "история обслуживания",
+    "эксплуатация",
+    "птс",
+  ].map((value) => value.toLowerCase()),
+);
+
+const VEHICLE_KEY_PATTERNS = [
+  /^brand/i,
+  /^model/i,
+  /^generation/i,
+  /^modification/i,
+  /^year/i,
+  /production_year/i,
+  /manufacture_year/i,
+  /release_year/i,
+  /mileage/i,
+  /^engine/i,
+  /power/i,
+  /transmission/i,
+  /gearbox/i,
+  /kpp/i,
+  /drive/i,
+  /wheel/i,
+  /steer/i,
+  /body/i,
+  /door/i,
+  /seat/i,
+  /color/i,
+  /interior/i,
+  /upholstery/i,
+  /condition/i,
+  /^vin/i,
+  /chassis/i,
+  /frame/i,
+  /registration/i,
+  /license/i,
+  /plate/i,
+  /owner/i,
+  /equipment/i,
+  /option/i,
+  /feature/i,
+  /extra/i,
+  /restriction/i,
+  /encumbrance/i,
+  /pledge/i,
+  /passport/i,
+  /customs/i,
+  /usage/i,
+  /service/i,
+  /insurance/i,
+];
+
 function parseNumberValue(value) {
   if (value == null || value === "") return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -92,7 +185,7 @@ function collectPhotos(details) {
   return out;
 }
 
-function buildKeyValueEntries(source) {
+function buildKeyValueEntries(source) {␊
   if (!source || typeof source !== "object") return [];
   const result = [];
   const seen = new Set();
@@ -119,6 +212,34 @@ function buildKeyValueEntries(source) {
   });
 
   return result;
+}
+
+function partitionLotAndVehicleEntries(entries) {
+  const lotInfoEntries = [];
+  const vehicleEntries = [];
+
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const label = typeof entry.key === "string" ? entry.key.trim() : "";
+    if (!label || label.toLowerCase() === "заголовок") return;
+
+    const rawKey =
+      entry.rawKey != null && entry.rawKey !== ""
+        ? String(entry.rawKey).toLowerCase()
+        : "";
+    const normalizedLabel = label.toLowerCase();
+    const isVehicleLabel = VEHICLE_LABELS.has(normalizedLabel);
+    const isVehicleKey =
+      rawKey && VEHICLE_KEY_PATTERNS.some((pattern) => pattern.test(rawKey));
+
+    if (isVehicleLabel || isVehicleKey) {
+      vehicleEntries.push(entry);
+    } else {
+      lotInfoEntries.push(entry);
+    }
+  });
+
+  return { lotInfoEntries, vehicleEntries };
 }
 
 function formatTradeType(value) {
@@ -518,6 +639,9 @@ export default function ListingPage({ item }) {
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
 
   const lotEntries = buildKeyValueEntries(details?.lot_details);
+  const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
+    lotEntries,
+  );
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const prices = Array.isArray(details?.prices) ? details.prices : [];
@@ -762,10 +886,17 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {lotEntries.length > 0 && (
+          {lotInfoEntries.length > 0 && (
             <section className="detail-section">
-              <h2>Характеристики</h2>
-              <KeyValueGrid entries={lotEntries} />
+              <h2>Сведения о лоте</h2>
+              <KeyValueGrid entries={lotInfoEntries} />
+            </section>
+          )}
+
+          {vehicleEntries.length > 0 && (
+            <section className="detail-section">
+              <h2>Характеристики автомобиля</h2>
+              <KeyValueGrid entries={vehicleEntries} />
             </section>
           )}
 
@@ -1021,6 +1152,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
