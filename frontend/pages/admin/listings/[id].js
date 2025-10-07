@@ -2488,7 +2488,13 @@ export default function AdminParserTradeCard() {
             </p>
           </div>
           {lotFields.length > 0 ? (
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div
+              style={{
+                display: 'grid',
+                gap: 12,
+                gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))',
+              }}
+            >
               {lotFields.map((row, index) => {
                 const fieldLabel = row?.label || translateValueByKey(row?.key) || row?.key || 'Поле';
                 const rawValue = row?.value != null ? String(row.value) : '';
@@ -2538,15 +2544,15 @@ export default function AdminParserTradeCard() {
                   <div
                     key={`${row.key || 'field'}-${index}`}
                     className="panel"
-                    style={{ padding: 12, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' }}
+                    style={{ padding: 12, display: 'grid', gap: 10 }}
                   >
-                    <div style={{ flex: '1 1 220px', display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'grid', gap: 4 }}>
                       <div style={{ fontWeight: 600 }} title={row.key || undefined}>
                         {fieldLabel}
                       </div>
                       <div className="muted" style={{ fontSize: 12 }}>Код: {row.key}</div>
                     </div>
-                    <label style={{ flex: '2 1 260px', display: 'grid', gap: 4 }}>
+                    <label style={{ display: 'grid', gap: 4 }}>
                       <span className="muted" style={{ fontSize: 12 }}>Значение</span>
                       {control}
                     </label>
@@ -3482,6 +3488,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
