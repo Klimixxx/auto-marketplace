@@ -185,7 +185,7 @@ function collectPhotos(details) {
   return out;
 }
 
-function buildKeyValueEntries(source) {␊
+function buildKeyValueEntries(source) {
   if (!source || typeof source !== "object") return [];
   const result = [];
   const seen = new Set();
@@ -1152,6 +1152,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
