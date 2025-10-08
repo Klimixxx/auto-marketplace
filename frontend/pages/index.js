@@ -1101,7 +1101,8 @@ export default function Home() {
         <section style={{ margin: "32px 0" }}>
           <div
             style={{
-              background: UI.cardBg,
+              background:
+                "linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)",
               border: `1px solid ${UI.border}`,
               borderRadius: 16,
               padding: 18,
@@ -1109,6 +1110,7 @@ export default function Home() {
               gridTemplateColumns: "auto 1fr",
               gap: 18,
               alignItems: "center",
+              boxShadow: "0 6px 22px rgba(17,24,39,0.06)",
             }}
           >
             {/* Левая картинка — рамка как в Hero */}
@@ -1216,15 +1218,17 @@ export default function Home() {
         </section>
 
         {/* === СТАТИСТИКА ПЛАТФОРМЫ — НИЖЕ === */}
-        <section style={{ margin: "32px 0" }}>
+               <section style={{ margin: "32px 0" }}>
           <div
             style={{
-              background: UI.cardBg,
+              background:
+                "linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)",
               border: `1px solid ${UI.border}`,
               borderRadius: 16,
               padding: 18,
               display: "grid",
               gap: 18,
+              boxShadow: "0 6px 22px rgba(17,24,39,0.06)",
             }}
           >
             <h2
@@ -1331,3 +1335,4 @@ export default function Home() {
     </>
   );
 }
+
