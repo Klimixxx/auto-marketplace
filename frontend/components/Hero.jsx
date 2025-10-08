@@ -287,10 +287,10 @@ const styles = {
     cursor: 'pointer',
   },
 
- features: {
+  features: {
     marginTop: 18,
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
     gap: 10,
   },
   feature: { 
@@ -339,6 +339,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
