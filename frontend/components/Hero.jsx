@@ -290,23 +290,23 @@ const styles = {
     gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
     gap: 10,
   },
-  feature: {
-    display: 'flex',
-    gap: 10,
-    alignItems: 'flex-start',
-    padding: 14,
-    borderRadius: 14,
-    background: 'rgba(0,0,0,0.06)',     // серо-тёмный полупрозрачный фон
-    border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
-    backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа
-  },
-  featureIcon: {
-    width: 48, height: 48, borderRadius: 12,
-    display: 'grid', placeItems: 'center',
-    background: 'rgba(0,0,0,0.08)',      // чуть более тёмный фон
-    border: '1px solid rgba(0,0,0,0.25)', // рамка темнее
-    fontSize: 22,
-  },
+  feature: {␊
+    display: 'flex',␊
+    gap: 10,␊
+    alignItems: 'flex-start',␊
+    padding: 14,␊
+    borderRadius: 14,␊
+    background: 'rgba(0,0,0,0.06)',     // серо-тёмный полупрозрачный фон␊
+    border: '1px solid var(--border)',  // тот же цвет, что и в блоке поддержки
+    backdropFilter: 'blur(4px)',               // эффект «стекла» как у бейджа␊
+  },␊
+  featureIcon: {␊
+    width: 48, height: 48, borderRadius: 12,␊
+    display: 'grid', placeItems: 'center',␊
+    background: 'rgba(0,0,0,0.08)',      // чуть более тёмный фон␊
+    border: '1px solid var(--border)',   // рамка в цвет блока поддержки
+    fontSize: 22,␊
+  },␊
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
   alert: {
@@ -335,3 +335,4 @@ const styles = {
     fontSize: 14,
   },
 };
+
