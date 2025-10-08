@@ -307,7 +307,6 @@ const styles = {
     background: 'rgba(255,255,255,0.85)',
     fontSize: 22, 
   },
-  },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
   alert: {
@@ -336,6 +335,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
