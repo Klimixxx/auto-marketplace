@@ -299,54 +299,7 @@ export default function Support() {
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 72,
-          background: "linear-gradient(120deg, rgba(15,23,42,0.92) 0%, rgba(42,101,247,0.82) 100%)",
-          borderRadius: 26,
-          padding: "44px 48px",
-          color: "white",
-          display: "grid",
-          gap: 16,
-          boxShadow: "var(--shadow-lg)",
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.1 }}>Нужна консультация прямо сейчас?</h2>
-        <p style={{ margin: 0, fontSize: 17, maxWidth: 540 }}>
-          Оставьте заявку в личном кабинете или позвоните нам — подключим эксперта по вашему региону и подготовим план покупки автомобиля с торгов.
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <a
-            href="/login"
-            style={{
-              background: "white",
-              color: "#0f172a",
-              padding: "12px 22px",
-              borderRadius: 999,
-              fontWeight: 700,
-              fontSize: 16,
-              textDecoration: "none",
-            }}
-          >
-            Войти в личный кабинет
-          </a>
-          <a
-            href="tel:+74951234567"
-            style={{
-              background: "rgba(255,255,255,0.18)",
-              color: "white",
-              padding: "12px 22px",
-              borderRadius: 999,
-              fontWeight: 600,
-              fontSize: 16,
-              border: "1px solid rgba(255,255,255,0.32)",
-              textDecoration: "none",
-            }}
-          >
-            Позвонить сейчас
-          </a>
-        </div>
-      </section>
     </div>
   );
 }
+
