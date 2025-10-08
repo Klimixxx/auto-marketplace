@@ -848,13 +848,9 @@ export default function ListingCard({
     }
   };
 
-const accentGradient =
-    "linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)";
-
-  const articleHoverStyle = {
-    background: accentGradient,
+const articleHoverStyle = {
+    background: "#fff",
     borderRadius: 16,
-    border: "1px solid var(--stats-border)",
     boxShadow: isHovered
       ? "0 10px 26px rgba(15,23,42,0.15)"
       : "0 1px 2px rgba(15,23,42,0.06)",
@@ -1540,4 +1536,5 @@ const accentGradient =
     </article>
   );
 }
+
 
