@@ -231,7 +231,8 @@ const styles = {
     gap: 10,
     padding: '8px 12px',
     borderRadius: 999,
-    background: UI.glass,
+    background:
+      'linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)',
     border: '1.5px solid var(--stats-border)',
     color: UI.text,
     fontSize: 13.5,
@@ -335,6 +336,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
