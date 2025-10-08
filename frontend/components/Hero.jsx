@@ -290,12 +290,12 @@ const styles = {
     gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
     gap: 10,
   },
-    feature: {
-    display: 'flex',
-    gap: 10,
-    alignItems: 'flex-start',
-    padding: 14,
-    borderRadius: 14,
+  feature: { 
+    display: 'flex', 
+    gap: 10, 
+    alignItems: 'flex-start', 
+    padding: 14, 
+    borderRadius: 14, 
     background:
       'linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)',
     border: '1px solid var(--border)',
@@ -305,8 +305,8 @@ const styles = {
     width: 48, height: 48, borderRadius: 12,
     display: 'grid', placeItems: 'center',
     background: 'rgba(255,255,255,0.85)',
-    border: '1px solid rgba(255,255,255,0.6)',
-    fontSize: 22,
+    fontSize: 22, 
+  },
   },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
@@ -336,6 +336,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
