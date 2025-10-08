@@ -1013,7 +1013,7 @@ export default function Home() {
                 className="button"
                 style={{
                   textDecoration: "none",
-                  background: "#1d4ed8",
+                  background: "var(--blue)",
                   color: "#fff",
                   borderRadius: 10,
                   padding: "9px 14px",
@@ -1025,10 +1025,12 @@ export default function Home() {
                   e.currentTarget.style.transform = "translateY(-2px)";
                   e.currentTarget.style.boxShadow =
                     "0 4px 12px rgba(0,0,0,0.15)";
+                  e.currentTarget.style.background = "#1e53d6";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow = "none";
+                  e.currentTarget.style.background = "var(--blue)";
                 }}
               >
                 Смотреть все →
@@ -1335,4 +1337,5 @@ export default function Home() {
     </>
   );
 }
+
 
