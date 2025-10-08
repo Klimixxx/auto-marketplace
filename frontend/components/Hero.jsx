@@ -292,7 +292,7 @@ const styles = {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
     gap: 10,
-  }
+  },
   feature: { 
     display: 'flex', 
     gap: 10, 
@@ -339,6 +339,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
