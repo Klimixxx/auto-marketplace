@@ -303,10 +303,11 @@ const styles = {
     boxShadow: 'var(--shadow-sm)',
   },
   featureIcon: {
-    width: 48, height: 48, borderRadius: 12,
-    display: 'grid', placeItems: 'center',
-    background: 'rgba(255,255,255,0.85)',
-    fontSize: 22, 
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 28,
+    lineHeight: 1,
   },
   featureTitle: { color: 'var(--text-900)', fontWeight: 700, fontSize: 14, lineHeight: 1.2 },
   featureText: { color: 'var(--text-600)', fontSize: 13, lineHeight: 1.4 },
@@ -336,6 +337,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
