@@ -175,10 +175,12 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrd
           </button>
         </form>
 
-        <div style={styles.features} className="features">
+         <div style={styles.features} className="features">
           <Feature icon="🔎" title="Честные данные" text="Источники и история авто — в одном месте." />
           <Feature icon="⚡" title="Быстрый старт" text="Фильтры и поиск без лишних шагов." />
           <Feature icon="🛡️" title="Безопасность" text="Сопровождаем оформление сделки." />
+          <Feature icon="🧰" title="Осмотры машины" text="Оценивайте состояние авто по свежим отчётам." />
+          <Feature icon="📑" title="Автотека" text="Получайте проверенные данные из официальных баз." />
         </div>
       </div>
 
@@ -337,6 +339,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
