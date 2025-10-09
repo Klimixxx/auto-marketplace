@@ -1,12 +1,12 @@
 // frontend/components/About.jsx — светлая версия «О нас»
 export default function About() {
 const UI = {
-  title: 'var(--text-900)',       // чёрный заголовок
-  text: 'var(--text-600)',        // черно-серый текст
-  cardBg: '#FDFCF9',              // ТЕПЛЫЙ белый, чтобы не сливаться с фоном страницы
+  title: 'var(--text-900)',       // чёрный заголовок␊
+  text: 'var(--text-600)',        // черно-серый текст␊
+  cardBg: 'var(--page-mid)',      // фон совпадает с главной страницей
   red: '#EF4444',
-  button: 'var(--blue)',          // синяя кнопка как «Найти»
-  buttonHover: '#1e53d6',         // ховер темнее
+  button: 'var(--blue)',          // синяя кнопка как «Найти»␊
+  buttonHover: '#1e53d6',         // ховер темнее␊
 };
 
 
@@ -16,7 +16,7 @@ const UI = {
         <div
   style={{
     position: 'relative',
-    background: 'var(--surface-1)',
+    background: UI.cardBg,
     border: 'none',
     borderRadius: 16,
     padding: 18,
@@ -117,6 +117,7 @@ const UI = {
     </section>
   );
 }
+
 
 
 
