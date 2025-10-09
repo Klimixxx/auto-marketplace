@@ -647,6 +647,7 @@ export default function Header({ user }) {
           background: "var(--page-bg-gradient)",
         }}
       >
+      <div
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -910,4 +911,5 @@ function BellIcon() {
     </svg>
   );
 }
+
 
