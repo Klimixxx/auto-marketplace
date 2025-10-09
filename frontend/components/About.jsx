@@ -4,7 +4,6 @@ const UI = {
   title: 'var(--text-900)',       // чёрный заголовок
   text: 'var(--text-600)',        // черно-серый текст
   cardBg: '#FDFCF9',              // ТЕПЛЫЙ белый, чтобы не сливаться с фоном страницы
-  border: 'var(--stats-border)',  // тонкая «тёплая» рамка
   red: '#EF4444',
   button: 'var(--blue)',          // синяя кнопка как «Найти»
   buttonHover: '#1e53d6',         // ховер темнее
@@ -19,7 +18,7 @@ const UI = {
     position: 'relative',
     background:
       'linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)', // фон как у бейджа «Честные данные»
-    border: `1px solid var(--stats-border)`,
+    border: 'none',
     borderRadius: 16,
     padding: 18,
     overflow: 'hidden',
@@ -119,4 +118,5 @@ const UI = {
     </section>
   );
 }
+
 
