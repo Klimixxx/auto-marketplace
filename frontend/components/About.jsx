@@ -16,8 +16,7 @@ const UI = {
         <div
   style={{
     position: 'relative',
-    background:
-      'linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)', // фон как у бейджа «Честные данные»
+    background: 'var(--surface-1)',
     border: 'none',
     borderRadius: 16,
     padding: 18,
@@ -118,5 +117,6 @@ const UI = {
     </section>
   );
 }
+
 
 
