@@ -1,4 +1,6 @@
 // frontend/components/About.jsx — светлая версия «О нас»
+
+
 export default function About() {
 const UI = {
   title: 'var(--text-900)',       // чёрный заголовок␊
@@ -117,6 +119,7 @@ const UI = {
     </section>
   );
 }
+
 
 
 
