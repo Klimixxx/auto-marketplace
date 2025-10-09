@@ -1105,7 +1105,7 @@ export default function Home() {
             style={{
               background:
                 "linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)",
-              border: `1px solid ${UI.border}`,
+              border: "1px solid var(--card-border)",
               borderRadius: 16,
               padding: 18,
               display: "grid",
@@ -1337,5 +1337,6 @@ export default function Home() {
     </>
   );
 }
+
 
 
