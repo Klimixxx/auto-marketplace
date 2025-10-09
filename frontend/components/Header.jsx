@@ -641,9 +641,12 @@ export default function Header({ user }) {
       {/* Нижняя шапка */}
       <div
         className="header--bottom hdr"
-        style={{ width: "100%", borderBottom: "none", background: "inherit" }}
+        style={{
+          width: "100%",
+          borderBottom: "none",
+          background: "var(--page-bg-gradient)",
+        }}
       >
-        <div
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -907,3 +910,4 @@ function BellIcon() {
     </svg>
   );
 }
+
