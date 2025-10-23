@@ -15,6 +15,12 @@ import tradeOrdersRouter from './routes/tradeOrders.js';
 import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
+import {
+  RUSSIAN_REGIONS,
+  getRegionNameByCode,
+  normalizeRegionCode,
+  findRegionCodeByName,
+} from '../shared/regions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -538,6 +544,7 @@ app.get('/api/listings', async (req, res) => {
   const {
     q,
     region,
+    region_code: regionCodeParam,
     city,
     brand,
     asset_type,
@@ -559,7 +566,30 @@ app.get('/api/listings', async (req, res) => {
     `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
       OR vin ILIKE '%' || $${params.length} || '%')`
   );}
-  if (region)     { params.push(region);     where.push(`region = $${params.length}`); }
+  const normalizedRegionCodeParam = normalizeRegionCode(regionCodeParam);
+  if (normalizedRegionCodeParam) {
+    params.push(normalizedRegionCodeParam);
+    where.push(`region_code = $${params.length}`);
+  } else if (region) {
+    const regionTrimmed = String(region).trim();
+    if (regionTrimmed) {
+      const regionCodeFromRegion = normalizeRegionCode(regionTrimmed);
+      const knownName = regionCodeFromRegion ? getRegionNameByCode(regionCodeFromRegion) : null;
+      if (regionCodeFromRegion && knownName) {
+        params.push(regionCodeFromRegion);
+        where.push(`region_code = $${params.length}`);
+      } else {
+        const codeByName = findRegionCodeByName(regionTrimmed);
+        if (codeByName) {
+          params.push(codeByName);
+          where.push(`region_code = $${params.length}`);
+        } else {
+          params.push(regionTrimmed);
+          where.push(`region = $${params.length}`);
+        }
+      }
+    }
+  }
   if (city)       { params.push(city);       where.push(`city = $${params.length}`); }
   if (asset_type) { params.push(asset_type); where.push(`asset_type = $${params.length}`); }
   if (brand) {
@@ -770,7 +800,7 @@ app.get('/api/listings', async (req, res) => {
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const totalSql = `SELECT count(*)::int AS count FROM listings ${whereSql}`;
   const listSql = `
-    SELECT id, title, region, city, brand, model, production_year, vin,
+    SELECT id, title, region, region_code, city, brand, model, production_year, vin,
            asset_type, trade_type, currency,
            start_price, current_price, min_price, max_price,
            status, end_date, source_url, photos, is_featured, published,
@@ -796,13 +826,7 @@ app.get('/api/listings', async (req, res) => {
 
 app.get('/api/listings/meta', async (_req, res) => {
   try {
-    const [regions, cities, brands, tradeTypes] = await Promise.all([
-      query(`
-        SELECT DISTINCT region
-          FROM listings
-         WHERE published = TRUE AND region IS NOT NULL AND btrim(region) <> ''
-         ORDER BY region
-      `),
+    const [cities, brands, tradeTypes] = await Promise.all([
       query(`
         SELECT DISTINCT city
           FROM listings
@@ -839,7 +863,7 @@ app.get('/api/listings/meta', async (_req, res) => {
     });
     
     res.json({
-      regions: regions.rows.map((r) => r.region),
+      regions: RUSSIAN_REGIONS,
       cities: cities.rows.map((r) => r.city),
       brands: brands.rows.map((r) => r.brand),
       tradeTypes: tradeTypeList,
@@ -855,7 +879,7 @@ app.get('/api/listings/featured', async (req, res) => {
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(24, limitRaw)) : 12;
   try {
     const { rows } = await query(
-      `SELECT id, title, region, city, brand, model, production_year, vin,
+      `SELECT id, title, region, region_code, city, brand, model, production_year, vin,
               asset_type, trade_type, currency,
               start_price, current_price, min_price, max_price,
               status, end_date, source_url, photos, is_featured, published,
@@ -915,12 +939,13 @@ app.get('/api/stats/summary', async (_req, res) => {
         FROM listings
       `),
       query(`
-        SELECT region,
-               count(*)::int AS listings,
+        SELECT COALESCE(region_code, '') AS region_code,
+               COALESCE(region, '')       AS region_name,
+               count(*)::int              AS listings,
                COALESCE(sum(COALESCE(current_price, start_price, min_price, max_price)),0) AS total_value
           FROM listings
-         WHERE published = TRUE AND region IS NOT NULL AND btrim(region) <> ''
-         GROUP BY region
+         WHERE published = TRUE
+         GROUP BY region_code, region
          ORDER BY listings DESC
       `),
     ]);
@@ -931,8 +956,12 @@ app.get('/api/stats/summary', async (_req, res) => {
       const value = Number(row.total_value || 0);
       const listings = Number(row.listings || 0);
       const average = listings ? Math.round((value / listings) * 100) / 100 : 0;
+      const regionCode = normalizeRegionCode(row.region_code);
+      const nameFromCode = regionCode ? getRegionNameByCode(regionCode) : null;
+      const finalName = nameFromCode || row.region_name || null;
       return {
-        region: row.region,
+        region: finalName,
+        region_code: regionCode || null,
         listings,
         totalValue: value,
         averagePrice: average,
@@ -1557,11 +1586,31 @@ function mapParsedToListing(item) {
   const fed = item?.fedresurs_data || {};
   const pr  = item?.parsed_data    || item || {};
 
-  const lot = pr.lot_details || {};
+  const lotSource = pr.lot_details && typeof pr.lot_details === 'object' && !Array.isArray(pr.lot_details)
+    ? pr.lot_details
+    : {};
+  const lot = { ...lotSource };
+
+  const regionCodeRaw =
+    lot.region_code
+    ?? lot.regionCode
+    ?? pr.region_code
+    ?? pr.regionCode
+    ?? item?.region_code
+    ?? fed?.region_code
+    ?? null;
+  const region_code = normalizeRegionCode(regionCodeRaw);
+  const regionName = region_code ? getRegionNameByCode(region_code) : null;
+  if (region_code) {
+    lot.region_code = region_code;
+    if (!lot.region && regionName) {
+      lot.region = regionName;
+    }
+  }
   const photos = collectPhotos(pr, lot);
 
   const details = {
-    lot_details: pr.lot_details || null,
+    lot_details: Object.keys(lot).length ? lot : null,
     debtor_details: pr.debtor_details || null,
     contact_details: pr.contact_details || null,
     prices: pr.prices || null,
@@ -1569,11 +1618,14 @@ function mapParsedToListing(item) {
     photos: photos.length ? photos : null,
     fedresurs_meta: fed || null,
   };
+  if (region_code) {
+    details.region_code = region_code;
+  }
 
   const title = pr.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот';
   const description = pr?.description || lot?.description || '';
   const asset_type = lot.category || pr.category || 'vehicle';
-  const region = lot.region || pr.region || null;
+  const region = regionName || lot.region || pr.region || null;
   const city = lot.city || lot.location || pr.city || pr.location || null;
   const brand = lot.brand || pr.brand || null;
   const model = lot.model || pr.model || null;
@@ -1610,6 +1662,7 @@ function mapParsedToListing(item) {
     description,
     asset_type,
     region,
+    region_code,
     city,
     brand,
     model,
@@ -1637,6 +1690,7 @@ async function upsertListing(listing) {
     description,
     asset_type,
     region,
+    region_code = null,
     city = null,
     brand = null,
     model = null,
@@ -1659,15 +1713,16 @@ async function upsertListing(listing) {
 
   await query(
     `INSERT INTO listings
-     (source_id, title, description, asset_type, region, city, brand, model, production_year, vin,
+     (source_id, title, description, asset_type, region, region_code, city, brand, model, production_year, vin,
       trade_type, currency, start_price, current_price, min_price, max_price, status, end_date,
       source_url, photos, details)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
      ON CONFLICT (source_id) DO UPDATE SET
        title=EXCLUDED.title,
        description=EXCLUDED.description,
        asset_type=EXCLUDED.asset_type,
        region=EXCLUDED.region,
+       region_code=EXCLUDED.region_code,
        city=EXCLUDED.city,
        brand=EXCLUDED.brand,
        model=EXCLUDED.model,
@@ -1691,6 +1746,7 @@ async function upsertListing(listing) {
       description,
       asset_type,
       region,
+      region_code,
       city,
       brand,
       model,
@@ -1724,8 +1780,14 @@ app.post('/admin/ingest/fedresurs', async (req, res) => {
       start_date,
       end_date,
       limit = 15,
-      offset = 0
+      offset = 0,
+      region_code: regionCodeRaw,
     } = Object.assign({}, req.query, req.body);
+
+    const region_code = normalizeRegionCode(regionCodeRaw);
+    if (!region_code) {
+      return res.status(400).json({ error: 'region_code is required' });
+    }
 
     // собираем URL запроса к парсеру
     const u = new URL('/parse-fedresurs-trades', PARSER_BASE);
@@ -1734,6 +1796,7 @@ app.post('/admin/ingest/fedresurs', async (req, res) => {
     if (end_date)   u.searchParams.set('end_date',   String(end_date));
     u.searchParams.set('limit',  String(limit));
     u.searchParams.set('offset', String(offset));
+    u.searchParams.set('region_code', String(region_code));
 
     console.log('Parser request:', u.toString());
 
@@ -1742,12 +1805,35 @@ app.post('/admin/ingest/fedresurs', async (req, res) => {
       return res.status(502).json({ error: 'Parser error', status, data });
     }
 
-    if (!Array.isArray(data)) {
+    let items = [];
+    let totalFound = null;
+
+    if (Array.isArray(data)) {
+      items = data;
+      totalFound = data.length;
+    } else if (data && typeof data === 'object') {
+      const candidates = [data.results, data.items, data.pageData, data.data, data.list];
+      const found = candidates.find((value) => Array.isArray(value));
+      if (!found) {
+        return res.status(502).json({ error: 'Unexpected parser payload', sample: data });
+      }
+      items = found;
+      const totalCandidate = data.total_found ?? data.found ?? data.total ?? data.totalCount;
+      if (totalCandidate !== undefined && totalCandidate !== null) {
+        const numeric = Number(totalCandidate);
+        if (Number.isFinite(numeric)) {
+          totalFound = numeric;
+        }
+      }
+      if (totalFound == null) {
+        totalFound = items.length;
+      }
+    } else {
       return res.status(502).json({ error: 'Unexpected parser payload', sample: data });
     }
 
     let upserted = 0;
-    for (const item of data) {
+    for (const item of items) {
       try {
         const listing = mapParsedToListing(item);
         await upsertListing(listing);
@@ -1759,10 +1845,12 @@ app.post('/admin/ingest/fedresurs', async (req, res) => {
 
     return res.json({
       ok: true,
-      received: data.length,
+      region_code,
+      received: items.length,
       upserted,
       offset: Number(offset),
-      limit: Number(limit)
+      limit: Number(limit),
+      total_found: totalFound,
     });
   } catch (err) {
     console.error('admin ingest fedresurs error:', err);
