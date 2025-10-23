@@ -214,7 +214,7 @@ export default function AdminParserTradesPage() {
   }, []);
 
   const fetchProgress = useCallback(
-    async (searchTerm) => {
+    async (searchTerm, regionCode) => {
       if (!API_BASE) {
         console.warn('NEXT_PUBLIC_API_BASE is not configured.');
         return;
@@ -229,6 +229,9 @@ export default function AdminParserTradesPage() {
       const params = new URLSearchParams();
       if (typeof searchTerm === 'string' && searchTerm.trim()) {
         params.set('search', resolveSearchTerm(searchTerm));
+      }
+      if (regionCode) {
+        params.set('region_code', regionCode);
       }
 
       const qs = params.toString();
@@ -269,7 +272,11 @@ export default function AdminParserTradesPage() {
       const params = new URLSearchParams();
       const activeFilters = cleanFilters(filtersOverride ?? filters);
       if (activeFilters.q) params.set('q', activeFilters.q);
-      if (activeFilters.region) params.set('region', activeFilters.region);
+      if (activeFilters.region_code) {
+        params.set('region_code', activeFilters.region_code);
+      } else if (activeFilters.region) {
+        params.set('region_code', activeFilters.region);
+      }
       if (activeFilters.city) params.set('city', activeFilters.city);
       if (activeFilters.brand) params.set('brand', activeFilters.brand);
       if (activeFilters.trade_type) params.set('trade_type', activeFilters.trade_type);
@@ -313,11 +320,11 @@ export default function AdminParserTradesPage() {
   useEffect(() => {
     if (view === 'drafts') {
       const searchTerm = resolveSearchTerm(filters.q || '');
-      fetchProgress(searchTerm);
+      fetchProgress(searchTerm, filters.region_code || '');
     } else {
       applyProgress(null);
     }
-  }, [view, fetchProgress, applyProgress, filters.q]);
+  }, [view, fetchProgress, applyProgress, filters.q, filters.region_code]);
 
   const handleFilterSearch = useCallback((nextFilters) => {
     setFilters(cleanFilters(nextFilters));
@@ -339,6 +346,11 @@ export default function AdminParserTradesPage() {
       }
 
       const searchTerm = resolveSearchTerm(filters.q || '');
+      const regionCode = filters.region_code || '';
+      if (!regionCode) {
+        alert('Выберите регион перед запуском парсинга.');
+        return;
+      }
       const offsetToUse = reset ? 0 : nextOffset;
 
       setIngesting(true);
@@ -354,6 +366,7 @@ export default function AdminParserTradesPage() {
             search: searchTerm,
             limit: PARSER_PAGE_SIZE,
             offset: offsetToUse,
+            region_code: regionCode,
           }),
         });
         const data = await res.json().catch(() => null);
@@ -370,6 +383,7 @@ export default function AdminParserTradesPage() {
           const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
           const fallbackProgress = {
             search_term: searchTerm,
+            region_code: regionCode,
             next_offset: Number.isFinite(Number(data.next_offset))
               ? Number(data.next_offset)
               : baseOffset + (receivedCount || limitUsed),
@@ -389,7 +403,7 @@ export default function AdminParserTradesPage() {
             `Текущий offset: ${Number(data.offset) || offsetToUse}, следующий: ${Number(data.next_offset) || nextOffset}.`,
         );
         await loadPage(1);
-        await fetchProgress(searchTerm);
+        await fetchProgress(searchTerm, regionCode);
       } catch (error) {
         console.error('ingest error:', error);
         alert(`Ошибка: ${error.message || 'ingest failed'}`);
@@ -726,5 +740,6 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
