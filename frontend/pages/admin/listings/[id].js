@@ -7,7 +7,7 @@ import {
   translateValueByKey,
 } from '../../../lib/lotFormatting';
 import { normalizeTradeTypeCode } from '../../../lib/tradeTypes';
-import { RUSSIAN_REGIONS, normalizeRegionCode, getRegionNameByCode } from '../../../../../shared/regions.js';
+import { RUSSIAN_REGIONS, normalizeRegionCode, getRegionNameByCode } from '../../../../shared/regions.js'
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
@@ -3551,6 +3551,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
