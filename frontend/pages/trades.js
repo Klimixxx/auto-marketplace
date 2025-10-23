@@ -5,7 +5,7 @@ import FilterBar from '../components/FilterBar';
 import ListingCard from '../components/ListingCard';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '').replace(/\/$/, '');
-const FILTER_KEYS = ['q', 'region', 'city', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
+const FILTER_KEYS = ['q', 'region_code', 'city', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
 
 function buildApiUrl(path) {
   if (API_BASE) return `${API_BASE}${path}`;
@@ -14,13 +14,22 @@ function buildApiUrl(path) {
 
 function extractFilters(query = {}) {
   const out = {};
-  for (const key of FILTER_KEYS) {
+  FILTER_KEYS.forEach((key) => {
     let value = query[key];
     if (Array.isArray(value)) value = value[value.length - 1];
-    if (value == null) continue;
+    if (value == null) return;
     const normalized = typeof value === 'string' ? value.trim() : value;
-    if (normalized === '') continue;
+    if (normalized === '') return;
     out[key] = normalized;
+  });
+  if (!out.region_code && query.region) {
+    const regionValue = Array.isArray(query.region) ? query.region[query.region.length - 1] : query.region;
+    if (regionValue) {
+      const trimmed = typeof regionValue === 'string' ? regionValue.trim() : regionValue;
+      if (trimmed) {
+        out.region_code = trimmed;
+      }
+    }
   }
   return out;
 }
@@ -257,3 +266,4 @@ export default function Trades() {
     </div>
   );
 }
+
