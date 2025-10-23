@@ -49,8 +49,11 @@ function normalizeParserPayload(payload) {
   throw new Error(`Unexpected parser payload type: ${typeof payload}`);
 }
 
-async function parseFedresursTrades({ search_string = 'vin', start_date, end_date, limit = 15, offset = 0 }) {
+async function parseFedresursTrades({ search_string = 'vin', start_date, end_date, limit = 15, offset = 0, region_code }) {
   const params = { search_string, start_date, end_date, limit, offset };
+  if (region_code) {
+    params.region_code = region_code;
+  }
   const { data } = await client.get('/parse-fedresurs-trades', { params });
   return normalizeParserPayload(data);
 }
