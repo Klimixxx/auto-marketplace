@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
+import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
 function api(path) {
   const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -14,18 +15,46 @@ export default function FilterBar({
   showFavoritesLink = true,
 }) {
   const [q, setQ] = useState(initial?.q || '');
-  const [region, setRegion] = useState(initial?.region || '');
+  const [regionCode, setRegionCode] = useState(initial?.region_code || initial?.region || '');
   const [city, setCity] = useState(initial?.city || '');
   const [brand, setBrand] = useState(initial?.brand || '');
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
   const [minPrice, setMinPrice] = useState(initial?.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(initial?.maxPrice || '');
   const EMPTY_META = useMemo(
-    () => ({ regions: [], cities: [], brands: [], tradeTypes: [] }),
+    () => ({ regions: RUSSIAN_REGIONS, cities: [], brands: [], tradeTypes: [] }),
     []
   );
 
   const [meta, setMeta] = useState(EMPTY_META);
+
+  const regionOptions = useMemo(() => {
+    const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
+    const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
+    const map = new Map();
+    fallback.forEach((item) => {
+      if (item?.code) {
+        const code = String(item.code);
+        map.set(code, { code, name: item.name || code });
+      }
+    });
+    metaRegions.forEach((entry) => {
+      if (!entry) return;
+      if (typeof entry === 'string') {
+        const code = entry;
+        if (!map.has(code)) {
+          map.set(code, { code, name: code });
+        }
+      } else if (typeof entry === 'object') {
+        const code = entry.code ?? entry.value ?? entry.id;
+        if (!code) return;
+        const stringCode = String(code);
+        const name = entry.name || entry.label || entry.title || entry.region || stringCode;
+        map.set(stringCode, { code: stringCode, name });
+      }
+    });
+    return Array.from(map.values());
+  }, [meta.regions]);
 
   const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
@@ -64,7 +93,7 @@ export default function FilterBar({
           const next =
             data && typeof data === 'object' && !Array.isArray(data)
               ? {
-                  regions: Array.isArray(data.regions) ? data.regions : [],
+                  regions: Array.isArray(data.regions) && data.regions.length ? data.regions : RUSSIAN_REGIONS,
                   cities: Array.isArray(data.cities) ? data.cities : [],
                   brands: Array.isArray(data.brands) ? data.brands : [],
                   tradeTypes: Array.isArray(data.tradeTypes) ? data.tradeTypes : [],
@@ -83,7 +112,7 @@ export default function FilterBar({
 
   useEffect(() => {
     setQ(initial?.q || '');
-    setRegion(initial?.region || '');
+    setRegionCode(initial?.region_code || initial?.region || '');
     setCity(initial?.city || '');
     setBrand(initial?.brand || '');
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -95,7 +124,7 @@ export default function FilterBar({
     e.preventDefault();
     onSearch({
       q,
-      region,
+      region_code: regionCode,
       city,
       brand,
       trade_type: tradeType,
@@ -106,7 +135,7 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegion('');
+    setRegionCode('');
     setCity('');
     setBrand('');
     setTradeType('');
@@ -114,7 +143,7 @@ export default function FilterBar({
     setMaxPrice('');
     onSearch({
       q: '',
-      region: '',
+      region_code: '',
       city: '',
       brand: '',
       trade_type: '',
@@ -144,10 +173,10 @@ export default function FilterBar({
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
           <div className="input-wrap">
-            <select className="input pro select" value={region} onChange={(e) => setRegion(e.target.value)}>
+            <select className="input pro select" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
               <option value="">Все регионы</option>
-              {meta.regions?.map((value) => (
-                <option key={value} value={value}>{value}</option>
+              {regionOptions.map((region) => (
+                <option key={region.code} value={region.code}>{region.name}</option>
               ))}
             </select>
           </div>
@@ -425,4 +454,5 @@ export default function FilterBar({
     </form>
   );
 }
+
 
