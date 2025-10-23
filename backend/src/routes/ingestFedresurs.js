@@ -18,8 +18,13 @@ router.post('/admin/ingest/fedresurs', auth, async (req, res) => {
       start_date,
       end_date,
       limit = 15,
-      offset = 0
+      offset = 0,
+      region_code,
     } = Object.assign({}, req.query, req.body);
+
+    if (!region_code) {
+      return res.status(400).json({ error: 'region_code is required' });
+    }
 
     const limitNum = Number(limit);
     const offsetNum = Number(offset);
@@ -32,6 +37,7 @@ router.post('/admin/ingest/fedresurs', auth, async (req, res) => {
       end_date,
       limit: safeLimit,
       offset: safeOffset,
+      region_code,
     });
 
     let inserted = 0;
@@ -50,6 +56,7 @@ router.post('/admin/ingest/fedresurs', auth, async (req, res) => {
       upserted: inserted,
       offset: safeOffset,
       limit: safeLimit,
+      region_code,
       parser_meta: meta,
     });
   } catch (err) {
