@@ -4,6 +4,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../db.js';
+import {
+  getRegionNameByCode,
+  normalizeRegionCode,
+  findRegionCodeByName,
+} from '../../shared/regions.js';
 
 const router = express.Router();
 
@@ -284,19 +289,44 @@ function resolveSearchTerm(value) {
   return trimmed || DEFAULT_SEARCH_TERM;
 }
 
-function resolveSearchKey(value) {
-  return resolveSearchTerm(value).toLowerCase();
+function resolveSearchKey(value, regionCode) {
+  const base = resolveSearchTerm(value).toLowerCase();
+  const normalizedRegion = normalizeRegionCode(regionCode);
+  if (normalizedRegion) {
+    return `${base}::region:${normalizedRegion}`;
+  }
+  return `${base}::region:all`;
 }
 
 
 async function upsertParserTrade(item) {
   const fedresurs = item?.fedresurs_data || {};
   const parsed = item?.parsed_data || item || {};
-  const lot = parsed.lot_details || {};
+  const lotSource = parsed.lot_details && typeof parsed.lot_details === 'object' && !Array.isArray(parsed.lot_details)
+    ? parsed.lot_details
+    : {};
+  const lot = { ...lotSource };
   const debtor = parsed.debtor_details || {};
   const contact = parsed.contact_details || {};
   const prices = Array.isArray(parsed.prices) ? parsed.prices : [];
   const documents = [];
+
+  const regionCodeRaw =
+    lot.region_code
+    ?? lot.regionCode
+    ?? parsed.region_code
+    ?? parsed.regionCode
+    ?? fedresurs.region_code
+    ?? item?.region_code
+    ?? null;
+  const region_code = normalizeRegionCode(regionCodeRaw);
+  const regionName = region_code ? getRegionNameByCode(region_code) : null;
+  if (region_code) {
+    lot.region_code = region_code;
+    if (!lot.region && regionName) {
+      lot.region = regionName;
+    }
+  }
 
   const fedresursId = parsed.fedresurs_id || fedresurs.guid || fedresurs.number || parsed.bidding_number || null;
   const biddingNumber = parsed.bidding_number || null;
@@ -320,7 +350,8 @@ async function upsertParserTrade(item) {
     documents,
     raw_payload: { fedresurs_data: fedresurs, parsed_data: parsed },
     category: lot.category || null,
-    region: lot.region || null,
+    region: regionName || lot.region || null,
+    region_code,
     brand: lot.brand || null,
     model: lot.model || null,
     year: lot.year || null,
@@ -336,13 +367,13 @@ async function upsertParserTrade(item) {
     insert into parser_trades
       (fedresurs_id, bidding_number, title, applications_count,
        lot_details, debtor_details, contact_details, prices, documents, raw_payload,
-       category, region, brand, model, year, vin, start_price,
+       category, region, region_code, brand, model, year, vin, start_price,
        date_start, date_finish, trade_place, source_url, description, photos)
     values
       ($1,$2,$3,$4,
        $5,$6,$7,$8,$9,$10,
-       $11,$12,$13,$14,$15,$16,$17,
-       $18,$19,$20,$21,$22,$23)
+       $11,$12,$13,$14,$15,$16,$17,$18,
+       $19,$20,$21,$22,$23,$24)
     on conflict (fedresurs_id) do update set
       bidding_number     = excluded.bidding_number,
       title              = excluded.title,
@@ -355,6 +386,7 @@ async function upsertParserTrade(item) {
       raw_payload        = excluded.raw_payload,
       category           = excluded.category,
       region             = excluded.region,
+      region_code        = excluded.region_code,
       brand              = excluded.brand,
       model              = excluded.model,
       year               = excluded.year,
@@ -374,7 +406,7 @@ async function upsertParserTrade(item) {
     params.fedresurs_id, params.bidding_number, params.title, params.applications_count,
     params.lot_details, params.debtor_details, params.contact_details, JSON.stringify(params.prices),
     JSON.stringify(params.documents), params.raw_payload,
-    params.category, params.region, params.brand, params.model, params.year, params.vin, params.start_price,
+    params.category, params.region, params.region_code, params.brand, params.model, params.year, params.vin, params.start_price,
     params.date_start, params.date_finish, params.trade_place, params.source_url, params.description,
     JSON.stringify(params.photos),
   ];
@@ -391,6 +423,7 @@ router.get('/parser-trades', async (req, res) => {
       limit = 20,
       status,
       region,
+      region_code: regionCodeParam,
       city,
       brand,
       trade_type: tradeType,
@@ -405,9 +438,29 @@ router.get('/parser-trades', async (req, res) => {
       filters.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
     }
 
-    if (region) {
-      params.push(region);
-      filters.push(`region = $${params.length}`);
+    const normalizedRegionCode = normalizeRegionCode(regionCodeParam);
+    if (normalizedRegionCode) {
+      params.push(normalizedRegionCode);
+      filters.push(`region_code = $${params.length}`);
+    } else if (region) {
+      const regionTrimmed = String(region).trim();
+      if (regionTrimmed) {
+        const codeFromParam = normalizeRegionCode(regionTrimmed);
+        const regionNameFromCode = codeFromParam ? getRegionNameByCode(codeFromParam) : null;
+        if (codeFromParam && regionNameFromCode) {
+          params.push(codeFromParam);
+          filters.push(`region_code = $${params.length}`);
+        } else {
+          const codeByName = findRegionCodeByName(regionTrimmed);
+          if (codeByName) {
+            params.push(codeByName);
+            filters.push(`region_code = $${params.length}`);
+          } else {
+            params.push(regionTrimmed);
+            filters.push(`region = $${params.length}`);
+          }
+        }
+      }
     }
 
     if (brand) {
@@ -472,7 +525,7 @@ router.get('/parser-trades', async (req, res) => {
       ? 'order by published_at desc nulls last, created_at desc'
       : 'order by created_at desc';
     const listSql = `
-      select id, title, region, category, brand, model, year, vin, start_price,
+      select id, title, region, region_code, category, brand, model, year, vin, start_price,
              date_finish, trade_place, source_url, created_at, published_at
         from parser_trades
       ${whereSql}
@@ -509,11 +562,13 @@ router.get('/parser-trades/:id', async (req, res) => {
 router.get('/parser-progress', async (req, res) => {
   try {
     const search = req.query.search;
+    const regionCodeParam = req.query.region_code;
+    const normalizedRegionCode = normalizeRegionCode(regionCodeParam);
+    const searchKey = resolveSearchKey(search, normalizedRegionCode);
     let row;
     if (typeof search === 'string' && search.trim()) {
-      const searchKey = resolveSearchKey(search);
       const { rows } = await query(
-        `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+        `select search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
            from parser_ingest_progress
           where search_key = $1`,
         [searchKey],
@@ -521,19 +576,21 @@ router.get('/parser-progress', async (req, res) => {
       row = rows[0];
     } else {
       const { rows } = await query(
-        `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+        `select search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
            from parser_ingest_progress
+          where region_code is not distinct from $1
           order by updated_at desc
           limit 1`,
-        [],
+        [normalizedRegionCode],
       );
       row = rows[0];
     }
 
     if (!row) {
       return res.json({
-        search_key: resolveSearchKey(search),
+        search_key: searchKey,
         search_term: resolveSearchTerm(search),
+        region_code: normalizedRegionCode || null,
         next_offset: 0,
         last_offset: 0,
         last_received: 0,
@@ -554,10 +611,22 @@ router.get('/parser-progress', async (req, res) => {
 
 router.post('/actions/ingest', async (req, res) => {
   try {
-    const { search, start_date, end_date, limit = DEFAULT_LIMIT, offset = DEFAULT_OFFSET } = req.body || {};
+    const {
+      search,
+      start_date,
+      end_date,
+      limit = DEFAULT_LIMIT,
+      offset = DEFAULT_OFFSET,
+      region_code: regionCodeRaw,
+    } = req.body || {};
+
+    const regionCode = normalizeRegionCode(regionCodeRaw);
+    if (!regionCode) {
+      return res.status(400).json({ error: 'region_code is required' });
+    }
 
     const searchTerm = resolveSearchTerm(search);
-    const searchKey = resolveSearchKey(search);
+    const searchKey = resolveSearchKey(search, regionCode);
 
     const limitNum = Number(limit);
     const offsetNum = Number(offset);
@@ -573,6 +642,7 @@ router.post('/actions/ingest', async (req, res) => {
     if (end_date) url.searchParams.set('end_date', String(end_date));
     url.searchParams.set('limit', String(safeLimit));
     url.searchParams.set('offset', String(safeOffset));
+    url.searchParams.set('region_code', String(regionCode));
 
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -618,10 +688,11 @@ router.post('/actions/ingest', async (req, res) => {
 
     await query(
       `insert into parser_ingest_progress
-         (search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        on conflict (search_key) do update set
          search_term   = excluded.search_term,
+         region_code   = excluded.region_code,
          next_offset   = excluded.next_offset,
          last_offset   = excluded.last_offset,
          last_received = excluded.last_received,
@@ -632,6 +703,7 @@ router.post('/actions/ingest', async (req, res) => {
       [
         searchKey,
         searchTerm,
+        regionCode,
         nextOffset,
         baseOffset,
         receivedCount,
@@ -742,6 +814,16 @@ router.patch('/parser-trades/:id', async (req, res) => {
     }
 
     const payload = req.body || {};
+    if (Object.prototype.hasOwnProperty.call(payload, 'region_code')) {
+      const normalizedRegion = normalizeRegionCode(payload.region_code);
+      payload.region_code = normalizedRegion || null;
+      if (normalizedRegion && !Object.prototype.hasOwnProperty.call(payload, 'region')) {
+        const regionName = getRegionNameByCode(normalizedRegion);
+        if (regionName) {
+          payload.region = regionName;
+        }
+      }
+    }
     const updates = [];
     const values = [];
 
@@ -764,6 +846,10 @@ router.patch('/parser-trades/:id', async (req, res) => {
 
     if ('region' in payload) {
       push('region', payload.region || null);
+    }
+
+    if ('region_code' in payload) {
+      push('region_code', payload.region_code || null);
     }
 
     if ('category' in payload) {
@@ -838,6 +924,21 @@ router.patch('/parser-trades/:id', async (req, res) => {
         lotDetails = { ...lotDetails, description: payload.description || null };
       } else if (payload.description) {
         lotDetails = { description: payload.description };
+      }
+    }
+
+    if ('region_code' in payload) {
+      lotDetailsShouldUpdate = true;
+      if (lotDetails && typeof lotDetails === 'object' && !Array.isArray(lotDetails)) {
+        lotDetails = { ...lotDetails, region_code: payload.region_code || null };
+        if (payload.region && !lotDetails.region) {
+          lotDetails.region = payload.region;
+        }
+      } else if (payload.region_code) {
+        lotDetails = { ...(lotDetails || {}), region_code: payload.region_code };
+        if (payload.region && !lotDetails.region) {
+          lotDetails.region = payload.region;
+        }
       }
     }
 
@@ -944,6 +1045,9 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
     const normalizedPhotos = storedPhotos.length ? normalizePhotos(storedPhotos) : [];
     const rawPayload = parseJsonObject(trade.raw_payload, 'parser_trades.raw_payload');
 
+    const regionCode = normalizeRegionCode(trade.region_code || lotDetails?.region_code);
+    const regionName = regionCode ? getRegionNameByCode(regionCode) : null;
+
     const details = {
       lot_details: lotDetails,
       debtor_details: debtorDetails,
@@ -953,20 +1057,24 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
       fedresurs_meta: rawPayload?.fedresurs_data || null,
       photos: normalizedPhotos.length ? normalizedPhotos : null,
     };
+    if (regionCode) {
+      details.region_code = regionCode;
+    }
 
     const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
 
     await query(`
       insert into listings
-        (source_id, title, description, asset_type, region, currency, start_price,
+        (source_id, title, description, asset_type, region, region_code, currency, start_price,
          current_price, status, end_date, source_url, details, published)
       values
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true)
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true)
       on conflict (source_id) do update set
         title=excluded.title,
         description=excluded.description,
         asset_type=excluded.asset_type,
         region=excluded.region,
+        region_code=excluded.region_code,
         currency=excluded.currency,
         start_price=excluded.start_price,
         current_price=excluded.current_price,
@@ -981,7 +1089,8 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
       trade.title || [trade.brand, trade.model, trade.year].filter(Boolean).join(' ') || 'Лот',
       trade.description || trade.lot_details?.description || null,
       trade.category || 'vehicle',
-      trade.region || null,
+      regionName || trade.region || null,
+      regionCode,
       currency,
       trade.start_price || null,
       currentPrice,
