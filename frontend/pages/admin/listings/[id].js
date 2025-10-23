@@ -7,6 +7,7 @@ import {
   translateValueByKey,
 } from '../../../lib/lotFormatting';
 import { normalizeTradeTypeCode } from '../../../lib/tradeTypes';
+import { RUSSIAN_REGIONS, normalizeRegionCode, getRegionNameByCode } from '../../../../../shared/regions.js';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 
@@ -311,6 +312,8 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'description',
   'category',
   'region',
+  'region_code',
+  'regionCode',
   'brand',
   'model',
   'year',
@@ -1267,6 +1270,7 @@ const LOT_DETAIL_SYNC_MAP = {
   description: 'description',
   category: 'category',
   region: 'region',
+  region_code: 'region_code',
   brand: 'brand',
   model: 'model',
   year: 'year',
@@ -1479,17 +1483,29 @@ export default function AdminParserTradeCard() {
   const [unpublishing, setUnpublishing] = useState(false);
   const [error, setError] = useState(null);
 
+  const regionOptions = RUSSIAN_REGIONS;
+
   const applyTrade = useCallback((trade) => {
     if (!trade) return;
     setItem(trade);
     
-    const lotDetails = trade.lot_details && typeof trade.lot_details === 'object' ? trade.lot_details : {};
+    const lotDetailsSource = trade.lot_details && typeof trade.lot_details === 'object' ? trade.lot_details : {};
+    const lotDetails = Array.isArray(lotDetailsSource) ? {} : { ...lotDetailsSource };
+    const normalizedRegionCode = normalizeRegionCode(trade.region_code || lotDetails.region_code);
+    const regionName = normalizedRegionCode ? getRegionNameByCode(normalizedRegionCode) : null;
+    if (normalizedRegionCode) {
+      lotDetails.region_code = normalizedRegionCode;
+      if (!lotDetails.region && regionName) {
+        lotDetails.region = regionName;
+      }
+    }
 
     setForm({
       title: trade.title || lotDetails.title || lotDetails.object_name || '',
       description: trade.description || lotDetails.description || '',
       category: trade.category || lotDetails.category || '',
-      region: trade.region || lotDetails.region || '',
+      region: trade.region || lotDetails.region || regionName || '',
+      region_code: normalizedRegionCode || '',
       brand: trade.brand || lotDetails.brand || '',
       model: trade.model || lotDetails.model || '',
       year: trade.year || lotDetails.year || '',
@@ -1789,6 +1805,22 @@ export default function AdminParserTradeCard() {
     },
     []
   );
+
+  const handleRegionCodeChange = useCallback((event) => {
+    const value = event?.target?.value ?? '';
+    setForm((prev) => {
+      const base = prev && typeof prev === 'object' ? prev : {};
+      const trimmedRegion = typeof base.region === 'string' ? base.region.trim() : '';
+      const previousAutoName = base.region_code ? getRegionNameByCode(base.region_code) || '' : '';
+      const nextAutoName = value ? getRegionNameByCode(value) || '' : '';
+      const shouldAutoFill = !trimmedRegion || trimmedRegion === previousAutoName;
+      return {
+        ...base,
+        region_code: value,
+        region: shouldAutoFill ? (nextAutoName || trimmedRegion) : base.region,
+      };
+    });
+  }, []);
 
   const updateAuctionField = useCallback(
     (key) => (event) => {
@@ -2098,6 +2130,19 @@ export default function AdminParserTradeCard() {
         const documentsPayload = buildDocumentsPayload(documents);
         const photosPayload = buildPhotosPayload(photos);
 
+        const regionCode = normalizeRegionCode(form?.region_code);
+        const regionNameFromCode = regionCode ? getRegionNameByCode(regionCode) : null;
+        if (lotDetailsPayload && typeof lotDetailsPayload === 'object') {
+          if (regionCode) {
+            lotDetailsPayload.region_code = regionCode;
+            if (!lotDetailsPayload.region) {
+              lotDetailsPayload.region = trimOrNull(form?.region) || regionNameFromCode || null;
+            }
+          } else {
+            delete lotDetailsPayload.region_code;
+          }
+        }
+
         const effectiveStartPrice = shouldUseStartPrice
           ? auctionPricing?.start_price && auctionPricing.start_price !== ''
             ? auctionPricing.start_price
@@ -2114,7 +2159,8 @@ export default function AdminParserTradeCard() {
           title: trimOrNull(form?.title),
           description: trimOrNull(form?.description),
           category: trimOrNull(form?.category),
-          region: trimOrNull(form?.region),
+          region: trimOrNull(form?.region) || regionNameFromCode || null,
+          region_code: regionCode || null,
           brand: trimOrNull(form?.brand),
           model: trimOrNull(form?.model),
           year: trimOrNull(form?.year),
@@ -2355,6 +2401,14 @@ export default function AdminParserTradeCard() {
       </div>
     );
   }
+
+  if (!form) {
+    return (
+      <div className="container">
+        <div className="muted">Загружаем данные лота…</div>
+      </div>
+    );
+  }
   const publishButtonLabel = item.published_at
     ? updatingPublication || saving || publishing
       ? 'Обновляем…'
@@ -2399,8 +2453,17 @@ export default function AdminParserTradeCard() {
               <input className="input" value={form.category} onChange={updateFormField('category')} />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Регион</span>
-              <input className="input" value={form.region} onChange={updateFormField('region')} />
+              <span className="muted">Код региона</span>
+              <select className="input" value={form.region_code || ''} onChange={handleRegionCodeChange}>
+                <option value="">Не выбран</option>
+                {regionOptions.map((region) => (
+                  <option key={region.code} value={region.code}>{region.name}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="muted">Название региона</span>
+              <input className="input" value={form.region} onChange={updateFormField('region')} placeholder="Например, Краснодарский край" />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Марка</span>
@@ -3488,6 +3551,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
