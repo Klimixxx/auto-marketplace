@@ -1221,9 +1221,8 @@ export default function Home() {
         {/* === СТАТИСТИКА ПЛАТФОРМЫ — НИЖЕ === */}
                <section style={{ margin: "32px 0" }}>
           <div
-             style={{
-              background:
-                "linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)",
+            style={{
+              background: "var(--page-mid)",
               border: "none",
               borderRadius: 16,
               padding: 18,
@@ -1336,6 +1335,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
