@@ -48,23 +48,6 @@ function normalizeUserId(value) {
   const text = String(value).trim();
   return text || null;
 }
-function normalizeRegionCodeParamList(value) {
-  if (value === null || value === undefined) return [];
-  const source = Array.isArray(value) ? value : String(value).split(',');
-  const normalized = [];
-  const seen = new Set();
-  for (const entry of source) {
-    if (entry === null || entry === undefined) continue;
-    const trimmed = String(entry).trim();
-    if (!trimmed) continue;
-    const code = normalizeRegionCode(trimmed);
-    if (!code) continue;
-    if (seen.has(code)) continue;
-    seen.add(code);
-    normalized.push(code);
-  }
-  return normalized;
-}
 
 // Нативный fetch + таймаут через AbortController
 async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body } = {}) {
@@ -583,16 +566,10 @@ app.get('/api/listings', async (req, res) => {
     `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
       OR vin ILIKE '%' || $${params.length} || '%')`
   );}
-  const normalizedRegionCodes = normalizeRegionCodeParamList(regionCodeParam);
-  if (normalizedRegionCodes.length === 1) {
-    params.push(normalizedRegionCodes[0]);
+  const normalizedRegionCodeParam = normalizeRegionCode(regionCodeParam);
+  if (normalizedRegionCodeParam) {
+    params.push(normalizedRegionCodeParam);
     where.push(`region_code = $${params.length}`);
-    } else if (normalizedRegionCodes.length > 1) {
-    const placeholders = normalizedRegionCodes.map((code) => {
-      params.push(code);
-      return `$${params.length}`;
-    });
-    where.push(`region_code IN (${placeholders.join(', ')})`);
   } else if (region) {
     const regionTrimmed = String(region).trim();
     if (regionTrimmed) {
