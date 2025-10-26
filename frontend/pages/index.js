@@ -24,6 +24,140 @@ const UI = {
   chipBg: "rgba(42,101,247,0.12)",
   chipBorder: "rgba(42,101,247,0.24)",
 };
+
+function ShieldCheckIcon({ size = 36 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 3.25C12 3.25 5 4.75 5 8.75C5 13.685 8.136 18.054 12 19.75C15.864 18.054 19 13.685 19 8.75C19 4.75 12 3.25 12 3.25Z"
+        stroke="url(#shieldGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.25 11.25L11 13L14.75 9.25"
+        stroke="url(#shieldGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <defs>
+        <linearGradient
+          id="shieldGradient"
+          x1="5"
+          y1="3.25"
+          x2="19.6"
+          y2="19"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#2563eb" />
+          <stop offset="1" stopColor="#60a5fa" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function HandshakeIcon({ size = 36 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M21 12L19 10L15 14L13 12L9 16"
+        stroke="url(#handshakeGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 14L3 10L5 8L9 12"
+        stroke="url(#handshakeGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 7L14 9L10 13L8 11L12 7Z"
+        stroke="url(#handshakeGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <defs>
+        <linearGradient
+          id="handshakeGradient"
+          x1="3"
+          y1="7"
+          x2="19"
+          y2="18"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#38bdf8" />
+          <stop offset="1" stopColor="#2563eb" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function SparkleIcon({ size = 36 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 3L13.5 7.5L18 9L13.5 10.5L12 15L10.5 10.5L6 9L10.5 7.5L12 3Z"
+        stroke="url(#sparkleGradient)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 15.5L7.25 17.75L9.5 18.5L7.25 19.25L6.5 21.5L5.75 19.25L3.5 18.5L5.75 17.75L6.5 15.5Z"
+        stroke="url(#sparkleGradient)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M16.5 13.5L17 15L18.5 15.5L17 16L16.5 17.5L16 16L14.5 15.5L16 15L16.5 13.5Z"
+        stroke="url(#sparkleGradient)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <defs>
+        <linearGradient
+          id="sparkleGradient"
+          x1="3.5"
+          y1="3"
+          x2="19.5"
+          y2="21.5"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#2563eb" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
 const fmtNumber = new Intl.NumberFormat("ru-RU");
 const fmtCurrency = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -767,6 +901,43 @@ export default function Home() {
   const router = useRouter();
 
 
+  const trustHighlights = [
+    {
+      title: "Экспертиза команды",
+      description:
+        "Наши аналитики и юристы ежедневно проверяют десятки торгов, отбирая только прозрачные и безопасные сделки.",
+      Icon: ShieldCheckIcon,
+    },
+    {
+      title: "Честные партнерства",
+      description:
+        "Мы выстраиваем прямые отношения с банками, дилерами и организаторами, поэтому пользователи получают актуальную информацию первыми.",
+      Icon: HandshakeIcon,
+    },
+    {
+      title: "Забота о каждом клиенте",
+      description:
+        "Персональные рекомендации, напоминания о важных этапах и поддержка в чатах помогают уверенно пройти путь до сделки.",
+      Icon: SparkleIcon,
+    },
+  ];
+
+  const trustMetrics = [
+    {
+      label: "4.9/5",
+      caption: "оценка пользователей",
+    },
+    {
+      label: "12 000+",
+      caption: "успешных сделок за последний год",
+    },
+    {
+      label: "72 часа",
+      caption: "среднее время ответа эксперта",
+    },
+  ];
+
+  
   // токен авторизации и локальное состояние избранного
   const [authToken, setAuthToken] = useState(null);
   const [favoriteIds, setFavoriteIds] = useState([]);
@@ -1331,6 +1502,169 @@ export default function Home() {
           </div>
         </section>
 
+        <section style={{ margin: "32px 0" }}>
+          <div
+            style={{
+              borderRadius: 20,
+              padding: "32px 24px",
+              background:
+                "linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(14, 165, 233, 0.18))",
+              border: "1px solid rgba(37, 99, 235, 0.12)",
+              boxShadow: "0 24px 40px -24px rgba(30, 64, 175, 0.35)",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                textAlign: "center",
+                marginBottom: 28,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto",
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  background: "rgba(59, 130, 246, 0.12)",
+                  color: "#1d4ed8",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  letterSpacing: 0.3,
+                }}
+              >
+                Команда, которой доверяют покупатели
+              </span>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 26,
+                  fontWeight: 900,
+                  color: "#0f172a",
+                }}
+              >
+                Почему нам доверяют
+              </h2>
+              <p
+                style={{
+                  margin: "0 auto",
+                  maxWidth: 720,
+                  lineHeight: 1.7,
+                  color: "#1e293b",
+                  fontSize: 16,
+                }}
+              >
+                Мы объединили глубокую экспертизу команды, проверенные процессы и
+                открытое общение, чтобы вы чувствовали поддержку на каждом
+                этапе покупки авто с торгов.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 16,
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                marginBottom: 28,
+              }}
+            >
+              {trustHighlights.map(({ title, description, Icon }) => (
+                <div
+                  key={title}
+                  style={{
+                    borderRadius: 16,
+                    background: "rgba(255,255,255,0.88)",
+                    border: "1px solid rgba(148, 163, 184, 0.24)",
+                    padding: "20px 18px",
+                    textAlign: "left",
+                    display: "grid",
+                    gap: 12,
+                    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                  }}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.transform = "translateY(-4px)";
+                    event.currentTarget.style.boxShadow =
+                      "0 18px 30px -24px rgba(15, 23, 42, 0.55)";
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.transform = "translateY(0)";
+                    event.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 16,
+                      background: "linear-gradient(135deg,#2563eb,#38bdf8)",
+                      display: "grid",
+                      placeItems: "center",
+                      boxShadow: "0 12px 20px -12px rgba(37, 99, 235, 0.6)",
+                    }}
+                  >
+                    <Icon size={28} />
+                  </div>
+                  <div>
+                    <h3
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: 17,
+                        fontWeight: 700,
+                        color: "#0f172a",
+                      }}
+                    >
+                      {title}
+                    </h3>
+                    <p
+                      style={{
+                        margin: 0,
+                        lineHeight: 1.6,
+                        color: "#1e293b",
+                        fontSize: 14.5,
+                      }}
+                    >
+                      {description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {trustMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  style={{
+                    borderRadius: 14,
+                    padding: "16px 18px",
+                    background: "rgba(15, 23, 42, 0.85)",
+                    color: "#e2e8f0",
+                    textAlign: "center",
+                    display: "grid",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 22, fontWeight: 800 }}>
+                    {metric.label}
+                  </span>
+                  <span style={{ fontSize: 13, opacity: 0.85 }}>
+                    {metric.caption}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* === ЛУЧШИЕ ПРЕДЛОЖЕНИЯ — ОСТАВЛЯЕМ ПОСЛЕ СТАТИСТИКИ === */}
         {(featured.length || loadingFeatured) && (
           <section style={{ margin: "32px 0" }}>
@@ -1351,44 +1685,11 @@ export default function Home() {
             )}
           </section>
         )}
-
-        <section style={{ margin: "24px 0 48px" }}>
-          <div
-            className="card"
-            style={{
-              background: UI.cardBg,
-              border: `1px solid ${UI.border}`,
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <h2 style={{ marginTop: 0, color: UI.title }}>
-              Все торги — в одном месте
-            </h2>
-            <p style={{ color: UI.text }}>
-              Мы агрегируем объявления с разных источников и показываем удобную
-              выдачу по фильтрам.
-            </p>
-            <p>
-              <a
-                className="button"
-                href="/trades"
-                style={{
-                  color: "#fff",
-                  background: "#1E90FF",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                }}
-              >
-                Перейти в каталог →
-              </a>
-            </p>
-          </div>
-        </section>
       </div>
     </>
   );
 }
+
 
 
 
