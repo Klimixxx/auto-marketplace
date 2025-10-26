@@ -91,7 +91,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
 function RegionBubbleMap({ regions, activeRegion }) {
   if (!regions.length) {
     return (
-      <div
+      <div␊
         style={{
           width: "100%",
           aspectRatio: "1527 / 768",
@@ -118,7 +118,8 @@ function RegionBubbleMap({ regions, activeRegion }) {
         overflow: "hidden",
         background: UI.cardBg,
         backgroundImage: "url(/maps/russia-fo.svg)",
-        backgroundSize: "cover",
+        backgroundSize: "contain",
+        backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         aspectRatio: "1527 / 768",
       }}
@@ -175,6 +176,16 @@ function RegionBubbleMap({ regions, activeRegion }) {
 }
 
 function RegionList({ regions, activeRegion, onHover, onSelect }) {
+  const [query, setQuery] = useState("");
+  const filteredRegions = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return regions;
+    return regions.filter((region) => {
+      const name = (region.region || "").toLowerCase();
+      return name.includes(trimmed);
+    });
+  }, [regions, query]);
+
   if (!regions.length) return null;
   return (
     <div
@@ -190,7 +201,56 @@ function RegionList({ regions, activeRegion, onHover, onSelect }) {
         overflowY: "auto",
       }}
     >
-      {regions.map((region) => {
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          background: UI.cardBg,
+          paddingBottom: 8,
+          zIndex: 1,
+        }}
+      >
+        <label style={{ display: "block" }}>
+          <span style={{
+            display: "block",
+            fontSize: 12,
+            color: UI.text,
+            marginBottom: 4,
+          }}>
+            Поиск региона
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Введите название региона"
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: `1px solid ${UI.border}`,
+              background: "var(--surface-1)",
+              color: UI.title,
+              fontSize: 14,
+            }}
+          />
+        </label>
+      </div>
+
+      {filteredRegions.length === 0 ? (
+        <div
+          style={{
+            padding: "16px 12px",
+            color: UI.text,
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        >
+          Регион не найден
+        </div>
+      ) : null}
+
+      {filteredRegions.map((region) => {
         const isActive = activeRegion?.region === region.region;
         const hasListings = (region.listings || 0) > 0;
         const title = region.region || "Регион не указан";
@@ -1325,6 +1385,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
