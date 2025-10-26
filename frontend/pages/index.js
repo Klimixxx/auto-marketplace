@@ -67,7 +67,6 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
           height: 52,
           borderRadius: 10,
           background: UI.iconBg,
-          border: `1px solid ${UI.chipBorder}`,
           display: "grid",
           placeItems: "center",
         }}
@@ -539,13 +538,12 @@ function EducationFeature({ title, Icon }) {
         minHeight: 88,
       }}
     >
-      <div
+         <div
         style={{
           width: 52,
           height: 52,
           borderRadius: 10,
           background: UI.iconBg,
-          border: `1px solid ${UI.chipBorder}`,
           display: "grid",
           placeItems: "center",
         }}
@@ -606,15 +604,9 @@ function DocumentIcon() {
 function AuctionsIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="gradHeroAuc" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={UI.gradFrom} />
-          <stop offset="100%" stopColor={UI.gradTo} />
-        </linearGradient>
-      </defs>
       <path
         d="M7 10l6-6 4 4-6 6-4-4zM3 21h10"
-        stroke="url(#gradHeroAuc)"
+        stroke="var(--blue)"
         strokeWidth="1.8"
         strokeLinecap="round"
       />
@@ -1141,7 +1133,7 @@ export default function Home() {
               <h2
                 style={{
                   margin: "0 0 6px",
-                  color: "var(--blue)",
+                  color: "#000",
                   fontWeight: 800,
                 }}
               >
@@ -1237,7 +1229,7 @@ export default function Home() {
                 textAlign: "center",
                 fontWeight: 900,
                 fontSize: 22,
-                color: "var(--blue)",
+                color: "#000",
               }}
             >
               Статистика платформы
@@ -1335,6 +1327,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
