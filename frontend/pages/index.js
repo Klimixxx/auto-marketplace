@@ -36,31 +36,18 @@ function ShieldCheckIcon({ size = 36 }) {
     >
       <path
         d="M12 3.25C12 3.25 5 4.75 5 8.75C5 13.685 8.136 18.054 12 19.75C15.864 18.054 19 13.685 19 8.75C19 4.75 12 3.25 12 3.25Z"
-        stroke="url(#shieldGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M9.25 11.25L11 13L14.75 9.25"
-        stroke="url(#shieldGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <defs>
-        <linearGradient
-          id="shieldGradient"
-          x1="5"
-          y1="3.25"
-          x2="19.6"
-          y2="19"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#2563eb" />
-          <stop offset="1" stopColor="#60a5fa" />
-        </linearGradient>
-      </defs>
     </svg>
   );
 }
@@ -76,38 +63,25 @@ function HandshakeIcon({ size = 36 }) {
     >
       <path
         d="M21 12L19 10L15 14L13 12L9 16"
-        stroke="url(#handshakeGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M7 14L3 10L5 8L9 12"
-        stroke="url(#handshakeGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M12 7L14 9L10 13L8 11L12 7Z"
-        stroke="url(#handshakeGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <defs>
-        <linearGradient
-          id="handshakeGradient"
-          x1="3"
-          y1="7"
-          x2="19"
-          y2="18"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#38bdf8" />
-          <stop offset="1" stopColor="#2563eb" />
-        </linearGradient>
-      </defs>
     </svg>
   );
 }
@@ -123,38 +97,25 @@ function SparkleIcon({ size = 36 }) {
     >
       <path
         d="M12 3L13.5 7.5L18 9L13.5 10.5L12 15L10.5 10.5L6 9L10.5 7.5L12 3Z"
-        stroke="url(#sparkleGradient)"
+        stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M6.5 15.5L7.25 17.75L9.5 18.5L7.25 19.25L6.5 21.5L5.75 19.25L3.5 18.5L5.75 17.75L6.5 15.5Z"
-        stroke="url(#sparkleGradient)"
+        stroke="white"
         strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M16.5 13.5L17 15L18.5 15.5L17 16L16.5 17.5L16 16L14.5 15.5L16 15L16.5 13.5Z"
-        stroke="url(#sparkleGradient)"
+        stroke="white"
         strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <defs>
-        <linearGradient
-          id="sparkleGradient"
-          x1="3.5"
-          y1="3"
-          x2="19.5"
-          y2="21.5"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#2563eb" />
-        </linearGradient>
-      </defs>
     </svg>
   );
 }
@@ -1505,12 +1466,11 @@ export default function Home() {
         <section style={{ margin: "32px 0" }}>
           <div
             style={{
-              borderRadius: 20,
-              padding: "32px 24px",
-              background:
-                "linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(14, 165, 233, 0.18))",
-              border: "1px solid rgba(37, 99, 235, 0.12)",
-              boxShadow: "0 24px 40px -24px rgba(30, 64, 175, 0.35)",
+              borderRadius: 16,
+              padding: "28px 24px",
+              background: "var(--page-mid)",
+              border: "none",
+              boxShadow: "0 6px 22px rgba(17,24,39,0.06)",
             }}
           >
             <div
@@ -1640,23 +1600,30 @@ export default function Home() {
                 gap: 12,
               }}
             >
-              {trustMetrics.map((metric) => (
+                          {trustMetrics.map((metric) => (
                 <div
                   key={metric.label}
                   style={{
                     borderRadius: 14,
                     padding: "16px 18px",
                     background: "rgba(15, 23, 42, 0.85)",
-                    color: "#e2e8f0",
+                    color: "#ffffff",
                     textAlign: "center",
                     display: "grid",
                     gap: 6,
                   }}
                 >
-                  <span style={{ fontSize: 22, fontWeight: 800 }}>
+                  <span
+                    style={{ fontSize: 22, fontWeight: 800, color: "#ffffff" }}
+                  >
                     {metric.label}
                   </span>
-                  <span style={{ fontSize: 13, opacity: 0.85 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(255, 255, 255, 0.75)",
+                    }}
+                  >
                     {metric.caption}
                   </span>
                 </div>
@@ -1664,7 +1631,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
         {/* === ЛУЧШИЕ ПРЕДЛОЖЕНИЯ — ОСТАВЛЯЕМ ПОСЛЕ СТАТИСТИКИ === */}
         {(featured.length || loadingFeatured) && (
           <section style={{ margin: "32px 0" }}>
@@ -1689,6 +1655,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
