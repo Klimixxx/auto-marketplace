@@ -444,12 +444,16 @@ export default function Header({ user }) {
     );
   };
 
-return (
+  return (
     <header
       className="header-solid"
       style={{
         width: "100%",
+        position: "sticky",
+        top: 0,
+        zIndex: 1000,
         borderBottom: "none",
+        boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08) !important"
       }}
     >
       {/* Верхняя шапка - черный фон */}
@@ -459,10 +463,6 @@ return (
           borderBottom: `1px solid ${UI.border}`,
           background: UI.topBg,
           backdropFilter: "blur(18px)",
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
-          boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08) !important",
         }}
       >
         <div
@@ -640,15 +640,15 @@ return (
       </div>
 
       {/* Нижняя шапка */}
-         <div
+      <div
         className="header--bottom hdr"
         style={{
           width: "100%",
           borderBottom: "none",
-          background: "transparent",
+          background: "var(--page-bg-gradient)",
         }}
       >
-        <div
+      <div
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -912,6 +912,5 @@ function BellIcon() {
     </svg>
   );
 }
-
 
 
