@@ -91,7 +91,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
 function RegionBubbleMap({ regions, activeRegion }) {
   if (!regions.length) {
     return (
-      <div␊
+      <div
         style={{
           width: "100%",
           aspectRatio: "1527 / 768",
@@ -1385,6 +1385,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
