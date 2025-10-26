@@ -127,7 +127,10 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrd
     e.preventDefault();
     const query = q.trim();
     if (!query) return Router.push('/trades');
-    Router.push(`/trades?q=${encodeURIComponent(query)}`);
+    Router.push({
+      pathname: '/trades',
+      query: { q: query },
+    });
   }
 
   return (
@@ -342,6 +345,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
