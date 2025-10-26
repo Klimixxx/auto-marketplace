@@ -7,23 +7,6 @@ import ListingCard from '../components/ListingCard';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '').replace(/\/$/, '');
 const FILTER_KEYS = ['q', 'region_code', 'city', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
 
-function normalizeRegionCodeFilter(value) {
-  if (!value && value !== 0) return [];
-  const source = Array.isArray(value) ? value : String(value).split(',');
-  const out = [];
-  const seen = new Set();
-  source.forEach((item) => {
-    if (item == null) return;
-    const trimmed = String(item).trim();
-    if (!trimmed) return;
-    if (seen.has(trimmed)) return;
-    seen.add(trimmed);
-    out.push(trimmed);
-  });
-  return out;
-}
-
-
 function buildApiUrl(path) {
   if (API_BASE) return `${API_BASE}${path}`;
   return path;
@@ -33,26 +16,18 @@ function extractFilters(query = {}) {
   const out = {};
   FILTER_KEYS.forEach((key) => {
     let value = query[key];
-    if (value == null) return;
-    if (key === 'region_code') {
-      const normalizedCodes = normalizeRegionCodeFilter(value);
-      if (normalizedCodes.length) {
-        out.region_code = normalizedCodes;
-      }
-      return;
-    }
     if (Array.isArray(value)) value = value[value.length - 1];
+    if (value == null) return;
     const normalized = typeof value === 'string' ? value.trim() : value;
     if (normalized === '') return;
     out[key] = normalized;
   });
-  if ((!out.region_code || out.region_code.length === 0) && query.region) {
+  if (!out.region_code && query.region) {
     const regionValue = Array.isArray(query.region) ? query.region[query.region.length - 1] : query.region;
     if (regionValue) {
       const trimmed = typeof regionValue === 'string' ? regionValue.trim() : regionValue;
       if (trimmed) {
-        const normalized = normalizeRegionCodeFilter(trimmed);
-        out.region_code = normalized.length ? normalized : [trimmed];
+        out.region_code = trimmed;
       }
     }
   }
@@ -64,15 +39,6 @@ function cleanFilters(input = {}) {
   for (const key of FILTER_KEYS) {
     let value = input[key];
     if (value == null) continue;
-    if (Array.isArray(value)) {
-      const normalizedArray = value
-        .map((entry) => (typeof entry === 'string' ? entry.trim() : entry))
-        .filter((entry) => entry != null && entry !== '');
-      if (normalizedArray.length) {
-        out[key] = normalizedArray;
-      }
-      continue;
-    }
     if (typeof value === 'string') value = value.trim();
     if (value === '') continue;
     out[key] = value;
@@ -158,18 +124,9 @@ export default function Trades() {
     setError(null);
     const params = new URLSearchParams();
     Object.entries(filtersValue || {}).forEach(([key, value]) => {
-      if (value == null) return;
-      if (Array.isArray(value)) {
-        value
-          .map((entry) => (typeof entry === 'string' ? entry.trim() : entry))
-          .filter((entry) => entry != null && entry !== '')
-          .forEach((entry) => {
-            params.append(key, entry);
-          });
-        return;
+      if (value != null && value !== '') {
+        params.set(key, value);
       }
-      if (typeof value === 'string' && value.trim() === '') return;
-      params.set(key, value);
     });
     params.set('page', pageValue);
     params.set('limit', '20');
@@ -309,5 +266,4 @@ export default function Trades() {
     </div>
   );
 }
-
 
