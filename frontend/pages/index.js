@@ -175,7 +175,19 @@ function RegionBubbleMap({ regions, activeRegion }) {
   );
 }
 
-return (
+function RegionList({ regions, activeRegion, onHover, onSelect }) {
+  const [query, setQuery] = useState("");
+  const filteredRegions = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return regions;
+    return regions.filter((region) => {
+      const name = (region.region || "").toLowerCase();
+      return name.includes(trimmed);
+    });
+  }, [regions, query]);
+
+  if (!regions.length) return null;
+  return (
     <div
       style={{
         borderRadius: 16,
@@ -1377,6 +1389,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
