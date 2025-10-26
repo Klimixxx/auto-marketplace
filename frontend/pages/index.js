@@ -893,7 +893,7 @@ export default function Home() {
       caption: "успешных сделок за последний год",
     },
     {
-      label: "72 часа",
+      label: "От 10 минут до 1 часа",
       caption: "среднее время ответа эксперта",
     },
   ];
@@ -1655,6 +1655,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
