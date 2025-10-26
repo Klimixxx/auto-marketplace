@@ -88,28 +88,6 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   );
 }
 
-
-            <span>
-              Сумма:{" "}
-              <strong style={{ color: UI.title }}>
-                {fmtCurrency.format(activeRegion.totalValue || 0)}
-              </strong>
-            </span>
-            <span>
-              Средняя цена:{" "}
-              <strong style={{ color: UI.title }}>
-                {fmtCurrency.format(activeRegion.averagePrice || 0)}
-              </strong>
-            </span>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-
-
 function RegionBubbleMap({ regions, activeRegion, onHover }) {
   if (!regions.length) {
     return (
