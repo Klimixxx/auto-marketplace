@@ -8,22 +8,6 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
-function normalizeRegionCodes(input) {
-  if (!input && input !== 0) return [];
-  const values = Array.isArray(input) ? input : String(input).split(',');
-  const normalized = [];
-  const seen = new Set();
-  values.forEach((value) => {
-    if (value == null) return;
-    const trimmed = String(value).trim();
-    if (!trimmed) return;
-    if (seen.has(trimmed)) return;
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  });
-  return normalized;
-}
-
 export default function FilterBar({
   onSearch,
   initial,
@@ -31,7 +15,7 @@ export default function FilterBar({
   showFavoritesLink = true,
 }) {
   const [q, setQ] = useState(initial?.q || '');
-const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initial?.region_code || initial?.region));
+  const [regionCode, setRegionCode] = useState(initial?.region_code || initial?.region || '');
   const [city, setCity] = useState(initial?.city || '');
   const [brand, setBrand] = useState(initial?.brand || '');
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -128,7 +112,7 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
 
   useEffect(() => {
     setQ(initial?.q || '');
-    setRegionCodes(normalizeRegionCodes(initial?.region_code || initial?.region));
+    setRegionCode(initial?.region_code || initial?.region || '');
     setCity(initial?.city || '');
     setBrand(initial?.brand || '');
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -140,7 +124,7 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
     e.preventDefault();
     onSearch({
       q,
-      region_code: regionCodes,
+      region_code: regionCode,
       city,
       brand,
       trade_type: tradeType,
@@ -151,7 +135,7 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
 
   function resetFilters() {
     setQ('');
-    setRegionCodes([]);
+    setRegionCode('');
     setCity('');
     setBrand('');
     setTradeType('');
@@ -159,7 +143,7 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
     setMaxPrice('');
     onSearch({
       q: '',
-      region_code: [],
+      region_code: '',
       city: '',
       brand: '',
       trade_type: '',
@@ -186,22 +170,10 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
         </label>
 
         {/* Регион */}
- <label className="field col-span-6 md:col-span-3 lg:col-span-2">
+        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
           <div className="input-wrap">
-            <select
-              className="input pro select"
-              multiple
-              value={regionCodes.length ? regionCodes : ['']}
-              onChange={(e) => {
-                const values = Array.from(e.target.selectedOptions, (option) => option.value);
-                if (values.includes('')) {
-                  setRegionCodes([]);
-                } else {
-                  setRegionCodes(values);
-                }
-              }}
-            >
+            <select className="input pro select" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
               <option value="">Все регионы</option>
               {regionOptions.map((region) => (
                 <option key={region.code} value={region.code}>{region.name}</option>
@@ -482,6 +454,5 @@ const [regionCodes, setRegionCodes] = useState(() => normalizeRegionCodes(initia
     </form>
   );
 }
-
 
 
