@@ -108,6 +108,8 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   );
 }
 
+
+
 function RegionBubbleMap({ regions, activeRegion, onHover }) {
   if (!regions.length) {
     return (
