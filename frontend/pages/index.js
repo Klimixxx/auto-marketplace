@@ -1019,7 +1019,7 @@ export default function Home() {
         isCurrency: false,
       },
       {
-        title: "Стоимость имущества в торгах",
+        title: "Стоимость имущества",
         value: summary?.totalValue ?? 0,
         Icon: BanknoteIcon,
         isCurrency: true,
@@ -1385,6 +1385,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
