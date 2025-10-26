@@ -88,7 +88,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   );
 }
 
-function RegionBubbleMap({ regions, activeRegion, onHover }) {
+function RegionBubbleMap({ regions, activeRegion, onHover, onSelect }) {
   if (!regions.length) {
     return (
       <div
@@ -114,11 +114,12 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
   );
   const rows = Math.ceil(regions.length / columns);
 
-  return (
+return (
     <div
       style={{
         position: "relative",
         width: "100%",
+        maxWidth: 720,
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: "hidden",
@@ -138,21 +139,9 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
         const isActive = activeRegion?.region === region.region;
         const hasListings = (region.listings || 0) > 0;
         const size = hasListings ? (isActive ? 30 : 24) : 20;
-        const background = isActive
-          ? UI.button
-          : hasListings
-          ? "rgba(42,101,247,0.18)"
-          : "rgba(148,163,184,0.25)";
-        const borderColor = isActive
-          ? "var(--accent)"
-          : hasListings
-          ? "rgba(42,101,247,0.35)"
-          : "transparent";
-        const boxShadow = isActive
-          ? "0 0 0 6px rgba(42,101,247,0.15)"
-          : hasListings
-          ? "0 1px 4px rgba(15,23,42,0.12)"
-          : "none";
+        const background = isActive ? "rgba(42,101,247,0.15)" : "transparent";
+        const borderColor = isActive ? "var(--accent)" : "transparent";
+        const boxShadow = isActive ? "0 0 0 6px rgba(42,101,247,0.18)" : "none";
 
         const key = `${region.region_code || 'no-code'}-${region.region || index}`;
         return (
@@ -161,6 +150,9 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
             type="button"
             onMouseEnter={() => onHover(region)}
             onFocus={() => onHover(region)}
+            onClick={() => {
+              if (onSelect) onSelect(region);
+            }}
             style={{
               position: "absolute",
               left: `${x}%`,
@@ -172,7 +164,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
               border: `2px solid ${borderColor}`,
               background,
               boxShadow,
-              cursor: hasListings ? "pointer" : "default",
+              cursor: "pointer",
               transition: "transform 0.2s ease, background 0.2s ease",
             }}
             aria-label={region.region || "Регион"}
@@ -231,7 +223,7 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
   );
 }
 
-function RegionList({ regions, activeRegion, onHover }) {
+function RegionList({ regions, activeRegion, onHover, onSelect }) {
   if (!regions.length) return null;
   return (
     <div
@@ -240,9 +232,9 @@ function RegionList({ regions, activeRegion, onHover }) {
         border: `1px solid ${UI.border}`,
         background: UI.cardBg,
         padding: 16,
-        display: "grid",
-        gap: 12,
-        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
       }}
     >
       {regions.map((region) => {
@@ -256,62 +248,35 @@ function RegionList({ regions, activeRegion, onHover }) {
             type="button"
             onMouseEnter={() => onHover(region)}
             onFocus={() => onHover(region)}
+            onClick={() => {
+              if (onSelect) onSelect(region);
+            }}
             aria-label={title}
             style={{
-              textAlign: "left",
               border: `1px solid ${isActive
-                ? UI.button
+                ? "var(--accent)"
                 : hasListings
                 ? UI.border
                 : "rgba(148,163,184,0.4)"}`,
               background: isActive
-                ? UI.chipBg
-                : hasListings
-                ? "transparent"
-                : "rgba(148,163,184,0.1)",
+                ? "rgba(42,101,247,0.12)"
+                : "rgba(148,163,184,0.08)",
               color: isActive
                 ? "var(--accent)"
                 : hasListings
                 ? UI.title
                 : UI.text,
-              padding: "12px 14px",
-              borderRadius: 12,
+              padding: "10px 14px",
+              borderRadius: 999,
               cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
+              display: "inline-flex",
+              alignItems: "center",
               gap: 6,
-              width: "100%",
+              fontSize: 13,
+              fontWeight: 600,
             }}
           >
-            <div
-              style={{
-                fontWeight: 600,
-                color: isActive
-                  ? "var(--accent)"
-                  : hasListings
-                  ? UI.title
-                  : UI.text,
-              }}
-            >
-              {title}
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: isActive ? "var(--accent)" : UI.text,
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <span>Лотов: {fmtNumber.format(region.listings || 0)}</span>
-              <span>Сумма: {fmtCurrency.format(region.totalValue || 0)}</span>
-              {hasListings ? (
-                <span>
-                  Средняя цена: {fmtCurrency.format(region.averagePrice || 0)}
-                </span>
-              ) : null}
-            </div>
+            {title}
           </button>
         );
       })}
@@ -759,8 +724,8 @@ export default function Home() {
 
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
   const [tradeUnread, setTradeUnread] = useState(0);
-
   const router = useRouter();
+
 
   // токен авторизации и локальное состояние избранного
   const [authToken, setAuthToken] = useState(null);
@@ -892,6 +857,19 @@ export default function Home() {
       console.error("Failed to toggle favorite", err);
       alert("Не удалось обновить избранное. Попробуйте позже.");
     }
+    }
+
+  function handleRegionSelect(region) {
+    if (!region) return;
+    setActiveRegion(region);
+    const query = {};
+    const code = region.region_code || region.regionCode;
+    if (code) {
+      query.region_code = code;
+    } else if (region.region) {
+      query.region = region.region;
+    }
+    router.push({ pathname: "/trades", query });
   }
 
   useEffect(() => {
@@ -1304,11 +1282,13 @@ export default function Home() {
                 regions={regions}
                 activeRegion={activeRegion}
                 onHover={setActiveRegion}
+                onSelect={handleRegionSelect}
               />
               <RegionList
                 regions={regions}
                 activeRegion={activeRegion}
                 onHover={setActiveRegion}
+                onSelect={handleRegionSelect}
               />
             </div>
           </div>
@@ -1372,6 +1352,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
