@@ -928,51 +928,149 @@ app.post('/api/favorites/:id', auth, async (req, res) => {
 
 app.get('/api/stats/summary', async (_req, res) => {
   try {
-    const [usersResult, listingsResult, regionResult] = await Promise.all([
+    const [usersResult, listingsResult] = await Promise.all([
       query('SELECT count(*)::int AS count FROM users'),
       query(`
-        SELECT
-          count(*) FILTER (WHERE published = TRUE) AS total_published,
-          count(*) FILTER (WHERE published = TRUE AND lower(coalesce(trade_type,'')) = 'offer') AS offers,
-          count(*) FILTER (WHERE published = TRUE AND lower(coalesce(trade_type,'')) = 'auction') AS auctions,
-          COALESCE(sum(COALESCE(current_price, start_price, min_price, max_price)) FILTER (WHERE published = TRUE), 0) AS total_value
-        FROM listings
-      `),
-      query(`
-        SELECT COALESCE(region_code, '') AS region_code,
-               COALESCE(region, '')       AS region_name,
-               count(*)::int              AS listings,
-               COALESCE(sum(COALESCE(current_price, start_price, min_price, max_price)),0) AS total_value
+        SELECT id, region_code, region, trade_type, details,
+               current_price, start_price, min_price, max_price
           FROM listings
          WHERE published = TRUE
-         GROUP BY region_code, region
-         ORDER BY listings DESC
       `),
     ]);
 
-    const listingsRow = listingsResult.rows[0] || {};
-    const totalValue = Number(listingsRow.total_value || 0);
-    const regions = regionResult.rows.map((row) => {
-      const value = Number(row.total_value || 0);
-      const listings = Number(row.listings || 0);
-      const average = listings ? Math.round((value / listings) * 100) / 100 : 0;
-      const regionCode = normalizeRegionCode(row.region_code);
-      const nameFromCode = regionCode ? getRegionNameByCode(regionCode) : null;
-      const finalName = nameFromCode || row.region_name || null;
-      return {
-        region: finalName,
-        region_code: regionCode || null,
-        listings,
-        totalValue: value,
-        averagePrice: average,
-      };
-    });
+    const listings = listingsResult.rows || [];
+    const regionMap = new Map();
+
+    for (const region of RUSSIAN_REGIONS) {
+      regionMap.set(region.code, {
+        region: region.name,
+        region_code: region.code,
+        listings: 0,
+        totalValue: 0,
+      });
+    }
+
+    const fallbackRegions = new Map();
+    let offersCount = 0;
+    let auctionsCount = 0;
+    let totalValue = 0;
+
+    for (const row of listings) {
+      const resolvedType = resolveListingTradeType(row) || row?.trade_type;
+      const normalizedType = normalizeTradeTypeCode(resolvedType);
+      if (normalizedType === 'public_offer') {
+        offersCount += 1;
+      } else if (normalizedType === 'open_auction') {
+        auctionsCount += 1;
+      }
+
+      const priceSources = [
+        row?.current_price,
+        row?.start_price,
+        row?.min_price,
+        row?.max_price,
+      ];
+      let price = 0;
+      for (const value of priceSources) {
+        const num = Number(value);
+        if (Number.isFinite(num) && num > 0) {
+          price = num;
+          break;
+        }
+        if (Number.isFinite(num) && !price) {
+          price = num;
+        }
+      }
+      totalValue += price;
+
+      let normalizedCode = normalizeRegionCode(row?.region_code);
+      if (normalizedCode && !regionMap.has(normalizedCode)) {
+        const withoutLeadingZeros = normalizedCode.replace(/^0+/, '');
+        if (withoutLeadingZeros && regionMap.has(withoutLeadingZeros)) {
+          normalizedCode = withoutLeadingZeros;
+        }
+      }
+      const rawRegionName = row?.region ? String(row.region).trim() : '';
+      let target;
+
+      if (normalizedCode) {
+        target = regionMap.get(normalizedCode);
+        if (!target) {
+          target = {
+            region: getRegionNameByCode(normalizedCode) || rawRegionName || null,
+            region_code: normalizedCode,
+            listings: 0,
+            totalValue: 0,
+          };
+          regionMap.set(normalizedCode, target);
+        } else if (!target.region) {
+          target.region = getRegionNameByCode(normalizedCode) || rawRegionName || null;
+        }
+      } else if (rawRegionName) {
+        const codeFromName = findRegionCodeByName(rawRegionName);
+        if (codeFromName) {
+          target = regionMap.get(codeFromName);
+          if (!target) {
+            target = {
+              region: getRegionNameByCode(codeFromName) || rawRegionName,
+              region_code: codeFromName,
+              listings: 0,
+              totalValue: 0,
+            };
+            regionMap.set(codeFromName, target);
+          } else if (!target.region) {
+            target.region = getRegionNameByCode(codeFromName) || rawRegionName;
+          }
+        } else {
+          const fallbackKey = `name:${rawRegionName.toLowerCase()}`;
+          target = fallbackRegions.get(fallbackKey);
+          if (!target) {
+            target = {
+              region: rawRegionName,
+              region_code: null,
+              listings: 0,
+              totalValue: 0,
+            };
+            fallbackRegions.set(fallbackKey, target);
+          }
+        }
+      }
+
+      if (target) {
+        target.listings += 1;
+        target.totalValue += price;
+      }
+    }
+
+    const regions = [...regionMap.values(), ...fallbackRegions.values()]
+      .map((region) => {
+        const listingsCount = Number(region.listings || 0);
+        const value = Number(region.totalValue || 0);
+        const average = listingsCount
+          ? Math.round((value / listingsCount) * 100) / 100
+          : 0;
+        return {
+          region: region.region,
+          region_code: region.region_code,
+          listings: listingsCount,
+          totalValue: value,
+          averagePrice: average,
+        };
+      })
+      .sort((a, b) => {
+        if ((b.listings || 0) !== (a.listings || 0)) {
+          return (b.listings || 0) - (a.listings || 0);
+        }
+        const nameA = a.region || '';
+        const nameB = b.region || '';
+        return nameA.localeCompare(nameB, 'ru');
+      });
 
     res.json({
       totalUsers: usersResult.rows[0]?.count ?? 0,
-      totalListings: listingsRow.total_published ?? 0,
-      offersCount: listingsRow.offers ?? 0,
-      auctionsCount: listingsRow.auctions ?? 0,
+      totalListings: listings.length,
+      offersCount,
+      auctionsCount,
       totalValue,
       regions,
     });
