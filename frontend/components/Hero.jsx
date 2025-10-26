@@ -22,11 +22,13 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrd
 
   // Фразы для "магической" печати в placeholder
   const demoQueries = useRef([
-    'Toyota Camry 2018, Москва',
+    'Toyota Camry 2018',
     'VIN: WDBUF56X48B123456',
-    'BMW X5 F15 до 2.5 млн',
-    'Пробег < 100 000, 4WD',
-    'Аукцион: Hyundai Solaris 2020',
+    'BMW X5 F15',
+    'LADA GRANTA',
+    'Hyundai Solaris 2020',
+    'Mercedes E Class',
+    
   ]);
 
   // Анимация "печатающегося" placeholder — работает, пока юзер не начал ввод
@@ -340,6 +342,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
