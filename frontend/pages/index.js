@@ -62,21 +62,35 @@ function HandshakeIcon({ size = 36 }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
-        d="M21 12L19 10L15 14L13 12L9 16"
+        d="M3 10.75L7.42 6.33A2.6 2.6 0 019.26 5.5h2.1a2.6 2.6 0 011.84.76l1.54 1.54a2.1 2.1 0 002.97 0l.73-.73a2.1 2.1 0 012.97 0L21 10.5"
         stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M7 14L3 10L5 8L9 12"
+        d="M7.5 14.5l2.86 2.86a2.6 2.6 0 003.68 0L21 10.4"
         stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M12 7L14 9L10 13L8 11L12 7Z"
+        d="M8.75 12.75L11.25 15.25"
+        stroke="white"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11 11.5l2.7 2.7"
+        stroke="white"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.25 10.25l2.4 2.4"
         stroke="white"
         strokeWidth="1.6"
         strokeLinecap="round"
@@ -1655,6 +1669,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
