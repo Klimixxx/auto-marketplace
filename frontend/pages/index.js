@@ -88,7 +88,7 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   );
 }
 
-function RegionBubbleMap({ regions, activeRegion, onHover, onSelect }) {
+function RegionBubbleMap({ regions, activeRegion }) {
   if (!regions.length) {
     return (
       <div
@@ -108,18 +108,11 @@ function RegionBubbleMap({ regions, activeRegion, onHover, onSelect }) {
     );
   }
 
-  const columns = Math.min(
-    8,
-    Math.max(4, Math.ceil(Math.sqrt(regions.length)))
-  );
-  const rows = Math.ceil(regions.length / columns);
-
-return (
+  return (
     <div
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: 720,
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: "hidden",
@@ -128,50 +121,8 @@ return (
         backgroundSize: "cover",
         backgroundPosition: "center",
         aspectRatio: "1527 / 768",
-        margin: "0 auto",
       }}
     >
-      {regions.map((region, index) => {
-        const col = index % columns;
-        const row = Math.floor(index / columns);
-        const x = ((col + 0.5) / columns) * 100;
-        const y = ((row + 0.5) / rows) * 100;
-        const isActive = activeRegion?.region === region.region;
-        const hasListings = (region.listings || 0) > 0;
-        const size = hasListings ? (isActive ? 30 : 24) : 20;
-        const background = isActive ? "rgba(42,101,247,0.15)" : "transparent";
-        const borderColor = isActive ? "var(--accent)" : "transparent";
-        const boxShadow = isActive ? "0 0 0 6px rgba(42,101,247,0.18)" : "none";
-
-        const key = `${region.region_code || 'no-code'}-${region.region || index}`;
-        return (
-          <button
-            key={key}
-            type="button"
-            onMouseEnter={() => onHover(region)}
-            onFocus={() => onHover(region)}
-            onClick={() => {
-              if (onSelect) onSelect(region);
-            }}
-            style={{
-              position: "absolute",
-              left: `${x}%`,
-              top: `${y}%`,
-              transform: "translate(-50%, -50%)",
-              width: size,
-              height: size,
-              borderRadius: "50%",
-              border: `2px solid ${borderColor}`,
-              background,
-              boxShadow,
-              cursor: "pointer",
-              transition: "transform 0.2s ease, background 0.2s ease",
-            }}
-            aria-label={region.region || "Регион"}
-          />
-        );
-      })}
-
       {activeRegion ? (
         <div
           style={{
@@ -233,8 +184,10 @@ function RegionList({ regions, activeRegion, onHover, onSelect }) {
         background: UI.cardBg,
         padding: 16,
         display: "flex",
-        flexWrap: "wrap",
+        flexDirection: "column",
         gap: 8,
+        maxHeight: 480,
+        overflowY: "auto",
       }}
     >
       {regions.map((region) => {
@@ -260,29 +213,52 @@ function RegionList({ regions, activeRegion, onHover, onSelect }) {
                 : "rgba(148,163,184,0.4)"}`,
               background: isActive
                 ? "rgba(42,101,247,0.12)"
-                : "rgba(148,163,184,0.08)",
+                : "rgba(148,163,184,0.04)",
               color: isActive
                 ? "var(--accent)"
                 : hasListings
                 ? UI.title
                 : UI.text,
-              padding: "10px 14px",
-              borderRadius: 999,
+              padding: "12px 16px",
+              borderRadius: 12,
               cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
               gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
+              textAlign: "left",
             }}
           >
-            {title}
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
+            <span
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                fontSize: 12,
+                color: isActive ? "var(--accent)" : UI.text,
+              }}
+            >
+              <span>
+                Лотов:{" "}
+                <strong style={{ color: UI.title }}>
+                  {fmtNumber.format(region.listings || 0)}
+                </strong>
+              </span>
+              <span>
+                Сумма:{" "}
+                <strong style={{ color: UI.title }}>
+                  {fmtCurrency.format(region.totalValue || 0)}
+                </strong>
+              </span>
+            </span>
           </button>
         );
       })}
     </div>
   );
 }
+
 
 function BestOffersCarousel({ items }) {
   const cardWidth = 280;
@@ -1276,14 +1252,11 @@ export default function Home() {
               style={{
                 display: "grid",
                 gap: 18,
+                alignItems: "stretch",
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
               }}
             >
-              <RegionBubbleMap
-                regions={regions}
-                activeRegion={activeRegion}
-                onHover={setActiveRegion}
-                onSelect={handleRegionSelect}
-              />
+              <RegionBubbleMap regions={regions} activeRegion={activeRegion} />
               <RegionList
                 regions={regions}
                 activeRegion={activeRegion}
@@ -1352,6 +1325,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
