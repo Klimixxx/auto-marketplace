@@ -88,6 +88,26 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
   );
 }
 
+
+            <span>
+              Сумма:{" "}
+              <strong style={{ color: UI.title }}>
+                {fmtCurrency.format(activeRegion.totalValue || 0)}
+              </strong>
+            </span>
+            <span>
+              Средняя цена:{" "}
+              <strong style={{ color: UI.title }}>
+                {fmtCurrency.format(activeRegion.averagePrice || 0)}
+              </strong>
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function RegionBubbleMap({ regions, activeRegion, onHover }) {
   if (!regions.length) {
     return (
@@ -108,11 +128,9 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
     );
   }
 
-  const width = 620;
-  const height = 340;
   const columns = Math.min(
-    6,
-    Math.max(3, Math.ceil(Math.sqrt(regions.length)))
+    8,
+    Math.max(4, Math.ceil(Math.sqrt(regions.length)))
   );
   const rows = Math.ceil(regions.length / columns);
 
@@ -121,7 +139,6 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: width,
         borderRadius: 16,
         border: `1px solid ${UI.border}`,
         overflow: "hidden",
@@ -139,9 +156,28 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
         const x = ((col + 0.5) / columns) * 100;
         const y = ((row + 0.5) / rows) * 100;
         const isActive = activeRegion?.region === region.region;
+        const hasListings = (region.listings || 0) > 0;
+        const size = hasListings ? (isActive ? 30 : 24) : 20;
+        const background = isActive
+          ? UI.button
+          : hasListings
+          ? "rgba(42,101,247,0.18)"
+          : "rgba(148,163,184,0.25)";
+        const borderColor = isActive
+          ? "var(--accent)"
+          : hasListings
+          ? "rgba(42,101,247,0.35)"
+          : "transparent";
+        const boxShadow = isActive
+          ? "0 0 0 6px rgba(42,101,247,0.15)"
+          : hasListings
+          ? "0 1px 4px rgba(15,23,42,0.12)"
+          : "none";
+
+        const key = `${region.region_code || 'no-code'}-${region.region || index}`;
         return (
           <button
-            key={region.region}
+            key={key}
             type="button"
             onMouseEnter={() => onHover(region)}
             onFocus={() => onHover(region)}
@@ -150,18 +186,16 @@ function RegionBubbleMap({ regions, activeRegion, onHover }) {
               left: `${x}%`,
               top: `${y}%`,
               transform: "translate(-50%, -50%)",
-              width: isActive ? 28 : 22,
-              height: isActive ? 28 : 22,
+              width: size,
+              height: size,
               borderRadius: "50%",
-              border: `2px solid ${isActive ? "var(--accent)" : "transparent"}`,
-              background: isActive ? UI.button : "rgba(42,101,247,0.18)",
-              boxShadow: isActive
-                ? "0 0 0 6px rgba(42,101,247,0.15)"
-                : "0 1px 4px rgba(15,23,42,0.12)",
-              cursor: "pointer",
+              border: `2px solid ${borderColor}`,
+              background,
+              boxShadow,
+              cursor: hasListings ? "pointer" : "default",
               transition: "transform 0.2s ease, background 0.2s ease",
             }}
-            aria-label={region.region}
+            aria-label={region.region || "Регион"}
           />
         );
       })}
@@ -226,45 +260,77 @@ function RegionList({ regions, activeRegion, onHover }) {
         border: `1px solid ${UI.border}`,
         background: UI.cardBg,
         padding: 16,
-        maxHeight: 340,
-        overflowY: "auto",
         display: "grid",
-        gap: 10,
+        gap: 12,
+        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
       }}
     >
       {regions.map((region) => {
         const isActive = activeRegion?.region === region.region;
+        const hasListings = (region.listings || 0) > 0;
+        const title = region.region || "Регион не указан";
+        const key = `${region.region_code || 'no-code'}-${title}`;
         return (
           <button
-            key={region.region}
+            key={key}
             type="button"
             onMouseEnter={() => onHover(region)}
             onFocus={() => onHover(region)}
+            aria-label={title}
             style={{
               textAlign: "left",
-              border: `1px solid ${isActive ? UI.button : UI.border}`,
-              background: isActive ? UI.chipBg : "transparent",
-              color: isActive ? "var(--accent)" : UI.title,
-              padding: "10px 12px",
+              border: `1px solid ${isActive
+                ? UI.button
+                : hasListings
+                ? UI.border
+                : "rgba(148,163,184,0.4)"}`,
+              background: isActive
+                ? UI.chipBg
+                : hasListings
+                ? "transparent"
+                : "rgba(148,163,184,0.1)",
+              color: isActive
+                ? "var(--accent)"
+                : hasListings
+                ? UI.title
+                : UI.text,
+              padding: "12px 14px",
               borderRadius: 12,
               cursor: "pointer",
-              display: "grid",
-              gap: 4,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              width: "100%",
             }}
           >
             <div
               style={{
                 fontWeight: 600,
-                color: isActive ? "var(--accent)" : UI.title,
+                color: isActive
+                  ? "var(--accent)"
+                  : hasListings
+                  ? UI.title
+                  : UI.text,
               }}
             >
-              {region.region}
+              {title}
             </div>
             <div
-              style={{ fontSize: 12, color: UI.text, display: "flex", gap: 12 }}
+              style={{
+                fontSize: 12,
+                color: isActive ? "var(--accent)" : UI.text,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
             >
               <span>Лотов: {fmtNumber.format(region.listings || 0)}</span>
               <span>Сумма: {fmtCurrency.format(region.totalValue || 0)}</span>
+              {hasListings ? (
+                <span>
+                  Средняя цена: {fmtCurrency.format(region.averagePrice || 0)}
+                </span>
+              ) : null}
             </div>
           </button>
         );
@@ -857,9 +923,12 @@ export default function Home() {
           if (!r.ok) throw new Error("summary");
           return r.json();
         });
-        if (!ignore) {
+              if (!ignore) {
           setSummary(data);
-          setActiveRegion(data?.regions?.[0] || null);
+          const preferredRegion = Array.isArray(data?.regions)
+            ? data.regions.find((region) => (region?.listings || 0) > 0) || data.regions[0] || null
+            : null;
+          setActiveRegion(preferredRegion);
         }
       } catch (e) {
         console.error("Failed to load summary stats", e);
@@ -1245,10 +1314,9 @@ export default function Home() {
               ))}
             </div>
 
-            <div
+           <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
                 gap: 18,
               }}
             >
@@ -1324,6 +1392,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
