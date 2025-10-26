@@ -175,19 +175,7 @@ function RegionBubbleMap({ regions, activeRegion }) {
   );
 }
 
-function RegionList({ regions, activeRegion, onHover, onSelect }) {
-  const [query, setQuery] = useState("");
-  const filteredRegions = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return regions;
-    return regions.filter((region) => {
-      const name = (region.region || "").toLowerCase();
-      return name.includes(trimmed);
-    });
-  }, [regions, query]);
-
-  if (!regions.length) return null;
-  return (
+return (
     <div
       style={{
         borderRadius: 16,
@@ -196,27 +184,20 @@ function RegionList({ regions, activeRegion, onHover, onSelect }) {
         padding: 16,
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: 12,
         maxHeight: 480,
-        overflowY: "auto",
       }}
     >
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          background: UI.cardBg,
-          paddingBottom: 8,
-          zIndex: 1,
-        }}
-      >
+      <div>
         <label style={{ display: "block" }}>
-          <span style={{
-            display: "block",
-            fontSize: 12,
-            color: UI.text,
-            marginBottom: 4,
-          }}>
+          <span
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: UI.text,
+              marginBottom: 4,
+            }}
+          >
             Поиск региона
           </span>
           <input
@@ -237,84 +218,95 @@ function RegionList({ regions, activeRegion, onHover, onSelect }) {
         </label>
       </div>
 
-      {filteredRegions.length === 0 ? (
-        <div
-          style={{
-            padding: "16px 12px",
-            color: UI.text,
-            fontSize: 13,
-            textAlign: "center",
-          }}
-        >
-          Регион не найден
-        </div>
-      ) : null}
-
-      {filteredRegions.map((region) => {
-        const isActive = activeRegion?.region === region.region;
-        const hasListings = (region.listings || 0) > 0;
-        const title = region.region || "Регион не указан";
-        const key = `${region.region_code || 'no-code'}-${title}`;
-        return (
-          <button
-            key={key}
-            type="button"
-            onMouseEnter={() => onHover(region)}
-            onFocus={() => onHover(region)}
-            onClick={() => {
-              if (onSelect) onSelect(region);
-            }}
-            aria-label={title}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          paddingRight: 4,
+        }}
+      >
+        {filteredRegions.length === 0 ? (
+          <div
             style={{
-              border: `1px solid ${isActive
-                ? "var(--accent)"
-                : hasListings
-                ? UI.border
-                : "rgba(148,163,184,0.4)"}`,
-              background: isActive
-                ? "rgba(42,101,247,0.12)"
-                : "rgba(148,163,184,0.04)",
-              color: isActive
-                ? "var(--accent)"
-                : hasListings
-                ? UI.title
-                : UI.text,
-              padding: "12px 16px",
-              borderRadius: 12,
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: 6,
-              textAlign: "left",
+              padding: "16px 12px",
+              color: UI.text,
+              fontSize: 13,
+              textAlign: "center",
             }}
           >
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
-            <span
+            Регион не найден
+          </div>
+        ) : null}
+
+        {filteredRegions.map((region) => {
+          const isActive = activeRegion?.region === region.region;
+          const hasListings = (region.listings || 0) > 0;
+          const title = region.region || "Регион не указан";
+          const key = `${region.region_code || 'no-code'}-${title}`;
+          return (
+            <button
+              key={key}
+              type="button"
+              onMouseEnter={() => onHover(region)}
+              onFocus={() => onHover(region)}
+              onClick={() => {
+                if (onSelect) onSelect(region);
+              }}
+              aria-label={title}
               style={{
+                border: `1px solid ${isActive
+                  ? "var(--accent)"
+                  : hasListings
+                  ? UI.border
+                  : "rgba(148,163,184,0.4)"}`,
+                background: isActive
+                  ? "rgba(42,101,247,0.12)"
+                  : "rgba(148,163,184,0.04)",
+                color: isActive
+                  ? "var(--accent)"
+                  : hasListings
+                  ? UI.title
+                  : UI.text,
+                padding: "12px 16px",
+                borderRadius: 12,
+                cursor: "pointer",
                 display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                fontSize: 12,
-                color: isActive ? "var(--accent)" : UI.text,
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: 6,
+                textAlign: "left",
               }}
             >
-              <span>
-                Лотов:{" "}
-                <strong style={{ color: UI.title }}>
-                  {fmtNumber.format(region.listings || 0)}
-                </strong>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
+              <span
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 12,
+                  fontSize: 12,
+                  color: isActive ? "var(--accent)" : UI.text,
+                }}
+              >
+                <span>
+                  Лотов:{" "}
+                  <strong style={{ color: UI.title }}>
+                    {fmtNumber.format(region.listings || 0)}
+                  </strong>
+                </span>
+                <span>
+                  Сумма:{" "}
+                  <strong style={{ color: UI.title }}>
+                    {fmtCurrency.format(region.totalValue || 0)}
+                  </strong>
+                </span>
               </span>
-              <span>
-                Сумма:{" "}
-                <strong style={{ color: UI.title }}>
-                  {fmtCurrency.format(region.totalValue || 0)}
-                </strong>
-              </span>
-            </span>
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1385,6 +1377,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
