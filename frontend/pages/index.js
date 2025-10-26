@@ -23,7 +23,6 @@ const UI = {
   buttonText: "var(--text-on-accent)",
   chipBg: "rgba(42,101,247,0.12)",
   chipBorder: "rgba(42,101,247,0.24)",
-  iconBg: "rgba(42,101,247,0.1)",
 };
 const fmtNumber = new Intl.NumberFormat("ru-RU");
 const fmtCurrency = new Intl.NumberFormat("ru-RU", {
@@ -66,7 +65,6 @@ function StatCard({ title, value, Icon, isCurrency, loading }) {
           width: 52,
           height: 52,
           borderRadius: 10,
-          background: UI.iconBg,
           display: "grid",
           placeItems: "center",
         }}
@@ -538,12 +536,11 @@ function EducationFeature({ title, Icon }) {
         minHeight: 88,
       }}
     >
-         <div
+      <div
         style={{
           width: 52,
           height: 52,
           borderRadius: 10,
-          background: UI.iconBg,
           display: "grid",
           placeItems: "center",
         }}
@@ -1327,6 +1324,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
