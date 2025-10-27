@@ -7,6 +7,16 @@ import ListingCard from '../components/ListingCard';
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '').replace(/\/$/, '');
 const FILTER_KEYS = ['q', 'region_code', 'city', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
 
+function normalizeRegionFilterValue(input) {
+  if (input == null) return [];
+  const rawValues = Array.isArray(input) ? input : [input];
+  const flattened = rawValues
+    .flatMap((value) => String(value ?? '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Array.from(new Set(flattened));
+}
+
 function buildApiUrl(path) {
   if (API_BASE) return `${API_BASE}${path}`;
   return path;
@@ -14,13 +24,25 @@ function buildApiUrl(path) {
 
 function extractFilters(query = {}) {
   const out = {};
-  FILTER_KEYS.forEach((key) => {
-    let value = query[key];
-    if (Array.isArray(value)) value = value[value.length - 1];
+   FILTER_KEYS.forEach((key) => {
+    const value = query[key];
     if (value == null) return;
-    const normalized = typeof value === 'string' ? value.trim() : value;
-    if (normalized === '') return;
-    out[key] = normalized;
+    if (key === 'region_code') {
+      const codes = normalizeRegionFilterValue(value);
+      if (codes.length) {
+        out[key] = codes.join(',');
+      }
+      return;
+    }
+    let normalizedValue = value;
+    if (Array.isArray(normalizedValue)) {
+      normalizedValue = normalizedValue[normalizedValue.length - 1];
+    }
+    if (typeof normalizedValue === 'string') {
+      normalizedValue = normalizedValue.trim();
+      if (normalizedValue === '') return;
+    }
+    out[key] = normalizedValue;
   });
   if (!out.region_code && query.region) {
     const regionValue = Array.isArray(query.region) ? query.region[query.region.length - 1] : query.region;
@@ -37,8 +59,14 @@ function extractFilters(query = {}) {
 function cleanFilters(input = {}) {
   const out = {};
   for (const key of FILTER_KEYS) {
-    let value = input[key];
+      let value = input[key];
     if (value == null) continue;
+    if (key === 'region_code') {
+      const codes = normalizeRegionFilterValue(value);
+      if (!codes.length) continue;
+      out[key] = codes.join(',');
+      continue;
+    }
     if (typeof value === 'string') value = value.trim();
     if (value === '') continue;
     out[key] = value;
@@ -266,4 +294,5 @@ export default function Trades() {
     </div>
   );
 }
+
 
