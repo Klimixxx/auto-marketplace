@@ -542,11 +542,12 @@ export default function AdminParserTradesPage() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <FilterBar
+         <FilterBar
             onSearch={handleFilterSearch}
             initial={filterInitial}
             favoritesCount={0}
             showFavoritesLink={false}
+            allowMultipleRegions={false}
           />
         </div>
 
@@ -740,6 +741,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
