@@ -786,8 +786,12 @@ export default function ListingCard({
 
   // статус лота
   const rawStatus = extractLotStatus(l);
-  const statusInfo =
+ const statusInfo =
     timing?.status || (rawStatus ? classifyStatus(rawStatus) : null);
+  const isSold =
+    statusInfo?.key === "finished" ||
+    (typeof statusInfo?.label === "string" &&
+      statusInfo.label.toLowerCase().includes("торги завершены"));
 
   // общий сброс «таблеток»
   const resetPill = {
@@ -921,13 +925,42 @@ const articleHoverStyle = {
                 inset: 0,
                 display: "grid",
                 placeItems: "center",
-                color: "#9aa7b8",
-                fontWeight: 600,
+                color: isSold ? "#dc2626" : "#9aa7b8",
+                fontWeight: 700,
+                fontSize: 22,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
               }}
             >
-              Нет фото
+              {isSold ? "ПРОДАНО" : "Нет фото"}
             </div>
           )}
+
+          {isSold && photo ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <span
+                style={{
+                  color: "#dc2626",
+                  fontWeight: 800,
+                  fontSize: 32,
+                  textTransform: "uppercase",
+                  letterSpacing: 3,
+                  textShadow: "0 2px 6px rgba(15,23,42,0.45)",
+                }}
+              >
+                ПРОДАНО
+              </span>
+            </div>
+          ) : null}
 
           {tradeType && !isCompact ? (
             <span
@@ -1244,13 +1277,42 @@ const articleHoverStyle = {
                 inset: 0,
                 display: "grid",
                 placeItems: "center",
-                color: "#9aa7b8",
-                fontWeight: 600,
+                color: isSold ? "#dc2626" : "#9aa7b8",
+                fontWeight: 700,
+                fontSize: 24,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
               }}
             >
-              Нет фото
+              {isSold ? "ПРОДАНО" : "Нет фото"}
             </div>
           )}
+
+          {isSold && photo ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <span
+                style={{
+                  color: "#dc2626",
+                  fontWeight: 800,
+                  fontSize: 36,
+                  textTransform: "uppercase",
+                  letterSpacing: 3,
+                  textShadow: "0 3px 8px rgba(15,23,42,0.5)",
+                }}
+              >
+                ПРОДАНО
+              </span>
+            </div>
+          ) : null}
 
           {hasMultiplePhotos ? (
             <div
@@ -1536,5 +1598,6 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
