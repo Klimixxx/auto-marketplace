@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
@@ -8,14 +8,49 @@ function api(path) {
   return base ? `${base}${path}` : path;
 }
 
+function parseRegionCodes(value) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .flatMap((item) => String(item ?? '').split(','))
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (value && typeof value === 'object' && 'value' in value) {
+    return parseRegionCodes(value.value);
+  }
+  return [];
+}
+
+function serializeRegionCodes(codes) {
+  if (!Array.isArray(codes) || codes.length === 0) return '';
+  return codes
+    .map((code) => String(code || '').trim())
+    .filter(Boolean)
+    .join(',');
+}
+
 export default function FilterBar({
   onSearch,
   initial,
   favoritesCount = 0,
   showFavoritesLink = true,
+  allowMultipleRegions = true,
 }) {
   const [q, setQ] = useState(initial?.q || '');
-  const [regionCode, setRegionCode] = useState(initial?.region_code || initial?.region || '');
+  const [regionCodes, setRegionCodes] = useState(() => {
+    const parsed = parseRegionCodes(initial?.region_code || initial?.region);
+    return allowMultipleRegions ? parsed : parsed.slice(0, 1);
+  });
   const [city, setCity] = useState(initial?.city || '');
   const [brand, setBrand] = useState(initial?.brand || '');
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -27,7 +62,10 @@ export default function FilterBar({
   );
 
   const [meta, setMeta] = useState(EMPTY_META);
-
+  const [isRegionDropdownOpen, setRegionDropdownOpen] = useState(false);
+  const regionDropdownRef = useRef(null);
+  const selectedRegionCodes = allowMultipleRegions ? regionCodes : regionCodes.slice(0, 1);
+  const singleRegionValue = selectedRegionCodes[0] || '';
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -56,7 +94,7 @@ export default function FilterBar({
     return Array.from(map.values());
   }, [meta.regions]);
 
-  const tradeTypeOptions = useMemo(() => {
+const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
     const preferredOrder = ['public_offer', 'open_auction'];
 
@@ -82,6 +120,62 @@ export default function FilterBar({
     return options;
   }, [meta.tradeTypes]);
 
+  const regionNameMap = useMemo(() => {
+    const map = new Map();
+    regionOptions.forEach((region) => {
+      if (region?.code) {
+        map.set(region.code, region.name || region.code);
+      }
+    });
+    return map;
+  }, [regionOptions]);
+
+  const regionSummary = useMemo(() => {
+    if (!selectedRegionCodes.length) return 'Все регионы';
+    const names = selectedRegionCodes
+      .map((code) => regionNameMap.get(code) || code)
+      .filter(Boolean);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.slice(0, 2).join(', ')} + ещё ${names.length - 2}`;
+  }, [selectedRegionCodes, regionNameMap]);
+
+  useEffect(() => {
+    if (!allowMultipleRegions) {
+      return () => {};
+    }
+    function handleClickOutside(event) {
+      if (!regionDropdownRef.current) return;
+      if (!regionDropdownRef.current.contains(event.target)) {
+        setRegionDropdownOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === 'Escape') {
+        setRegionDropdownOpen(false);
+      }
+    }
+
+    if (typeof document === 'undefined') {
+      return () => {};
+    }
+
+    if (isRegionDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [allowMultipleRegions, isRegionDropdownOpen]);
+
+  useEffect(() => {
+    if (!allowMultipleRegions && isRegionDropdownOpen) {
+      setRegionDropdownOpen(false);
+    }
+  }, [allowMultipleRegions, isRegionDropdownOpen]);
   useEffect(() => {
     let ignore = false;
     async function loadMeta() {
@@ -112,19 +206,33 @@ export default function FilterBar({
 
   useEffect(() => {
     setQ(initial?.q || '');
-    setRegionCode(initial?.region_code || initial?.region || '');
+    const parsed = parseRegionCodes(initial?.region_code || initial?.region);
+    setRegionCodes(allowMultipleRegions ? parsed : parsed.slice(0, 1));
     setCity(initial?.city || '');
     setBrand(initial?.brand || '');
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
     setMinPrice(initial?.minPrice || '');
     setMaxPrice(initial?.maxPrice || '');
-  }, [initial]);
+  }, [initial, allowMultipleRegions]);
+
+  function toggleRegionSelection(code) {
+    setRegionCodes((prev) => {
+      if (prev.includes(code)) {
+        return prev.filter((item) => item !== code);
+      }
+      return [...prev, code];
+    });
+  }
+
+  function clearRegions() {
+    setRegionCodes([]);
+  }
 
   function submit(e) {
     e.preventDefault();
     onSearch({
       q,
-      region_code: regionCode,
+      region_code: serializeRegionCodes(selectedRegionCodes),
       city,
       brand,
       trade_type: tradeType,
@@ -133,9 +241,9 @@ export default function FilterBar({
     });
   }
 
-  function resetFilters() {
+function resetFilters() {
     setQ('');
-    setRegionCode('');
+    setRegionCodes([]);
     setCity('');
     setBrand('');
     setTradeType('');
@@ -169,16 +277,70 @@ export default function FilterBar({
           </div>
         </label>
 
-        {/* Регион */}
+           {/* Регион */}
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
           <div className="input-wrap">
-            <select className="input pro select" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
-              <option value="">Все регионы</option>
-              {regionOptions.map((region) => (
-                <option key={region.code} value={region.code}>{region.name}</option>
-              ))}
-            </select>
+            {allowMultipleRegions ? (
+              <div
+                ref={regionDropdownRef}
+                className={`region-multi-select ${isRegionDropdownOpen ? 'is-open' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="input pro multi-select-trigger"
+                  onClick={() => setRegionDropdownOpen((prev) => !prev)}
+                  aria-haspopup="listbox"
+                  aria-expanded={isRegionDropdownOpen}
+                >
+                  <span className={`multi-select-label ${selectedRegionCodes.length ? 'has-value' : ''}`}>
+                    {regionSummary}
+                  </span>
+                  <span className="multi-select-arrow" aria-hidden="true" />
+                </button>
+                {isRegionDropdownOpen ? (
+                  <div className="multi-select-dropdown" role="listbox" aria-multiselectable="true">
+                    <button type="button" className="multi-select-option" onClick={clearRegions}>
+                      <span className="checkbox">
+                        <input type="checkbox" checked={regionCodes.length === 0} readOnly />
+                      </span>
+                      <span>Все регионы</span>
+                    </button>
+                    <div className="multi-select-options">
+                      {regionOptions.map((region) => {
+                        const checked = regionCodes.includes(region.code);
+                        return (
+                          <label key={region.code} className={`multi-select-option${checked ? ' is-selected' : ''}`}>
+                            <span className="checkbox">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleRegionSelection(region.code)}
+                              />
+                            </span>
+                            <span>{region.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <select
+                className="input pro select"
+                value={singleRegionValue}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setRegionCodes(value ? [value] : []);
+                }}
+              >
+                <option value="">Все регионы</option>
+                {regionOptions.map((region) => (
+                  <option key={region.code} value={region.code}>{region.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         </label>
 
@@ -358,7 +520,7 @@ export default function FilterBar({
           background: #fff;
         }
 
-        /* кастомная стрелка для select */
+           /* кастомная стрелка для select */
         .select {
           appearance: none;
           -webkit-appearance: none;
@@ -367,6 +529,115 @@ export default function FilterBar({
           background-repeat: no-repeat;
           background-position: right 10px center;
           padding-right: 30px;
+        }
+
+        .region-multi-select {
+          position: relative;
+          width: 100%;
+        }
+
+        .multi-select-trigger {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          cursor: pointer;
+        }
+
+        .multi-select-label {
+          flex: 1;
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          color: var(--muted);
+          font-size: 14px;
+          text-align: left;
+        }
+
+        .multi-select-label.has-value {
+          color: var(--text);
+        }
+
+        .multi-select-arrow {
+          flex-shrink: 0;
+          width: 14px;
+          height: 14px;
+          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: center;
+          transition: transform .15s ease;
+        }
+
+        .region-multi-select.is-open .multi-select-arrow {
+          transform: rotate(180deg);
+        }
+
+        .multi-select-dropdown {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 20;
+          background: #fff;
+          border-radius: 12px;
+          box-shadow: var(--shadow-sm);
+          border: 1px solid rgba(30,144,255,.18);
+          padding: 6px 0;
+          max-height: 280px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .multi-select-options {
+          overflow-y: auto;
+          max-height: 220px;
+        }
+
+        .multi-select-option {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 6px 14px;
+          font-size: 14px;
+          cursor: pointer;
+          color: var(--text);
+          transition: background .12s ease;
+        }
+
+        .multi-select-option:hover {
+          background: rgba(30,144,255,.08);
+        }
+
+        .multi-select-option.is-selected {
+          background: rgba(30,144,255,.12);
+        }
+
+        button.multi-select-option {
+          background: transparent;
+          border: none;
+          text-align: left;
+          font: inherit;
+        }
+
+        button.multi-select-option:focus-visible,
+        .multi-select-trigger:focus-visible {
+          outline: none;
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
+        }
+
+        .multi-select-option .checkbox {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .multi-select-option input[type='checkbox'] {
+          width: 16px;
+          height: 16px;
         }
 
         /* иконку поиска и суффикс ₽ мы удалили, соответствующие стили не нужны */
@@ -454,5 +725,6 @@ export default function FilterBar({
     </form>
   );
 }
+
 
 
