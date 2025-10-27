@@ -48,25 +48,7 @@ function normalizeUserId(value) {
   const text = String(value).trim();
   return text || null;
 }
-function normalizeRegionCodeList(input) {
-  if (input === undefined || input === null) return [];
-  const rawValues = Array.isArray(input) ? input : [input];
-  const normalized = [];
-  rawValues.forEach((item) => {
-    const parts = String(item ?? '')
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean);
-    parts.forEach((part) => {
-      const code = normalizeRegionCode(part);
-      if (!code) return;
-      if (!normalized.includes(code)) {
-        normalized.push(code);
-      }
-    });
-  });
-  return normalized;
-}
+
 // Нативный fetch + таймаут через AbortController
 async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body } = {}) {
   const ac = new AbortController();
@@ -584,18 +566,10 @@ app.get('/api/listings', async (req, res) => {
     `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
       OR vin ILIKE '%' || $${params.length} || '%')`
   );}
-   const normalizedRegionCodes = normalizeRegionCodeList(regionCodeParam);
-  if (normalizedRegionCodes.length) {
-    if (normalizedRegionCodes.length === 1) {
-      params.push(normalizedRegionCodes[0]);
-      where.push(`region_code = $${params.length}`);
-    } else {
-      const placeholders = normalizedRegionCodes.map((code) => {
-        params.push(code);
-        return `$${params.length}`;
-      });
-      where.push(`region_code = ANY(ARRAY[${placeholders.join(', ')}]::text[])`);
-    }
+  const normalizedRegionCodeParam = normalizeRegionCode(regionCodeParam);
+  if (normalizedRegionCodeParam) {
+    params.push(normalizedRegionCodeParam);
+    where.push(`region_code = $${params.length}`);
   } else if (region) {
     const regionTrimmed = String(region).trim();
     if (regionTrimmed) {
