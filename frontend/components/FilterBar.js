@@ -109,6 +109,8 @@ export default function FilterBar({
     return `${names.length} регионов`;
   }, [regionCodes, selectedRegionRecords]);
 
+  const canResetRegions = regionCodes.length > 0 || regionSearchTerm.trim().length > 0;
+
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     function handleClickOutside(event) {
@@ -209,7 +211,7 @@ export default function FilterBar({
     e.preventDefault();
     onSearch({
       q,
-      region_code: regionCode,
+      region_code: regionCodes,
       city,
       brand,
       trade_type: tradeType,
@@ -220,7 +222,8 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegionCode('');
+    setRegionCodes([]);
+    setRegionSearchTerm('');
     setCity('');
     setBrand('');
     setTradeType('');
@@ -228,7 +231,7 @@ export default function FilterBar({
     setMaxPrice('');
     onSearch({
       q: '',
-      region_code: '',
+      region_code: [],
       city: '',
       brand: '',
       trade_type: '',
@@ -269,16 +272,30 @@ export default function FilterBar({
             </button>
             {isRegionMenuOpen ? (
               <div className="region-dropdown" role="listbox" aria-multiselectable="true">
-                <div className="region-dropdown-content">
-                  <label className="region-option all-regions">
-                    <input
-                      type="checkbox"
-                      checked={regionCodes.length === 0}
-                      onChange={() => setRegionCodes([])}
-                    />
-                    <span>Все регионы</span>
-                  </label>
+                <div className="region-dropdown-card">
+                  <div className="region-dropdown-head">
+                    <div className="region-dropdown-title">
+                      <span className="region-headline">Выберите регионы</span>
+                      <span className="region-subline">
+                        {regionCodes.length ? `Выбрано ${regionCodes.length}` : 'Все регионы'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={`region-clear ${canResetRegions ? '' : 'disabled'}`.trim()}
+                      onClick={() => {
+                        if (!canResetRegions) return;
+                        setRegionCodes([]);
+                        setRegionSearchTerm('');
+                      }}
+                      disabled={!canResetRegions}
+                    >
+                      Сбросить
+                    </button>
+                  </div>
+
                   <div className="region-search">
+                    <span className="region-search-icon" aria-hidden="true" />
                     <input
                       ref={regionSearchInputRef}
                       className="region-search-input"
@@ -288,31 +305,39 @@ export default function FilterBar({
                       onChange={(event) => setRegionSearchTerm(event.target.value)}
                     />
                   </div>
-                  <div className="region-options" role="group">
+
+                  <div className="region-options" role="group" aria-label="Список регионов">
                     {filteredRegionOptions.length ? (
-                      filteredRegionOptions.map((region) => {
-                        const checked = regionCodes.includes(region.code);
-                        return (
-                          <label key={region.code} className={`region-option ${checked ? 'checked' : ''}`}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                setRegionCodes((prev) => {
-                                  const exists = prev.includes(region.code);
-                                  if (exists) {
-                                    return prev.filter((code) => code !== region.code);
-                                  }
-                                  return [...prev, region.code];
-                                });
-                              }}
-                            />
-                            <span>{region.name}</span>
-                          </label>
-                        );
-                      })
+                      <ul className="region-option-list">
+                        {filteredRegionOptions.map((region) => {
+                          const checked = regionCodes.includes(region.code);
+                          return (
+                            <li key={region.code}>
+                              <label className={`region-option ${checked ? 'checked' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    setRegionCodes((prev) => {
+                                      const exists = prev.includes(region.code);
+                                      if (exists) {
+                                        return prev.filter((code) => code !== region.code);
+                                      }
+                                      return [...prev, region.code];
+                                    });
+                                  }}
+                                />
+                                <span className="region-option-name">{region.name}</span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     ) : (
-                      <div className="region-empty">Регион не найден</div>
+                      <div className="region-empty">
+                        <strong>Ничего не нашлось</strong>
+                        <span>Попробуйте изменить запрос</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -514,76 +539,172 @@ export default function FilterBar({
           z-index: 20;
           top: calc(100% + 6px);
           left: 0;
-          right: 0;
-          background: #fff;
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
-          padding: 4px 0;
+          min-width: max(100%, 320px);
+          width: min(540px, calc(100vw - 32px));
         }
-        .region-dropdown-content {
+        .region-dropdown-card {
+          background: #fff;
+          border: 1px solid rgba(203, 213, 225, 0.65);
+          border-radius: 16px;
+          box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
+          padding: 18px 18px 16px;
           display: flex;
           flex-direction: column;
-          max-height: 320px;
+          gap: 14px;
+        }
+        .region-dropdown-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .region-dropdown-title {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .region-headline {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .region-subline {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--muted);
+        }
+        .region-clear {
+          border: none;
+          background: rgba(30,144,255,.08);
+          color: var(--brand);
+          border-radius: 999px;
+          padding: 0 14px;
+          height: 32px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
+        }
+        .region-clear:hover {
+          background: rgba(30,144,255,.15);
+          box-shadow: 0 10px 22px rgba(30,144,255,.2);
+          transform: translateY(-1px);
+        }
+        .region-clear:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(30,144,255,.25);
+        }
+        .region-clear.disabled,
+        .region-clear:disabled {
+          background: rgba(148,163,184,0.14);
+          color: rgba(100,116,139,0.7);
+          cursor: default;
+          box-shadow: none;
+          transform: none;
         }
         .region-search {
-          padding: 8px 16px 12px;
-          border-bottom: 1px solid var(--line);
-          background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border-radius: 12px;
+          border: 1px solid rgba(226,232,240,0.9);
+          padding: 0 12px;
+          height: 38px;
+          background: linear-gradient(180deg, rgba(248,250,252,0.94) 0%, rgba(255,255,255,0.96) 100%);
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .region-search:focus-within {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.14);
+          background: #fff;
+        }
+        .region-search-icon {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+          background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.188 11.188l3.07 3.07-1.06 1.06-3.07-3.07a6 6 0 1 1 1.06-1.06zM7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z' fill='%238B97A8'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: center;
+          opacity: 0.7;
         }
         .region-search-input {
-          width: 100%;
-          height: 34px;
-          border-radius: 8px;
-          border: 1px solid rgba(226,232,240,0.9);
-          padding: 0 10px;
+          flex: 1;
+          border: none;
+          outline: none;
+          background: transparent;
           font-size: 14px;
           color: var(--text);
-          outline: none;
-          transition: border-color .15s ease, box-shadow .15s ease;
-        }
-        .region-search-input:focus {
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255,.12);
         }
         .region-options {
+          max-height: 280px;
           overflow-y: auto;
-          max-height: 260px;
-          padding: 4px 0 6px;
+          padding-right: 4px;
+        }
+        .region-option-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .region-options::-webkit-scrollbar {
+          width: 8px;
+        }
+        .region-options::-webkit-scrollbar-thumb {
+          background: rgba(148,163,184,0.45);
+          border-radius: 999px;
         }
         .region-option {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 8px 16px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.85);
+          border: 1px solid rgba(148,163,184,0.25);
           font-size: 14px;
           color: var(--text);
           cursor: pointer;
-        }
-        .region-option input {
-          flex-shrink: 0;
-        }
-        .region-option span {
-          flex: 1;
+          transition: background .15s ease, border-color .15s ease;
         }
         .region-option:hover {
           background: rgba(30,144,255,.08);
+          border-color: rgba(30,144,255,.25);
         }
-        .region-option.checked span {
-          font-weight: 600;
+        .region-option.checked {
+          background: rgba(30,144,255,.12);
+          border-color: rgba(30,144,255,.4);
         }
-        .region-option.all-regions {
-          position: sticky;
-          top: 0;
-          background: linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(248,250,252,0.88) 100%);
-          border-bottom: 1px solid var(--line);
-          z-index: 1;
+        .region-option input {
+          margin-top: 0;
+          flex-shrink: 0;
+          accent-color: var(--brand);
+        }
+        .region-option-name {
+          flex: 1;
+          line-height: 1.4;
+          word-break: break-word;
         }
         .region-empty {
-          padding: 16px;
-          font-size: 13px;
+          grid-column: 1 / -1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 32px 20px;
+          border-radius: 14px;
+          border: 1px dashed rgba(148,163,184,0.35);
+          background: rgba(248,250,252,0.92);
           color: var(--muted);
+          font-size: 13px;
           text-align: center;
+        }
+        .region-empty strong {
+          color: var(--text);
+          font-size: 14px;
         }
 
         .input.pro {
@@ -674,8 +795,9 @@ export default function FilterBar({
           .filters-panel-pro { padding: 10px; }
           .actions { flex-direction: column; align-items: stretch; }
           .right-actions { justify-content: stretch; }
-        }
-      `}</style>
+          .region-dropdown { width: calc(100vw - 32px); }
+          .region-options { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+        }</style>
         <style jsx>{`
   /* Контейнер действий: всё вправо — для надёжности (если снимешь inline-стили) */
   .actions {
@@ -700,6 +822,7 @@ export default function FilterBar({
     </form>
   );
 }
+
 
 
 
