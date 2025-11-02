@@ -1,11 +1,33 @@
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
 function api(path) {
   const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
   return base ? `${base}${path}` : path;
+}
+
+function normalizeRegionCodes(value) {
+  if (value === undefined || value === null) return [];
+  const toArray = (input) => {
+    if (input === undefined || input === null) return [];
+    if (Array.isArray(input)) {
+      return input.flatMap((entry) => toArray(entry));
+    }
+    const text = typeof input === 'string' ? input : String(input);
+    return text
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+  };
+  const flattened = toArray(value);
+  const unique = new Set();
+  flattened.forEach((code) => {
+    const normalized = typeof code === 'string' ? code.trim() : String(code);
+    if (normalized) unique.add(normalized);
+  });
+  return Array.from(unique.values());
 }
 
 export default function FilterBar({
@@ -15,7 +37,9 @@ export default function FilterBar({
   showFavoritesLink = true,
 }) {
   const [q, setQ] = useState(initial?.q || '');
-  const [regionCode, setRegionCode] = useState(initial?.region_code || initial?.region || '');
+  const [regionCodes, setRegionCodes] = useState(
+    () => normalizeRegionCodes(initial?.region_code ?? initial?.region)
+  );
   const [city, setCity] = useState(initial?.city || '');
   const [brand, setBrand] = useState(initial?.brand || '');
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -27,6 +51,8 @@ export default function FilterBar({
   );
 
   const [meta, setMeta] = useState(EMPTY_META);
+  const [isRegionMenuOpen, setRegionMenuOpen] = useState(false);
+  const regionMenuRef = useRef(null);
 
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
@@ -56,10 +82,45 @@ export default function FilterBar({
     return Array.from(map.values());
   }, [meta.regions]);
 
+  const selectedRegionRecords = useMemo(() => {
+    if (!Array.isArray(regionCodes) || !regionCodes.length) return [];
+    const map = new Map(regionOptions.map((region) => [region.code, region]));
+    return regionCodes.map((code) => map.get(code) || { code, name: code }).filter(Boolean);
+  }, [regionCodes, regionOptions]);
+
+  const regionSummary = useMemo(() => {
+    if (!regionCodes.length) return 'Все регионы';
+    const names = selectedRegionRecords.map((region) => region.name || region.code);
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return names.join(', ');
+    return `${names.length} регионов`;
+  }, [regionCodes.length, selectedRegionRecords]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    function handleClickOutside(event) {
+      if (!regionMenuRef.current) return;
+      if (regionMenuRef.current.contains(event.target)) return;
+      setRegionMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!isRegionMenuOpen || typeof document === 'undefined') return undefined;
+    function handleKey(event) {
+      if (event.key === 'Escape') {
+        setRegionMenuOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isRegionMenuOpen]);
+
   const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
     const preferredOrder = ['public_offer', 'open_auction'];
-
     preferredOrder.forEach((code) => normalized.add(code));
     (meta.tradeTypes || []).forEach((value) => {
       const code = normalizeTradeTypeCode(value);
@@ -112,7 +173,7 @@ export default function FilterBar({
 
   useEffect(() => {
     setQ(initial?.q || '');
-    setRegionCode(initial?.region_code || initial?.region || '');
+    setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
     setCity(initial?.city || '');
     setBrand(initial?.brand || '');
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
@@ -172,13 +233,53 @@ export default function FilterBar({
         {/* Регион */}
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
-          <div className="input-wrap">
-            <select className="input pro select" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
-              <option value="">Все регионы</option>
-              {regionOptions.map((region) => (
-                <option key={region.code} value={region.code}>{region.name}</option>
-              ))}
-            </select>
+          <div className="input-wrap" ref={regionMenuRef}>
+            <button
+              type="button"
+              className={`input pro multi-trigger ${isRegionMenuOpen ? 'open' : ''}`}
+              onClick={() => setRegionMenuOpen((prev) => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={isRegionMenuOpen}
+            >
+              <span className="trigger-label">{regionSummary}</span>
+            </button>
+            {isRegionMenuOpen ? (
+              <div className="region-dropdown" role="listbox" aria-multiselectable="true">
+                <div className="region-dropdown-content">
+                  <label className="region-option all-regions">
+                    <input
+                      type="checkbox"
+                      checked={regionCodes.length === 0}
+                      onChange={() => setRegionCodes([])}
+                    />
+                    <span>Все регионы</span>
+                  </label>
+                  <div className="region-options">
+                    {regionOptions.map((region) => {
+                      const checked = regionCodes.includes(region.code);
+                      return (
+                        <label key={region.code} className={`region-option ${checked ? 'checked' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setRegionCodes((prev) => {
+                                const exists = prev.includes(region.code);
+                                if (exists) {
+                                  return prev.filter((code) => code !== region.code);
+                                }
+                                return [...prev, region.code];
+                              });
+                            }}
+                          />
+                          <span>{region.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </label>
 
@@ -340,6 +441,86 @@ export default function FilterBar({
 
         .input-wrap { position: relative; display: flex; align-items: center; }
 
+        .multi-trigger {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          cursor: pointer;
+          text-align: left;
+          padding-right: 36px;
+        }
+        .multi-trigger::after {
+          content: '';
+          width: 14px;
+          height: 14px;
+          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: center;
+          flex-shrink: 0;
+          transition: transform .18s ease;
+        }
+        .multi-trigger.open::after {
+          transform: rotate(180deg);
+        }
+        .multi-trigger .trigger-label {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          width: 100%;
+        }
+
+        .region-dropdown {
+          position: absolute;
+          z-index: 20;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+          padding: 4px 0;
+        }
+        .region-dropdown-content {
+          display: flex;
+          flex-direction: column;
+          max-height: 320px;
+        }
+        .region-options {
+          overflow-y: auto;
+          max-height: 260px;
+        }
+        .region-option {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 16px;
+          font-size: 14px;
+          color: var(--text);
+          cursor: pointer;
+        }
+        .region-option input {
+          flex-shrink: 0;
+        }
+        .region-option span {
+          flex: 1;
+        }
+        .region-option:hover {
+          background: rgba(30,144,255,.08);
+        }
+        .region-option.checked span {
+          font-weight: 600;
+        }
+        .region-option.all-regions {
+          position: sticky;
+          top: 0;
+          background: linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(248,250,252,0.88) 100%);
+          border-bottom: 1px solid var(--line);
+          z-index: 1;
+        }
+
         .input.pro {
           width: 100%;
           height: 38px;
@@ -454,5 +635,6 @@ export default function FilterBar({
     </form>
   );
 }
+
 
 
