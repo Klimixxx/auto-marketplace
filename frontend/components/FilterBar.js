@@ -51,11 +51,14 @@ export default function FilterBar({
   );
 
   const [meta, setMeta] = useState(EMPTY_META);
+
+  // --- Регион: состояние выпадающего списка
   const [isRegionMenuOpen, setRegionMenuOpen] = useState(false);
   const [regionSearchTerm, setRegionSearchTerm] = useState('');
   const regionMenuRef = useRef(null);
   const regionSearchInputRef = useRef(null);
 
+  // Собираем опции регионов (мета + fallback), нормализуем {code, name}
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -104,13 +107,13 @@ export default function FilterBar({
   const regionSummary = useMemo(() => {
     if (!regionCodes.length) return 'Все регионы';
     const names = selectedRegionRecords.map((region) => region.name || region.code);
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return names.join(', ');
+    if (names.length <= 3) return names.join(', ');
     return `${names.length} регионов`;
   }, [regionCodes, selectedRegionRecords]);
 
   const canResetRegions = regionCodes.length > 0 || regionSearchTerm.trim().length > 0;
 
+  // Клик снаружи — закрываем меню
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     function handleClickOutside(event) {
@@ -122,6 +125,7 @@ export default function FilterBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Фокус в поиске + Esc
   useEffect(() => {
     if (!isRegionMenuOpen || typeof document === 'undefined') return undefined;
     const input = regionSearchInputRef.current;
@@ -138,12 +142,14 @@ export default function FilterBar({
     return () => document.removeEventListener('keydown', handleKey);
   }, [isRegionMenuOpen]);
 
+  // Очистка строки поиска при закрытии
   useEffect(() => {
     if (!isRegionMenuOpen) {
       setRegionSearchTerm('');
     }
   }, [isRegionMenuOpen]);
 
+  // Список типов торгов (с приоритетом)
   const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
     const preferredOrder = ['public_offer', 'open_auction'];
@@ -169,6 +175,7 @@ export default function FilterBar({
     return options;
   }, [meta.tradeTypes]);
 
+  // Загрузка метаданных для фильтров
   useEffect(() => {
     let ignore = false;
     async function loadMeta() {
@@ -197,6 +204,7 @@ export default function FilterBar({
     return () => { ignore = true; };
   }, [EMPTY_META]);
 
+  // Сбрасываем локальные состояния при смене initial
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
@@ -256,92 +264,88 @@ export default function FilterBar({
           </div>
         </label>
 
-        {/* Регион */}
+        {/* Регион — упрощённый кастомный «select» с мультивыбором и поиском */}
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
-          <div className="input-wrap" ref={regionMenuRef}>
+          <div className="custom-select" ref={regionMenuRef}>
             <button
               type="button"
-              className={`input pro multi-trigger ${isRegionMenuOpen ? 'open' : ''}`}
+              className={`select-display ${isRegionMenuOpen ? 'open' : ''}`}
               onClick={() => setRegionMenuOpen((prev) => !prev)}
               aria-haspopup="listbox"
               aria-expanded={isRegionMenuOpen}
+              title={regionSummary}
             >
-              <span className="trigger-label">{regionSummary}</span>
+              <span className="select-text">{regionSummary}</span>
+              <span aria-hidden="true" className={`select-caret ${isRegionMenuOpen ? 'up' : ''}`} />
             </button>
-            {isRegionMenuOpen ? (
-              <div className="region-dropdown" role="listbox" aria-multiselectable="true">
-                <div className="region-dropdown-card">
-                  <div className="region-dropdown-head">
-                    <div className="region-dropdown-title">
-                      <span className="region-headline">Выберите регионы</span>
-                      <span className="region-subline">
-                        {regionCodes.length ? `Выбрано ${regionCodes.length}` : 'Все регионы'}
-                      </span>
-                    </div>
+
+            {isRegionMenuOpen && (
+              <div className="select-dropdown" role="listbox" aria-multiselectable="true">
+                <div className="dropdown-head">
+                  <div className="dropdown-title">
+                    <span className="headline">Выбор регионов</span>
+                    <span className="subline">
+                      {regionCodes.length ? `Выбрано: ${regionCodes.length}` : 'Все регионы'}
+                    </span>
+                  </div>
+                  <div className="dropdown-actions">
                     <button
                       type="button"
-                      className={`region-clear ${canResetRegions ? '' : 'disabled'}`.trim()}
+                      className={`clear-btn ${canResetRegions ? '' : 'disabled'}`.trim()}
+                      disabled={!canResetRegions}
                       onClick={() => {
                         if (!canResetRegions) return;
                         setRegionCodes([]);
                         setRegionSearchTerm('');
                       }}
-                      disabled={!canResetRegions}
                     >
-                      Сбросить
+                      Очистить
                     </button>
                   </div>
-
-                  <div className="region-search">
-                    <span className="region-search-icon" aria-hidden="true" />
-                    <input
-                      ref={regionSearchInputRef}
-                      className="region-search-input"
-                      type="search"
-                      placeholder="Поиск региона"
-                      value={regionSearchTerm}
-                      onChange={(event) => setRegionSearchTerm(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="region-options" role="group" aria-label="Список регионов">
-                    {filteredRegionOptions.length ? (
-                      <ul className="region-option-list">
-                        {filteredRegionOptions.map((region) => {
-                          const checked = regionCodes.includes(region.code);
-                          return (
-                            <li key={region.code}>
-                              <label className={`region-option ${checked ? 'checked' : ''}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    setRegionCodes((prev) => {
-                                      const exists = prev.includes(region.code);
-                                      if (exists) {
-                                        return prev.filter((code) => code !== region.code);
-                                      }
-                                      return [...prev, region.code];
-                                    });
-                                  }}
-                                />
-                                <span className="region-option-name">{region.name}</span>
-                              </label>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <div className="region-empty">
-                        <strong>Ничего не нашлось</strong>
-                        <span>Попробуйте изменить запрос</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
+
+                <div className="select-search">
+                  <span className="search-icon" aria-hidden="true" />
+                  <input
+                    ref={regionSearchInputRef}
+                    type="search"
+                    placeholder="Поиск региона…"
+                    value={regionSearchTerm}
+                    onChange={(e) => setRegionSearchTerm(e.target.value)}
+                  />
+                </div>
+
+                {filteredRegionOptions.length ? (
+                  <div className="select-options" role="group" aria-label="Список регионов">
+                    {filteredRegionOptions.map((region) => {
+                      const checked = regionCodes.includes(region.code);
+                      return (
+                        <label key={region.code} className={`option ${checked ? 'checked' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setRegionCodes((prev) => {
+                                const exists = prev.includes(region.code);
+                                if (exists) return prev.filter((c) => c !== region.code);
+                                return [...prev, region.code];
+                              });
+                            }}
+                          />
+                          <span className="option-name">{region.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="empty">
+                    <strong>Ничего не нашлось</strong>
+                    <span>Попробуйте изменить запрос</span>
+                  </div>
+                )}
               </div>
-            ) : null}
+            )}
           </div>
         </label>
 
@@ -378,7 +382,9 @@ export default function FilterBar({
             <select className="input pro select" value={tradeType} onChange={(e) => setTradeType(e.target.value)}>
               <option value="">Все типы</option>
               {tradeTypeOptions.map((value) => (
-                <option key={value} value={value}>{TRADE_TYPE_LABELS[value] || formatTradeTypeLabel(value) || value}</option>
+                <option key={value} value={value}>
+                  {TRADE_TYPE_LABELS[value] || formatTradeTypeLabel(value) || value}
+                </option>
               ))}
             </select>
           </div>
@@ -495,209 +501,6 @@ export default function FilterBar({
 
         .input-wrap { position: relative; display: flex; align-items: center; }
 
-        .multi-trigger {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          cursor: pointer;
-          text-align: left;
-          padding-right: 36px;
-        }
-        .multi-trigger::after {
-          content: '';
-          width: 14px;
-          height: 14px;
-          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: center;
-          flex-shrink: 0;
-          transition: transform .18s ease;
-        }
-        .multi-trigger.open::after {
-          transform: rotate(180deg);
-        }
-        .multi-trigger .trigger-label {
-          display: block;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          width: 100%;
-        }
-
-        .region-dropdown {
-          position: absolute;
-          z-index: 20;
-          top: calc(100% + 6px);
-          left: 0;
-          min-width: max(100%, 320px);
-          width: min(540px, calc(100vw - 32px));
-        }
-        .region-dropdown-card {
-          background: #fff;
-          border: 1px solid rgba(203, 213, 225, 0.65);
-          border-radius: 16px;
-          box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
-          padding: 18px 18px 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .region-dropdown-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        .region-dropdown-title {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .region-headline {
-          font-size: 14px;
-          font-weight: 700;
-          color: var(--text);
-        }
-        .region-subline {
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          color: var(--muted);
-        }
-        .region-clear {
-          border: none;
-          background: rgba(30,144,255,.08);
-          color: var(--brand);
-          border-radius: 999px;
-          padding: 0 14px;
-          height: 32px;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
-        }
-        .region-clear:hover {
-          background: rgba(30,144,255,.15);
-          box-shadow: 0 10px 22px rgba(30,144,255,.2);
-          transform: translateY(-1px);
-        }
-        .region-clear:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(30,144,255,.25);
-        }
-        .region-clear.disabled,
-        .region-clear:disabled {
-          background: rgba(148,163,184,0.14);
-          color: rgba(100,116,139,0.7);
-          cursor: default;
-          box-shadow: none;
-          transform: none;
-        }
-        .region-search {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          border-radius: 12px;
-          border: 1px solid rgba(226,232,240,0.9);
-          padding: 0 12px;
-          height: 38px;
-          background: linear-gradient(180deg, rgba(248,250,252,0.94) 0%, rgba(255,255,255,0.96) 100%);
-          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-        }
-        .region-search:focus-within {
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255,.14);
-          background: #fff;
-        }
-        .region-search-icon {
-          width: 16px;
-          height: 16px;
-          flex-shrink: 0;
-          background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.188 11.188l3.07 3.07-1.06 1.06-3.07-3.07a6 6 0 1 1 1.06-1.06zM7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z' fill='%238B97A8'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: center;
-          opacity: 0.7;
-        }
-        .region-search-input {
-          flex: 1;
-          border: none;
-          outline: none;
-          background: transparent;
-          font-size: 14px;
-          color: var(--text);
-        }
-        .region-options {
-          max-height: 280px;
-          overflow-y: auto;
-          padding-right: 4px;
-        }
-        .region-option-list {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .region-options::-webkit-scrollbar {
-          width: 8px;
-        }
-        .region-options::-webkit-scrollbar-thumb {
-          background: rgba(148,163,184,0.45);
-          border-radius: 999px;
-        }
-        .region-option {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 12px;
-          border-radius: 10px;
-          background: rgba(255,255,255,0.85);
-          border: 1px solid rgba(148,163,184,0.25);
-          font-size: 14px;
-          color: var(--text);
-          cursor: pointer;
-          transition: background .15s ease, border-color .15s ease;
-        }
-        .region-option:hover {
-          background: rgba(30,144,255,.08);
-          border-color: rgba(30,144,255,.25);
-        }
-        .region-option.checked {
-          background: rgba(30,144,255,.12);
-          border-color: rgba(30,144,255,.4);
-        }
-        .region-option input {
-          margin-top: 0;
-          flex-shrink: 0;
-          accent-color: var(--brand);
-        }
-        .region-option-name {
-          flex: 1;
-          line-height: 1.4;
-          word-break: break-word;
-        }
-        .region-empty {
-          grid-column: 1 / -1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 32px 20px;
-          border-radius: 14px;
-          border: 1px dashed rgba(148,163,184,0.35);
-          background: rgba(248,250,252,0.92);
-          color: var(--muted);
-          font-size: 13px;
-          text-align: center;
-        }
-        .region-empty strong {
-          color: var(--text);
-          font-size: 14px;
-        }
-
         .input.pro {
           width: 100%;
           height: 38px;
@@ -726,9 +529,7 @@ export default function FilterBar({
           padding-right: 30px;
         }
 
-        .actions {
-          justify-content: flex-end;
-        }
+        .actions { justify-content: flex-end; }
 
         .btn {
           height: 38px;
@@ -758,7 +559,6 @@ export default function FilterBar({
           box-shadow: 0 6px 14px rgba(17,24,39,.08);
           background: #fff;
         }
-
         .btn.ghost {
           background: #ffffff;
           color: #374151;
@@ -772,11 +572,183 @@ export default function FilterBar({
           color: #111827;
         }
 
+        /* ---- Новый кастомный select для регионов ---- */
+        .custom-select { position: relative; width: 100%; }
+        .select-display {
+          width: 100%;
+          height: 38px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          padding: 0 36px 0 12px;
+          background: rgba(255,255,255,.8);
+          color: var(--text);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .select-display:hover { background: #fff; }
+        .select-display.open {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
+          background: #fff;
+        }
+        .select-text {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1;
+        }
+        .select-caret {
+          position: absolute;
+          right: 10px;
+          width: 14px;
+          height: 14px;
+          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: center;
+          transition: transform .18s ease;
+        }
+        .select-caret.up { transform: rotate(180deg); }
+
+        .select-dropdown {
+          position: absolute;
+          z-index: 20;
+          top: calc(100% + 6px);
+          left: 0;
+          min-width: 100%;
+          width: min(540px, calc(100vw - 32px));
+          background: #fff;
+          border: 1px solid rgba(203, 213, 225, 0.65);
+          border-radius: 12px;
+          box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-height: 320px;
+          overflow: hidden;
+        }
+
+        .dropdown-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 0 2px;
+        }
+        .dropdown-title { display: flex; flex-direction: column; gap: 2px; }
+        .headline { font-size: 14px; font-weight: 700; color: var(--text); }
+        .subline {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+          color: var(--muted);
+        }
+        .clear-btn {
+          border: none;
+          background: rgba(30,144,255,.08);
+          color: var(--brand);
+          border-radius: 999px;
+          padding: 0 12px;
+          height: 28px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
+        }
+        .clear-btn:hover {
+          background: rgba(30,144,255,.15);
+          box-shadow: 0 6px 16px rgba(30,144,255,.2);
+          transform: translateY(-1px);
+        }
+        .clear-btn.disabled,
+        .clear-btn:disabled {
+          background: rgba(148,163,184,0.14);
+          color: rgba(100,116,139,0.7);
+          cursor: default;
+          box-shadow: none;
+          transform: none;
+        }
+
+        .select-search {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid rgba(226,232,240,0.9);
+          border-radius: 10px;
+          padding: 0 10px;
+          height: 36px;
+          background: linear-gradient(180deg, rgba(248,250,252,0.94) 0%, rgba(255,255,255,0.96) 100%);
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .select-search:focus-within {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.14);
+          background: #fff;
+        }
+        .search-icon {
+          width: 16px; height: 16px; flex-shrink: 0;
+          background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.188 11.188l3.07 3.07-1.06 1.06-3.07-3.07a6 6 0 1 1 1.06-1.06zM7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z' fill='%238B97A8'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: center; opacity: .7;
+        }
+        .select-search input {
+          flex: 1; border: none; outline: none; background: transparent;
+          font-size: 14px; color: var(--text);
+        }
+
+        .select-options {
+          overflow-y: auto;
+          padding-right: 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-height: 220px;
+        }
+        .select-options::-webkit-scrollbar { width: 8px; }
+        .select-options::-webkit-scrollbar-thumb {
+          background: rgba(148,163,184,0.45); border-radius: 999px;
+        }
+
+        .option {
+          display: flex; align-items: center; gap: 10px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.9);
+          border: 1px solid rgba(148,163,184,0.25);
+          font-size: 14px; color: var(--text);
+          cursor: pointer;
+          transition: background .1s ease, border-color .1s ease;
+        }
+        .option:hover {
+          background: rgba(30,144,255,.08);
+          border-color: rgba(30,144,255,.25);
+        }
+        .option.checked {
+          background: rgba(30,144,255,.12);
+          border-color: rgba(30,144,255,.4);
+          font-weight: 600;
+        }
+        .option input { margin-top: 0; flex-shrink: 0; accent-color: var(--brand); }
+        .option-name { flex: 1; line-height: 1.35; word-break: break-word; }
+
+        .empty {
+          display: grid; place-items: center;
+          gap: 6px; padding: 28px 16px;
+          border-radius: 10px;
+          border: 1px dashed rgba(148,163,184,0.35);
+          background: rgba(248,250,252,0.92);
+          color: var(--muted);
+          font-size: 13px;
+          text-align: center;
+        }
+        .empty strong { color: var(--text); font-size: 14px; }
+
         @media (max-width: 719.98px) {
           .filters-panel-pro { padding: 10px; }
           .actions { flex-direction: column; align-items: stretch; }
-          .region-dropdown { width: calc(100vw - 32px); }
-          .region-options { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+          .select-dropdown { width: calc(100vw - 32px); }
         }
       `}</style>
     </form>
