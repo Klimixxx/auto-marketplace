@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
@@ -47,7 +47,7 @@ export default function FilterBar({
   );
   const [meta, setMeta] = useState(EMPTY_META);
 
-  // ---- Список регионов из метаданных (нормализуем к {code, name})
+  // ---- Список регионов из метаданных (к {code, name})
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -71,21 +71,20 @@ export default function FilterBar({
         map.set(stringCode, { code: stringCode, name });
       }
     });
-    // сортировка по алфавиту
-    return Array.from(map.values()).sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code, 'ru'));
+    return Array.from(map.values()).sort((a, b) =>
+      (a.name || a.code).localeCompare(b.name || b.code, 'ru')
+    );
   }, [meta.regions]);
 
-  // Только валидные выбранные коды
   const validRegionCodes = useMemo(
     () => (Array.isArray(regionCodes) ? regionCodes.filter(Boolean) : []),
     [regionCodes]
   );
 
-  // Сводка в поле
   const regionSummary = useMemo(() => {
     if (!validRegionCodes.length) return 'Все регионы';
-    const map = new Map(regionOptions.map((r) => [r.code, r.name || r.code]));
-    const names = validRegionCodes.map((c) => map.get(c) || c);
+    const nameByCode = new Map(regionOptions.map((r) => [r.code, r.name || r.code]));
+    const names = validRegionCodes.map((c) => nameByCode.get(c) || c);
     if (names.length <= 3) return names.join(', ');
     return `${names.length} регионов`;
   }, [validRegionCodes, regionOptions]);
@@ -145,7 +144,7 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegionCodes([]);
+    setRegionCodes(['']); // оставим одну пустую строку
     setCity('');
     setBrand('');
     setTradeType('');
@@ -162,14 +161,14 @@ export default function FilterBar({
     });
   }
 
-  // --- UI: несколько нативных <select>, "+" добавляет ещё один
-  // показываем хотя бы один select всегда (если ничего не выбрано)
-  const rows = (regionCodes.length ? regionCodes : ['']).map((v, i) => ({ idx: i, value: v || '' }));
+  // ------- Регионы: несколько нативных <select> + кнопки +/- -------
+  const rows = (regionCodes.length ? [...regionCodes] : ['']).map((v) => v || '');
 
   const handleRowChange = (rowIndex, newCode) => {
     setRegionCodes((prev) => {
       const base = prev.length ? [...prev] : [''];
       base[rowIndex] = newCode;
+
       // убираем пустые и дубли, сохраняем порядок
       const seen = new Set();
       const next = [];
@@ -180,17 +179,31 @@ export default function FilterBar({
           next.push(c);
         }
       }
-      return next.length ? next : ['']; // оставим пустую строку, чтобы был виден select
+      // оставим хотя бы одну пустую строку, чтобы был виден select
+      return next.length ? next : [''];
     });
   };
 
   const addRow = () => {
     setRegionCodes((prev) => {
-      const list = prev.length ? [...prev, ''] : ['', ''];
+      const list = prev.length ? [...prev] : [''];
+      // не добавляем второй пустой, если последний уже пустой
+      if (!list.length || list[list.length - 1] !== '') list.push('');
+      else if (list.length === 1) list.push('');
       return list;
     });
   };
 
+  const removeRow = (rowIndex) => {
+    setRegionCodes((prev) => {
+      const next = [...prev];
+      next.splice(rowIndex, 1);
+      if (next.length === 0) return ['']; // оставить один пустой
+      return next;
+    });
+  };
+
+  // -------- UI --------
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
       <div className="row compact">
@@ -207,36 +220,54 @@ export default function FilterBar({
           </div>
         </label>
 
-        {/* Регионы — как обычный select + кнопка "+" для добавления ещё одного */}
+        {/* Регионы — нативные select + кнопки +/- */}
         <div className="field col-span-6 md:col-span-3 lg:col-span-4">
           <span className="label">Регион</span>
-
-          {/* сводка (как в селекте) */}
           <div className="summary">{regionSummary}</div>
 
-          {/* строки выбора */}
           <div className="region-multi">
-            {rows.map((row) => (
-              <div className="region-row" key={row.idx}>
-                <select
-                  className="input pro select"
-                  value={row.value}
-                  onChange={(e) => handleRowChange(row.idx, e.target.value)}
-                >
-                  <option value="">{row.idx === 0 ? 'Все регионы' : 'Выберите регион'}</option>
-                  {regionOptions.map((r) => (
-                    <option key={r.code} value={r.code}>{r.name}</option>
-                  ))}
-                </select>
+            {rows.map((value, idx) => {
+              const isLast = idx === rows.length - 1;
+              const canDelete = rows.length > 1; // не скрывать минус, когда строк много
+              return (
+                <div className="region-row" key={idx}>
+                  {/* Минус слева (удалить строку) */}
+                  <button
+                    type="button"
+                    className="btn icon minus"
+                    onClick={() => removeRow(idx)}
+                    title="Удалить регион"
+                    disabled={!canDelete}
+                    aria-disabled={!canDelete}
+                  >
+                    −
+                  </button>
 
-                {/* "+" — только возле первой строки, чтобы не плодить кнопки */}
-                {row.idx === 0 && (
-                  <button type="button" className="btn icon plus" onClick={addRow} title="Добавить регион">
+                  {/* Сам select */}
+                  <select
+                    className="input pro select region-select"
+                    value={value}
+                    onChange={(e) => handleRowChange(idx, e.target.value)}
+                  >
+                    <option value="">{idx === 0 ? 'Все регионы' : 'Выберите регион'}</option>
+                    {regionOptions.map((r) => (
+                      <option key={r.code} value={r.code}>{r.name}</option>
+                    ))}
+                  </select>
+
+                  {/* Плюс справа — только у последней строки */}
+                  <button
+                    type="button"
+                    className="btn icon plus"
+                    onClick={addRow}
+                    title="Добавить ещё регион"
+                    style={{ visibility: isLast ? 'visible' : 'hidden' }}
+                  >
                     +
                   </button>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -272,7 +303,7 @@ export default function FilterBar({
           <div className="input-wrap">
             <select className="input pro select" value={tradeType} onChange={(e) => setTradeType(e.target.value)}>
               <option value="">Все типы</option>
-              { (meta.tradeTypes || []).map((value) => {
+              {(meta.tradeTypes || []).map((value) => {
                 const v = normalizeTradeTypeCode(value);
                 return v ? (
                   <option key={v} value={v}>
@@ -342,6 +373,7 @@ export default function FilterBar({
           --muted: #6b7280;
           --line: #dbe3ed;
           --filters-bg: rgba(230, 238, 248, .8);
+          --danger: #ef4444;
         }
 
         .filters-panel-pro {
@@ -395,7 +427,7 @@ export default function FilterBar({
           outline: none;
           transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
-        .input.pro:hover  { background: #fff; }
+        .input.pro:hover { background: #fff; }
         .input.pro:focus  {
           border-color: var(--brand);
           box-shadow: 0 0 0 3px rgba(30,144,255,.15);
@@ -413,7 +445,7 @@ export default function FilterBar({
         }
 
         .summary {
-          margin-top: 4px;
+          margin-top: 2px;
           margin-bottom: 6px;
           font-size: 12px;
           color: var(--muted);
@@ -421,23 +453,42 @@ export default function FilterBar({
         }
 
         .region-multi { display: grid; gap: 8px; }
-        .region-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
-        .btn.icon.plus {
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          border: 1px dashed var(--line);
+        .region-row {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .region-select { width: 100%; }
+
+        .btn.icon {
+          display: inline-grid;
+          place-items: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          border: 1px solid var(--line);
           background: #fff;
           font-weight: 800;
-          color: var(--brand);
+          line-height: 1;
+          padding: 0;
           cursor: pointer;
-          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
         }
-        .btn.icon.plus:hover {
-          transform: translateY(-1px);
-          border-color: rgba(30,144,255,.4);
-          box-shadow: 0 6px 14px rgba(17,24,39,.08);
+        .btn.icon:disabled {
+          opacity: 0.5;
+          cursor: default;
         }
+        .btn.icon.plus {
+          color: var(--brand);
+          border-color: rgba(30,144,255,.35);
+        }
+        .btn.icon.plus:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(30,144,255,.18); background: #f8fbff; }
+        .btn.icon.minus {
+          color: var(--danger);
+          border-color: rgba(239,68,68,.35);
+        }
+        .btn.icon.minus:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(239,68,68,.18); background: #fff6f6; }
 
         .actions { justify-content: flex-end; }
 
