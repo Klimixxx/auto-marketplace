@@ -47,7 +47,6 @@ export default function FilterBar({
   );
   const [meta, setMeta] = useState(EMPTY_META);
 
-  // ---- Список регионов из метаданных (к {code, name})
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -89,7 +88,6 @@ export default function FilterBar({
     return `${names.length} регионов`;
   }, [validRegionCodes, regionOptions]);
 
-  // Загрузка метаданных
   useEffect(() => {
     let ignore = false;
     async function loadMeta() {
@@ -117,7 +115,6 @@ export default function FilterBar({
     return () => { ignore = true; };
   }, [EMPTY_META]);
 
-  // Синхронизация при смене initial
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
@@ -128,7 +125,6 @@ export default function FilterBar({
     setMaxPrice(initial?.maxPrice || '');
   }, [initial]);
 
-  // Сабмит/сброс
   function submit(e) {
     e.preventDefault();
     onSearch({
@@ -144,7 +140,7 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegionCodes(['']); // оставим одну пустую строку
+    setRegionCodes(['']);
     setCity('');
     setBrand('');
     setTradeType('');
@@ -161,15 +157,13 @@ export default function FilterBar({
     });
   }
 
-  // ------- Регионы: несколько нативных <select> + кнопки +/- -------
+  // ------- Регионы: несколько <select> + кнопки справа -------
   const rows = (regionCodes.length ? [...regionCodes] : ['']).map((v) => v || '');
 
   const handleRowChange = (rowIndex, newCode) => {
     setRegionCodes((prev) => {
       const base = prev.length ? [...prev] : [''];
       base[rowIndex] = newCode;
-
-      // убираем пустые и дубли, сохраняем порядок
       const seen = new Set();
       const next = [];
       for (const c of base) {
@@ -179,7 +173,6 @@ export default function FilterBar({
           next.push(c);
         }
       }
-      // оставим хотя бы одну пустую строку, чтобы был виден select
       return next.length ? next : [''];
     });
   };
@@ -187,8 +180,7 @@ export default function FilterBar({
   const addRow = () => {
     setRegionCodes((prev) => {
       const list = prev.length ? [...prev] : [''];
-      // не добавляем второй пустой, если последний уже пустой
-      if (!list.length || list[list.length - 1] !== '') list.push('');
+      if (list[list.length - 1] !== '') list.push('');
       else if (list.length === 1) list.push('');
       return list;
     });
@@ -198,12 +190,10 @@ export default function FilterBar({
     setRegionCodes((prev) => {
       const next = [...prev];
       next.splice(rowIndex, 1);
-      if (next.length === 0) return ['']; // оставить один пустой
-      return next;
+      return next.length ? next : [''];
     });
   };
 
-  // -------- UI --------
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
       <div className="row compact">
@@ -220,7 +210,7 @@ export default function FilterBar({
           </div>
         </label>
 
-        {/* Регионы — нативные select + кнопки +/- */}
+        {/* Регионы */}
         <div className="field col-span-6 md:col-span-3 lg:col-span-4">
           <span className="label">Регион</span>
           <div className="summary">{regionSummary}</div>
@@ -228,22 +218,8 @@ export default function FilterBar({
           <div className="region-multi">
             {rows.map((value, idx) => {
               const isLast = idx === rows.length - 1;
-              const canDelete = rows.length > 1; // не скрывать минус, когда строк много
               return (
                 <div className="region-row" key={idx}>
-                  {/* Минус слева (удалить строку) */}
-                  <button
-                    type="button"
-                    className="btn icon minus"
-                    onClick={() => removeRow(idx)}
-                    title="Удалить регион"
-                    disabled={!canDelete}
-                    aria-disabled={!canDelete}
-                  >
-                    −
-                  </button>
-
-                  {/* Сам select */}
                   <select
                     className="input pro select region-select"
                     value={value}
@@ -255,12 +231,24 @@ export default function FilterBar({
                     ))}
                   </select>
 
-                  {/* Плюс справа — только у последней строки */}
+                  {/* Минус справа у каждой строки */}
+                  <button
+                    type="button"
+                    className="btn icon minus"
+                    onClick={() => removeRow(idx)}
+                    title="Удалить регион"
+                    aria-label="Удалить регион"
+                  >
+                    −
+                  </button>
+
+                  {/* Плюс справа только у последней */}
                   <button
                     type="button"
                     className="btn icon plus"
                     onClick={addRow}
-                    title="Добавить ещё регион"
+                    title="Добавить регион"
+                    aria-label="Добавить регион"
                     style={{ visibility: isLast ? 'visible' : 'hidden' }}
                   >
                     +
@@ -428,11 +416,7 @@ export default function FilterBar({
           transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
         .input.pro:hover { background: #fff; }
-        .input.pro:focus  {
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
-          background: #fff;
-        }
+        .input.pro:focus  { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(30,144,255,.15); background: #fff; }
 
         .select {
           appearance: none;
@@ -444,19 +428,13 @@ export default function FilterBar({
           padding-right: 30px;
         }
 
-        .summary {
-          margin-top: 2px;
-          margin-bottom: 6px;
-          font-size: 12px;
-          color: var(--muted);
-          min-height: 18px;
-        }
+        .summary { margin: 2px 0 6px; font-size: 12px; color: var(--muted); min-height: 18px; }
 
         .region-multi { display: grid; gap: 8px; }
         .region-row {
           display: grid;
-          grid-template-columns: auto 1fr auto;
-          gap: 8px;
+          grid-template-columns: 1fr auto auto; /* select, minus, plus */
+          gap: 6px;
           align-items: center;
         }
         .region-select { width: 100%; }
@@ -464,31 +442,22 @@ export default function FilterBar({
         .btn.icon {
           display: inline-grid;
           place-items: center;
-          width: 28px;
-          height: 28px;
-          border-radius: 8px;
-          border: 1px solid var(--line);
-          background: #fff;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          border: 1px solid transparent;
+          background: var(--brand);
+          color: #fff;
           font-weight: 800;
           line-height: 1;
           padding: 0;
           cursor: pointer;
-          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+          transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, opacity .12s ease;
         }
-        .btn.icon:disabled {
-          opacity: 0.5;
-          cursor: default;
-        }
-        .btn.icon.plus {
-          color: var(--brand);
-          border-color: rgba(30,144,255,.35);
-        }
-        .btn.icon.plus:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(30,144,255,.18); background: #f8fbff; }
-        .btn.icon.minus {
-          color: var(--danger);
-          border-color: rgba(239,68,68,.35);
-        }
-        .btn.icon.minus:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(239,68,68,.18); background: #fff6f6; }
+        .btn.icon:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(30,144,255,.25); filter: brightness(1.03); }
+        .btn.icon.plus { background: var(--brand); }
+        .btn.icon.minus { background: var(--danger); }
+        .btn.icon:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
 
         .actions { justify-content: flex-end; }
 
