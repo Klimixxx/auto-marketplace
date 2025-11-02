@@ -99,7 +99,6 @@ export default function FilterBar({
   const regionSummary = useMemo(() => {
     if (!regionCodes.length) return 'Все регионы';
     const names = selectedRegionRecords.map((r) => r.name || r.code);
-    if (names.length <= 1) return names.join(', ');
     if (names.length <= 3) return names.join(', ');
     return `${names.length} регионов`;
   }, [regionCodes, selectedRegionRecords]);
@@ -300,7 +299,7 @@ export default function FilterBar({
                       return (
                         <li key={region.code}>
                           <label className={`select-like-option ${checked ? 'selected' : ''}`}>
-                            {/* скрытый чекбокс, чтобы строка выглядела как у обычного select */}
+                            {/* чекбокс доступен для клавиатуры, но визуально скрыт */}
                             <input
                               type="checkbox"
                               checked={checked}
@@ -518,103 +517,128 @@ export default function FilterBar({
         .btn.ghost { background: #ffffff; color: #374151; border: 1px solid #D1D5DB; }
         .btn.ghost:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(17,24,39,.08); background: #F9FAFB; border-color: #CBD5E1; color: #111827; }
 
-        /* ---------- Регионы: селект-подобный дропдаун ---------- */
+        /* ---------- Регионы: селект-подобный дропдаун (апгрейд дизайна) ---------- */
         .region-select-wrap { position: relative; }
         .region-trigger { display: flex; align-items: center; justify-content: space-between; }
         .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
         .select-like-dropdown {
           position: absolute;
-          z-index: 30;
-          top: calc(100% + 4px);
+          z-index: 40;
+          top: calc(100% + 6px);
           left: 0;
           min-width: 100%;
-          width: min(560px, calc(100vw - 40px));
-          background: #fff;
-          border: 1px solid #d1d5db;
-          border-radius: 10px;
-          box-shadow: 0 16px 32px rgba(0,0,0,.08);
+          width: min(680px, calc(100vw - 40px));
+          background: #ffffff;
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 14px;
+          box-shadow: 0 24px 60px rgba(15,23,42,.18);
           overflow: hidden;
         }
 
+        /* Липкая шапка и поиск */
         .select-like-head {
+          position: sticky;
+          top: 0;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 10px;
-          border-bottom: 1px solid #e5e7eb;
-          background: #fafafa;
+          padding: 10px 12px;
+          background: linear-gradient(180deg, #fff 0%, #f9fafb 100%);
+          border-bottom: 1px solid #eef2f7;
+          z-index: 1;
         }
         .head-left { display: grid; gap: 2px; }
+        .head-left strong { font-size: 14px; color: #0f172a; }
         .muted { color: #6b7280; font-size: 12px; }
         .head-actions { display: flex; gap: 8px; }
         .link-btn {
-          background: transparent;
-          border: none;
+          background: rgba(30,144,255,.08);
           color: #1E90FF;
+          border: none;
+          padding: 6px 10px;
+          border-radius: 999px;
           font-weight: 700;
-          padding: 6px 8px;
-          border-radius: 8px;
           cursor: pointer;
         }
-        .link-btn:disabled { color: #94a3b8; cursor: default; }
+        .link-btn:hover { background: rgba(30,144,255,.15); }
+        .link-btn:disabled { background: rgba(148,163,184,.14); color: rgba(100,116,139,.75); cursor: default; }
 
         .select-like-search {
-          padding: 8px 10px;
-          border-bottom: 1px solid #f1f5f9;
+          position: sticky;
+          top: 48px;
+          padding: 10px 12px;
           background: #fff;
+          border-bottom: 1px solid #f1f5f9;
+          z-index: 1;
         }
         .select-like-search input {
           width: 100%;
-          height: 32px;
+          height: 36px;
           border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          padding: 0 10px;
+          border-radius: 10px;
+          padding: 0 12px;
           font-size: 14px;
           outline: none;
+          background: #fff;
+          transition: border-color .15s ease, box-shadow .15s ease;
         }
         .select-like-search input:focus {
           border-color: #1E90FF;
           box-shadow: 0 0 0 3px rgba(30,144,255,.15);
         }
 
+        /* Список опций — сетка, без буллетов */
         .select-like-list {
-          max-height: 280px;
+          max-height: 320px;
           overflow-y: auto;
-          list-style: none;
           margin: 0;
-          padding: 4px 0;
+          padding: 8px;
+          list-style: none !important;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 6px;
         }
-        .select-like-list::-webkit-scrollbar { width: 8px; }
+        @media (min-width: 900px) {
+          .select-like-list { grid-template-columns: 1fr 1fr; }
+        }
+        .select-like-list::-webkit-scrollbar { width: 10px; }
         .select-like-list::-webkit-scrollbar-thumb { background: rgba(148,163,184,.45); border-radius: 999px; }
 
         .select-like-option {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 8px 12px;
+          padding: 10px 12px;
+          border: 1px solid rgba(226,232,240,.9);
+          border-radius: 10px;
+          background: #fff;
+          transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
           cursor: pointer;
-          transition: background .1s ease;
         }
-        .select-like-option:hover { background: #f3f4f6; }
-        .select-like-option input { display: none; } /* прячем чекбокс */
+        .select-like-option:hover {
+          background: #f8fafc;
+          border-color: rgba(30,144,255,.35);
+          box-shadow: 0 6px 14px rgba(2,6,23,.06);
+        }
+        /* доступность: чекбокс не видим визуально, но остаётся в DOM */
+        .select-like-option input {
+          position: absolute;
+          opacity: 0;
+          width: 0;
+          height: 0;
+          pointer-events: none;
+        }
         .select-like-option .option-text {
           flex: 1;
           font-size: 14px;
           color: #0f172a;
           line-height: 1.35;
         }
-        .select-like-option .option-check::after {
-          content: '';
-          width: 0;
-          height: 0;
-          display: inline-block;
-        }
-        .select-like-option.selected .option-check::after {
-          content: '';
-          width: 14px;
-          height: 14px;
-          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.5 9.5L2.5 6.5l1.1-1.1 1.9 1.9 4-4 1.1 1.1-5.1 5.1z' fill='%231E90FF'/%3E%3C/svg%3E");
+        /* Галочка справа у выбранных */
+        .select-like-option .option-check { width: 18px; height: 18px; }
+        .select-like-option.selected .option-check {
+          background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='9' cy='9' r='9' fill='%231E90FF'/%3E%3Cpath d='M5 9.5l2.2 2.2L13 6.9' stroke='%23fff' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
           background-repeat: no-repeat;
           background-position: center;
         }
