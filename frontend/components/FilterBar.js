@@ -224,16 +224,17 @@ export default function FilterBar({
             {rows.map((value, idx) => {
               const isLast = idx === rows.length - 1;
               const isSingleEmpty = rows.length === 1 && (rows[0] === '' || !rows[0]);
+              const canRemove = !isSingleEmpty;
               return (
                 <div className="region-row" key={idx}>
                   {/* минус слева */}
                   <button
                     type="button"
                     className="btn icon minus"
-                    onClick={() => removeRow(idx)}
-                    title="Удалить регион"
+                    onClick={() => canRemove && removeRow(idx)}
+                    title={canRemove ? 'Удалить регион' : 'Нельзя удалить единственный регион'}
                     aria-label="Удалить регион"
-                    style={{ visibility: isSingleEmpty ? 'hidden' : 'visible' }}
+                    disabled={!canRemove}
                   >
                     −
                   </button>
@@ -251,16 +252,17 @@ export default function FilterBar({
                   </select>
 
                   {/* плюс справа только у последнего */}
-                  <button
-                    type="button"
-                    className="btn icon plus"
-                    onClick={addRow}
-                    title="Добавить регион"
-                    aria-label="Добавить регион"
-                    style={{ visibility: isLast ? 'visible' : 'hidden' }}
-                  >
-                    +
-                  </button>
+                  {isLast ? (
+                    <button
+                      type="button"
+                      className="btn icon plus"
+                      onClick={addRow}
+                      title="Добавить регион"
+                      aria-label="Добавить регион"
+                    >
+                      +
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
@@ -370,7 +372,7 @@ export default function FilterBar({
           --line: #dbe3ed;
           --filters-bg: rgba(230, 238, 248, .8);
           --danger: #ef4444;
-          --icon-size: 18px; /* меньше кнопки */
+          --icon-size: 26px;
         }
 
         .filters-panel-pro {
@@ -440,40 +442,49 @@ export default function FilterBar({
         .summary { margin: 2px 0 6px; font-size: 12px; color: var(--muted); min-height: 18px; }
 
         /* меньше расстояние между строками регионов */
-        .region-multi { display: grid; gap: 4px; }
+        .region-multi { display: grid; gap: 6px; }
 
         .region-row {
-          display: grid;
-          grid-template-columns: minmax(var(--icon-size), auto) 1fr minmax(var(--icon-size), auto);
-          column-gap: 6px;
+          display: flex;
           align-items: center;
+          gap: 8px;
         }
 
-        /* Жёстко задаем места элементов в сетке */
-        .region-row .minus { grid-column: 1; }
-        .region-row .region-select { grid-column: 2; width: 100%; }
-        .region-row .plus { grid-column: 3; }
+        .region-row .region-select {
+          flex: 1;
+          width: 100%;
+        }
 
         .btn.icon {
-          display: inline-grid;
-          place-items: center;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           width: var(--icon-size);
           height: var(--icon-size);
-          border-radius: 5px;
-          border: 1px solid transparent;
-          background: var(--brand);
-          color: #fff;
-          font-weight: 800;
-          font-size: 12px;
+          min-width: var(--icon-size);
+          border-radius: 999px;
+          border: 1px solid rgba(30, 144, 255, 0.28);
+          background: #ffffff;
+          color: var(--brand);
+          font-weight: 600;
+          font-size: 14px;
           line-height: 1;
           padding: 0;
           cursor: pointer;
-          transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, opacity .12s ease;
+          transition: background .15s ease, color .15s ease, box-shadow .15s ease, border-color .15s ease;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
         }
-        .btn.icon:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(30,144,255,.25); filter: brightness(1.03); }
-        .btn.icon.plus { background: var(--brand); }
-        .btn.icon.minus { background: var(--danger); }
-        .btn.icon:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+        .btn.icon:hover { background: rgba(30,144,255,0.08); }
+        .btn.icon.plus { color: var(--brand); }
+        .btn.icon.minus { border-color: rgba(239, 68, 68, 0.35); color: var(--danger); }
+        .btn.icon:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+          border-color: rgba(148, 163, 184, 0.4);
+          color: rgba(148, 163, 184, 0.9);
+          background: rgba(248, 250, 252, 0.8);
+          box-shadow: none;
+        }
 
         .actions { justify-content: flex-end; }
 
@@ -501,3 +512,4 @@ export default function FilterBar({
     </form>
   );
 }
+
