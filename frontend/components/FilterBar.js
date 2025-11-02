@@ -47,6 +47,7 @@ export default function FilterBar({
   );
   const [meta, setMeta] = useState(EMPTY_META);
 
+  // регионы -> [{code,name}] + сортировка
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -88,6 +89,7 @@ export default function FilterBar({
     return `${names.length} регионов`;
   }, [validRegionCodes, regionOptions]);
 
+  // загрузка меты
   useEffect(() => {
     let ignore = false;
     async function loadMeta() {
@@ -115,6 +117,7 @@ export default function FilterBar({
     return () => { ignore = true; };
   }, [EMPTY_META]);
 
+  // синхронизация initial
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
@@ -125,6 +128,7 @@ export default function FilterBar({
     setMaxPrice(initial?.maxPrice || '');
   }, [initial]);
 
+  // submit/reset
   function submit(e) {
     e.preventDefault();
     onSearch({
@@ -140,7 +144,7 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegionCodes(['']);
+    setRegionCodes(['']); // оставить одну пустую строку
     setCity('');
     setBrand('');
     setTradeType('');
@@ -157,13 +161,14 @@ export default function FilterBar({
     });
   }
 
-  // ------- Регионы: несколько <select> + кнопки справа -------
+  // --- регионы: несколько select; "-" слева, "+" справа у последнего
   const rows = (regionCodes.length ? [...regionCodes] : ['']).map((v) => v || '');
 
   const handleRowChange = (rowIndex, newCode) => {
     setRegionCodes((prev) => {
       const base = prev.length ? [...prev] : [''];
       base[rowIndex] = newCode;
+      // уникализируем и убираем пустые
       const seen = new Set();
       const next = [];
       for (const c of base) {
@@ -180,9 +185,9 @@ export default function FilterBar({
   const addRow = () => {
     setRegionCodes((prev) => {
       const list = prev.length ? [...prev] : [''];
-      if (list[list.length - 1] !== '') list.push('');
-      else if (list.length === 1) list.push('');
-      return list;
+      // если последняя пустая — не добавляем ещё одну пустую
+      if (list[list.length - 1] === '') return list;
+      return [...list, ''];
     });
   };
 
@@ -220,6 +225,18 @@ export default function FilterBar({
               const isLast = idx === rows.length - 1;
               return (
                 <div className="region-row" key={idx}>
+                  {/* минус слева */}
+                  <button
+                    type="button"
+                    className="btn icon minus"
+                    onClick={() => removeRow(idx)}
+                    title="Удалить регион"
+                    aria-label="Удалить регион"
+                  >
+                    −
+                  </button>
+
+                  {/* селект */}
                   <select
                     className="input pro select region-select"
                     value={value}
@@ -231,18 +248,7 @@ export default function FilterBar({
                     ))}
                   </select>
 
-                  {/* Минус справа у каждой строки */}
-                  <button
-                    type="button"
-                    className="btn icon minus"
-                    onClick={() => removeRow(idx)}
-                    title="Удалить регион"
-                    aria-label="Удалить регион"
-                  >
-                    −
-                  </button>
-
-                  {/* Плюс справа только у последней */}
+                  {/* плюс справа только у последнего */}
                   <button
                     type="button"
                     className="btn icon plus"
@@ -433,7 +439,7 @@ export default function FilterBar({
         .region-multi { display: grid; gap: 8px; }
         .region-row {
           display: grid;
-          grid-template-columns: 1fr auto auto; /* select, minus, plus */
+          grid-template-columns: auto 1fr auto; /* minus | select | plus */
           gap: 6px;
           align-items: center;
         }
