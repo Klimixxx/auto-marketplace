@@ -84,18 +84,6 @@ function cleanFilters(input = {}) {
   return out;
 }
 
-function cleanFilters(input = {}) {
-  const out = {};
-  for (const key of FILTER_KEYS) {
-    let value = input[key];
-    if (value == null) continue;
-    if (typeof value === 'string') value = value.trim();
-    if (value === '') continue;
-    out[key] = value;
-  }
-  return out;
-}
-
 function parsePage(value) {
   const raw = Array.isArray(value) ? value[0] : value;
   const num = Number.parseInt(raw, 10);
@@ -330,5 +318,3 @@ export default function Trades() {
     </div>
   );
 }
-
-
