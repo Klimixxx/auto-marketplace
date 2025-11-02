@@ -22,6 +22,8 @@ import {
   findRegionCodeByName,
 } from '../shared/regions.js';
 
+const REGION_CODE_SET = new Set(RUSSIAN_REGIONS.map((region) => region.code));
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -61,6 +63,56 @@ async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body
   } finally {
     clearTimeout(t);
   }
+}
+
+function flattenQueryParam(value) {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => flattenQueryParam(entry));
+  }
+  const text = typeof value === 'string' ? value : String(value);
+  return text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function resolveRegionCodeFromQuery(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  const normalized = normalizeRegionCode(trimmed);
+  if (normalized && REGION_CODE_SET.has(normalized)) {
+    return normalized;
+  }
+
+  if (normalized) {
+    const digitsOnly = normalized.replace(/\D+/g, '');
+    if (digitsOnly) {
+      if (REGION_CODE_SET.has(digitsOnly)) return digitsOnly;
+      const withoutLeadingZeros = digitsOnly.replace(/^0+/, '');
+      if (withoutLeadingZeros && REGION_CODE_SET.has(withoutLeadingZeros)) {
+        return withoutLeadingZeros;
+      }
+    }
+    const byNormalizedName = findRegionCodeByName(normalized);
+    if (byNormalizedName) return byNormalizedName;
+  }
+
+  const directDigits = trimmed.replace(/\D+/g, '');
+  if (directDigits) {
+    if (REGION_CODE_SET.has(directDigits)) return directDigits;
+    const withoutLeadingZeros = directDigits.replace(/^0+/, '');
+    if (withoutLeadingZeros && REGION_CODE_SET.has(withoutLeadingZeros)) {
+      return withoutLeadingZeros;
+    }
+  }
+
+  const byName = findRegionCodeByName(trimmed);
+  if (byName) return byName;
+
+  return null;
 }
 
 const app = express();
@@ -566,26 +618,48 @@ app.get('/api/listings', async (req, res) => {
     `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
       OR vin ILIKE '%' || $${params.length} || '%')`
   );}
-  const normalizedRegionCodeParam = normalizeRegionCode(regionCodeParam);
-  if (normalizedRegionCodeParam) {
-    params.push(normalizedRegionCodeParam);
-    where.push(`region_code = $${params.length}`);
-  } else if (region) {
-    const regionTrimmed = String(region).trim();
-    if (regionTrimmed) {
-      const regionCodeFromRegion = normalizeRegionCode(regionTrimmed);
-      const knownName = regionCodeFromRegion ? getRegionNameByCode(regionCodeFromRegion) : null;
-      if (regionCodeFromRegion && knownName) {
-        params.push(regionCodeFromRegion);
-        where.push(`region_code = $${params.length}`);
-      } else {
-        const codeByName = findRegionCodeByName(regionTrimmed);
-        if (codeByName) {
-          params.push(codeByName);
-          where.push(`region_code = $${params.length}`);
+  const regionCodeValues = flattenQueryParam(regionCodeParam);
+  const normalizedRegionCodes = new Set();
+  regionCodeValues.forEach((value) => {
+    const resolved = resolveRegionCodeFromQuery(value);
+    if (resolved) normalizedRegionCodes.add(resolved);
+  });
+
+  if (normalizedRegionCodes.size) {
+    const placeholders = Array.from(normalizedRegionCodes).map((code) => {
+      params.push(code);
+      return `$${params.length}`;
+    });
+    where.push(`region_code IN (${placeholders.join(', ')})`);
+  } else {
+    const regionValues = flattenQueryParam(region);
+    if (regionValues.length) {
+      const regionCodesFromNames = new Set();
+      const plainRegionNames = new Set();
+      regionValues.forEach((value) => {
+        const resolved = resolveRegionCodeFromQuery(value);
+        if (resolved) {
+          regionCodesFromNames.add(resolved);
         } else {
-          params.push(regionTrimmed);
-          where.push(`region = $${params.length}`);
+          const trimmed = String(value ?? '').trim();
+          if (trimmed) plainRegionNames.add(trimmed);
+        }
+      });
+      if (regionCodesFromNames.size) {
+        const placeholders = Array.from(regionCodesFromNames).map((code) => {
+          params.push(code);
+          return `$${params.length}`;
+        });
+        where.push(`region_code IN (${placeholders.join(', ')})`);
+      } else if (plainRegionNames.size) {
+        const placeholders = Array.from(plainRegionNames).map((name) => {
+          params.push(name);
+          return `$${params.length}`;
+        });
+        if (placeholders.length === 1) {
+          where.push(`region = ${placeholders[0]}`);
+        } else {
+          where.push(`region IN (${placeholders.join(', ')})`);
         }
       }
     }
