@@ -185,14 +185,15 @@ export default function FilterBar({
   const addRow = () => {
     setRegionCodes((prev) => {
       const list = prev.length ? [...prev] : [''];
-      // если последняя пустая — не добавляем ещё одну пустую
-      if (list[list.length - 1] === '') return list;
+      if (list[list.length - 1] === '') return list; // не плодим пустые
       return [...list, ''];
     });
   };
 
   const removeRow = (rowIndex) => {
     setRegionCodes((prev) => {
+      const isSingleEmpty = prev.length === 1 && (prev[0] === '' || !prev[0]);
+      if (isSingleEmpty) return prev; // защищаемся
       const next = [...prev];
       next.splice(rowIndex, 1);
       return next.length ? next : [''];
@@ -223,6 +224,7 @@ export default function FilterBar({
           <div className="region-multi">
             {rows.map((value, idx) => {
               const isLast = idx === rows.length - 1;
+              const isSingleEmpty = rows.length === 1 && (rows[0] === '' || !rows[0]);
               return (
                 <div className="region-row" key={idx}>
                   {/* минус слева */}
@@ -232,6 +234,7 @@ export default function FilterBar({
                     onClick={() => removeRow(idx)}
                     title="Удалить регион"
                     aria-label="Удалить регион"
+                    style={{ visibility: isSingleEmpty ? 'hidden' : 'visible' }}
                   >
                     −
                   </button>
@@ -368,6 +371,7 @@ export default function FilterBar({
           --line: #dbe3ed;
           --filters-bg: rgba(230, 238, 248, .8);
           --danger: #ef4444;
+          --icon-size: 20px;
         }
 
         .filters-panel-pro {
@@ -439,7 +443,7 @@ export default function FilterBar({
         .region-multi { display: grid; gap: 8px; }
         .region-row {
           display: grid;
-          grid-template-columns: auto 1fr auto; /* minus | select | plus */
+          grid-template-columns: minmax(var(--icon-size), auto) 1fr minmax(var(--icon-size), auto);
           gap: 6px;
           align-items: center;
         }
@@ -448,13 +452,14 @@ export default function FilterBar({
         .btn.icon {
           display: inline-grid;
           place-items: center;
-          width: 24px;
-          height: 24px;
-          border-radius: 6px;
+          width: var(--icon-size);
+          height: var(--icon-size);
+          border-radius: 5px;
           border: 1px solid transparent;
           background: var(--brand);
           color: #fff;
           font-weight: 800;
+          font-size: 14px;
           line-height: 1;
           padding: 0;
           cursor: pointer;
