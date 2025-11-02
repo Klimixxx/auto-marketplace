@@ -52,7 +52,9 @@ export default function FilterBar({
 
   const [meta, setMeta] = useState(EMPTY_META);
   const [isRegionMenuOpen, setRegionMenuOpen] = useState(false);
+  const [regionSearchTerm, setRegionSearchTerm] = useState('');
   const regionMenuRef = useRef(null);
+  const regionSearchInputRef = useRef(null);
 
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
@@ -88,13 +90,24 @@ export default function FilterBar({
     return regionCodes.map((code) => map.get(code) || { code, name: code }).filter(Boolean);
   }, [regionCodes, regionOptions]);
 
+  const filteredRegionOptions = useMemo(() => {
+    if (!regionSearchTerm) return regionOptions;
+    const query = regionSearchTerm.trim().toLowerCase();
+    if (!query) return regionOptions;
+    return regionOptions.filter((region) => {
+      const name = region?.name ? String(region.name).toLowerCase() : '';
+      const code = region?.code ? String(region.code).toLowerCase() : '';
+      return name.includes(query) || code.includes(query);
+    });
+  }, [regionOptions, regionSearchTerm]);
+
   const regionSummary = useMemo(() => {
     if (!regionCodes.length) return 'Все регионы';
     const names = selectedRegionRecords.map((region) => region.name || region.code);
     if (names.length === 1) return names[0];
     if (names.length === 2) return names.join(', ');
     return `${names.length} регионов`;
-  }, [regionCodes.length, selectedRegionRecords]);
+  }, [regionCodes, selectedRegionRecords]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -109,6 +122,11 @@ export default function FilterBar({
 
   useEffect(() => {
     if (!isRegionMenuOpen || typeof document === 'undefined') return undefined;
+    const input = regionSearchInputRef.current;
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.select?.();
+    }
     function handleKey(event) {
       if (event.key === 'Escape') {
         setRegionMenuOpen(false);
@@ -116,6 +134,12 @@ export default function FilterBar({
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
+  }, [isRegionMenuOpen]);
+
+  useEffect(() => {
+    if (!isRegionMenuOpen) {
+      setRegionSearchTerm('');
+    }
   }, [isRegionMenuOpen]);
 
   const tradeTypeOptions = useMemo(() => {
@@ -254,28 +278,42 @@ export default function FilterBar({
                     />
                     <span>Все регионы</span>
                   </label>
-                  <div className="region-options">
-                    {regionOptions.map((region) => {
-                      const checked = regionCodes.includes(region.code);
-                      return (
-                        <label key={region.code} className={`region-option ${checked ? 'checked' : ''}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setRegionCodes((prev) => {
-                                const exists = prev.includes(region.code);
-                                if (exists) {
-                                  return prev.filter((code) => code !== region.code);
-                                }
-                                return [...prev, region.code];
-                              });
-                            }}
-                          />
-                          <span>{region.name}</span>
-                        </label>
-                      );
-                    })}
+                  <div className="region-search">
+                    <input
+                      ref={regionSearchInputRef}
+                      className="region-search-input"
+                      type="search"
+                      placeholder="Поиск региона"
+                      value={regionSearchTerm}
+                      onChange={(event) => setRegionSearchTerm(event.target.value)}
+                    />
+                  </div>
+                  <div className="region-options" role="group">
+                    {filteredRegionOptions.length ? (
+                      filteredRegionOptions.map((region) => {
+                        const checked = regionCodes.includes(region.code);
+                        return (
+                          <label key={region.code} className={`region-option ${checked ? 'checked' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setRegionCodes((prev) => {
+                                  const exists = prev.includes(region.code);
+                                  if (exists) {
+                                    return prev.filter((code) => code !== region.code);
+                                  }
+                                  return [...prev, region.code];
+                                });
+                              }}
+                            />
+                            <span>{region.name}</span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <div className="region-empty">Регион не найден</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -488,9 +526,30 @@ export default function FilterBar({
           flex-direction: column;
           max-height: 320px;
         }
+        .region-search {
+          padding: 8px 16px 12px;
+          border-bottom: 1px solid var(--line);
+          background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%);
+        }
+        .region-search-input {
+          width: 100%;
+          height: 34px;
+          border-radius: 8px;
+          border: 1px solid rgba(226,232,240,0.9);
+          padding: 0 10px;
+          font-size: 14px;
+          color: var(--text);
+          outline: none;
+          transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .region-search-input:focus {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.12);
+        }
         .region-options {
           overflow-y: auto;
           max-height: 260px;
+          padding: 4px 0 6px;
         }
         .region-option {
           display: flex;
@@ -519,6 +578,12 @@ export default function FilterBar({
           background: linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(248,250,252,0.88) 100%);
           border-bottom: 1px solid var(--line);
           z-index: 1;
+        }
+        .region-empty {
+          padding: 16px;
+          font-size: 13px;
+          color: var(--muted);
+          text-align: center;
         }
 
         .input.pro {
@@ -635,6 +700,7 @@ export default function FilterBar({
     </form>
   );
 }
+
 
 
 
