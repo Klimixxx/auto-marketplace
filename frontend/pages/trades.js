@@ -15,21 +15,71 @@ function buildApiUrl(path) {
 function extractFilters(query = {}) {
   const out = {};
   FILTER_KEYS.forEach((key) => {
-    let value = query[key];
-    if (Array.isArray(value)) value = value[value.length - 1];
+    const value = query[key];
     if (value == null) return;
-    const normalized = typeof value === 'string' ? value.trim() : value;
+    if (key === 'region_code') {
+      const list = Array.isArray(value) ? value : [value];
+      const normalizedList = list
+        .flatMap((entry) => {
+          if (entry === null || entry === undefined) return [];
+          if (Array.isArray(entry)) return entry;
+          const text = typeof entry === 'string' ? entry : String(entry);
+          return text
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean);
+        })
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry)))
+        .filter((entry) => entry !== '');
+      if (normalizedList.length) {
+        out[key] = Array.from(new Set(normalizedList));
+      }
+      return;
+    }
+    let valueToUse = value;
+    if (Array.isArray(valueToUse)) valueToUse = valueToUse[valueToUse.length - 1];
+    if (valueToUse == null) return;
+    const normalized = typeof valueToUse === 'string' ? valueToUse.trim() : valueToUse;
     if (normalized === '') return;
     out[key] = normalized;
   });
-  if (!out.region_code && query.region) {
-    const regionValue = Array.isArray(query.region) ? query.region[query.region.length - 1] : query.region;
-    if (regionValue) {
-      const trimmed = typeof regionValue === 'string' ? regionValue.trim() : regionValue;
-      if (trimmed) {
-        out.region_code = trimmed;
-      }
+  if ((!out.region_code || (Array.isArray(out.region_code) && out.region_code.length === 0)) && query.region) {
+    const regionValues = Array.isArray(query.region) ? query.region : [query.region];
+    const normalized = regionValues
+      .flatMap((entry) => {
+        if (entry === null || entry === undefined) return [];
+        if (Array.isArray(entry)) return entry;
+        const text = typeof entry === 'string' ? entry : String(entry);
+        return text
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean);
+      })
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry)))
+      .filter((entry) => entry !== '');
+    if (normalized.length) {
+      out.region_code = Array.from(new Set(normalized));
     }
+  }
+  return out;
+}
+
+function cleanFilters(input = {}) {
+  const out = {};
+  for (const key of FILTER_KEYS) {
+    let value = input[key];
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      const normalized = value
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry)))
+        .filter((entry) => entry !== '');
+      if (!normalized.length) continue;
+      out[key] = Array.from(new Set(normalized));
+      continue;
+    }
+    if (typeof value === 'string') value = value.trim();
+    if (value === '') continue;
+    out[key] = value;
   }
   return out;
 }
@@ -124,9 +174,23 @@ export default function Trades() {
     setError(null);
     const params = new URLSearchParams();
     Object.entries(filtersValue || {}).forEach(([key, value]) => {
-      if (value != null && value !== '') {
-        params.set(key, value);
+      if (value == null) return;
+      if (Array.isArray(value)) {
+        value.forEach((entry) => {
+          if (entry == null) return;
+          const normalized = typeof entry === 'string' ? entry.trim() : String(entry);
+          if (normalized === '') return;
+          params.append(key, normalized);
+        });
+        return;
       }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed === '') return;
+        params.set(key, trimmed);
+        return;
+      }
+      params.set(key, value);
     });
     params.set('page', pageValue);
     params.set('limit', '20');
@@ -266,4 +330,5 @@ export default function Trades() {
     </div>
   );
 }
+
 
