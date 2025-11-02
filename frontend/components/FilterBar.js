@@ -253,7 +253,6 @@ export default function FilterBar({
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            {/* иконку поиска убрали по ТЗ */}
           </div>
         </label>
 
@@ -396,7 +395,6 @@ export default function FilterBar({
               value={minPrice}
               onChange={(e) => setMinPrice(e.target.value)}
             />
-            {/* Убрали символ ₽ */}
           </div>
         </label>
 
@@ -410,50 +408,44 @@ export default function FilterBar({
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
             />
-            {/* Убрали символ ₽ */}
           </div>
         </label>
 
-       
         {/* Кнопки */}
-<div
-  className="actions col-span-12"
-  style={{
-    display: 'flex',
-    justifyContent: 'flex-end', // ← всё вправо в одну линию
-    gap: 8,
-    alignItems: 'center',
-    marginTop: 4,
-  }}
->
-  <button type="button" className="btn secondary hover-reset" onClick={resetFilters}>
-    Сбросить
-  </button>
-  <button type="submit" className="btn primary">
-    Показать
-  </button>
+        <div
+          className="actions col-span-12"
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            alignItems: 'center',
+            marginTop: 4,
+          }}
+        >
+          <button type="button" className="btn secondary hover-reset" onClick={resetFilters}>
+            Сбросить
+          </button>
+          <button type="submit" className="btn primary">
+            Показать
+          </button>
 
-  {/* Кнопка "Мои избранные" — вправо и с нейтральным стилем */}
-  {showFavoritesLink ? (
-    <Link
-      href="/favorites"
-      className="btn ghost fav-btn"
-      style={{
-        background: '#ffffff',          // принудительно белая
-        color: '#374151',               // серо-графитовый текст
-        border: '1px solid #D1D5DB',    // светло-серый бордер
-        whiteSpace: 'nowrap',
-      }}
-    >
-      Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
-    </Link>
-  ) : null}
-</div>
-</div> 
+          {showFavoritesLink ? (
+            <Link
+              href="/favorites"
+              className="btn ghost fav-btn"
+              style={{
+                background: '#ffffff',
+                color: '#374151',
+                border: '1px solid #D1D5DB',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
+            </Link>
+          ) : null}
+        </div>
+      </div>
 
-
-
-      {/* Стили: компактный размер и полупрозрачный голубой фон */}
       <style jsx>{`
         :root {
           --brand: #1E90FF;
@@ -472,7 +464,6 @@ export default function FilterBar({
           backdrop-filter: saturate(1.05) blur(1.5px);
         }
 
-        /* 12-колоночная сетка + адаптивные помощники */
         .row.compact {
           display: grid;
           grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -498,7 +489,7 @@ export default function FilterBar({
         .field { display: grid; gap: 4px; }
         .label {
           font-size: 11px;
-          color: var(--brand);      /* подписи стали синими */
+          color: var(--brand);
           font-weight: 600;
         }
 
@@ -725,7 +716,6 @@ export default function FilterBar({
           background: #fff;
         }
 
-        /* кастомная стрелка для select */
         .select {
           appearance: none;
           -webkit-appearance: none;
@@ -736,17 +726,9 @@ export default function FilterBar({
           padding-right: 30px;
         }
 
-        /* иконку поиска и суффикс ₽ мы удалили, соответствующие стили не нужны */
-
         .actions {
-  display: flex;
-  justify-content: flex-end; /* всё уводим вправо в одну линию */
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-.right-actions { display: flex; gap: 8px; }
-
+          justify-content: flex-end;
+        }
 
         .btn {
           height: 38px;
@@ -776,54 +758,27 @@ export default function FilterBar({
           box-shadow: 0 6px 14px rgba(17,24,39,.08);
           background: #fff;
         }
-        /* Менее синий, нейтрально-серый стиль для "Мои избранные" */
-.btn.ghost {
-  background: #ffffff;
-  color: #374151;              /* slate-700 */
-  border: 1px solid #D1D5DB;   /* gray-300 */
-}
-.btn.ghost:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(17,24,39,.08); /* мягкая тень */
-  background: #F9FAFB;         /* gray-50 */
-  border-color: #CBD5E1;       /* slate-300 */
-  color: #111827;              /* slate-900 */
-}
 
+        .btn.ghost {
+          background: #ffffff;
+          color: #374151;
+          border: 1px solid #D1D5DB;
+        }
+        .btn.ghost:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 14px rgba(17,24,39,.08);
+          background: #F9FAFB;
+          border-color: #CBD5E1;
+          color: #111827;
+        }
 
         @media (max-width: 719.98px) {
           .filters-panel-pro { padding: 10px; }
           .actions { flex-direction: column; align-items: stretch; }
-          .right-actions { justify-content: stretch; }
           .region-dropdown { width: calc(100vw - 32px); }
           .region-options { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-        }</style>
-        <style jsx>{`
-  /* Контейнер действий: всё вправо — для надёжности (если снимешь inline-стили) */
-  .actions {
-    justify-content: flex-end;
-  }
-
-  /* Серая версия кнопки "Мои избранные" поверх глобальных .btn правил */
-  :global(.fav-btn) {
-    background: #ffffff !important;
-    color: #374151 !important;
-    border: 1px solid #D1D5DB !important;
-  }
-  :global(.fav-btn:hover) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 14px rgba(17,24,39,.08);
-    background: #F9FAFB !important;
-    border-color: #CBD5E1 !important;
-    color: #111827 !important;
-  }
-`}</style>
-
+        }
+      `}</style>
     </form>
   );
 }
-
-
-
-
-
