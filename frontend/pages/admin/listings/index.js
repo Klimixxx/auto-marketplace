@@ -88,11 +88,38 @@ function cleanFilters(input = {}) {
   const result = {};
   Object.entries(input || {}).forEach(([key, rawValue]) => {
     if (rawValue == null) return;
+    if (Array.isArray(rawValue)) {
+      const normalized = rawValue
+        .map((entry) => {
+          if (entry == null) return null;
+          const text = typeof entry === 'string' ? entry.trim() : String(entry);
+          return text === '' ? null : text;
+        })
+        .filter(Boolean);
+      if (!normalized.length) return;
+      result[key] = Array.from(new Set(normalized));
+      return;
+    }
     const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
     if (value === '') return;
     result[key] = value;
   });
   return result;
+}
+
+function pickPrimaryRegionCode(value) {
+  if (value == null) return '';
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (entry == null) continue;
+      const text = typeof entry === 'string' ? entry.trim() : String(entry);
+      if (text) return text;
+    }
+    return '';
+  }
+  if (typeof value === 'string') return value.trim();
+  const text = String(value);
+  return text === 'undefined' ? '' : text;
 }
 
 function formatNumber(value) {
@@ -227,11 +254,13 @@ export default function AdminParserTradesPage() {
       }
 
       const params = new URLSearchParams();
-      if (typeof searchTerm === 'string' && searchTerm.trim()) {
-        params.set('search', resolveSearchTerm(searchTerm));
+      const normalizedSearch = typeof searchTerm === 'string' ? searchTerm.trim() : '';
+      if (normalizedSearch) {
+        params.set('search', resolveSearchTerm(normalizedSearch));
       }
-      if (regionCode) {
-        params.set('region_code', regionCode);
+      const normalizedRegion = pickPrimaryRegionCode(regionCode);
+      if (normalizedRegion) {
+        params.set('region_code', normalizedRegion);
       }
 
       const qs = params.toString();
@@ -273,7 +302,14 @@ export default function AdminParserTradesPage() {
       const activeFilters = cleanFilters(filtersOverride ?? filters);
       if (activeFilters.q) params.set('q', activeFilters.q);
       if (activeFilters.region_code) {
-        params.set('region_code', activeFilters.region_code);
+        const regionFilter = activeFilters.region_code;
+        if (Array.isArray(regionFilter)) {
+          regionFilter.forEach((code) => {
+            if (code) params.append('region_code', code);
+          });
+        } else {
+          params.set('region_code', regionFilter);
+        }
       } else if (activeFilters.region) {
         params.set('region_code', activeFilters.region);
       }
@@ -319,8 +355,9 @@ export default function AdminParserTradesPage() {
 
   useEffect(() => {
     if (view === 'drafts') {
-      const searchTerm = resolveSearchTerm(filters.q || '');
-      fetchProgress(searchTerm, filters.region_code || '');
+      const searchTerm = filters.q || '';
+      const primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
+      fetchProgress(searchTerm, primaryRegionCode);
     } else {
       applyProgress(null);
     }
@@ -346,8 +383,8 @@ export default function AdminParserTradesPage() {
       }
 
       const searchTerm = resolveSearchTerm(filters.q || '');
-      const regionCode = filters.region_code || '';
-      if (!regionCode) {
+      const primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
+      if (!primaryRegionCode) {
         alert('Выберите регион перед запуском парсинга.');
         return;
       }
@@ -366,7 +403,7 @@ export default function AdminParserTradesPage() {
             search: searchTerm,
             limit: PARSER_PAGE_SIZE,
             offset: offsetToUse,
-            region_code: regionCode,
+            region_code: primaryRegionCode,
           }),
         });
         const data = await res.json().catch(() => null);
@@ -383,7 +420,7 @@ export default function AdminParserTradesPage() {
           const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
           const fallbackProgress = {
             search_term: searchTerm,
-            region_code: regionCode,
+            region_code: primaryRegionCode,
             next_offset: Number.isFinite(Number(data.next_offset))
               ? Number(data.next_offset)
               : baseOffset + (receivedCount || limitUsed),
@@ -403,7 +440,7 @@ export default function AdminParserTradesPage() {
             `Текущий offset: ${Number(data.offset) || offsetToUse}, следующий: ${Number(data.next_offset) || nextOffset}.`,
         );
         await loadPage(1);
-        await fetchProgress(searchTerm, regionCode);
+        await fetchProgress(searchTerm, primaryRegionCode);
       } catch (error) {
         console.error('ingest error:', error);
         alert(`Ошибка: ${error.message || 'ingest failed'}`);
@@ -740,6 +777,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
