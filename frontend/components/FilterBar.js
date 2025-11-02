@@ -161,14 +161,13 @@ export default function FilterBar({
     });
   }
 
-  // --- регионы: несколько select; "-" слева, "+" справа у последнего
+  // --- регионы: несколько select
   const rows = (regionCodes.length ? [...regionCodes] : ['']).map((v) => v || '');
 
   const handleRowChange = (rowIndex, newCode) => {
     setRegionCodes((prev) => {
       const base = prev.length ? [...prev] : [''];
       base[rowIndex] = newCode;
-      // уникализируем и убираем пустые
       const seen = new Set();
       const next = [];
       for (const c of base) {
@@ -185,7 +184,7 @@ export default function FilterBar({
   const addRow = () => {
     setRegionCodes((prev) => {
       const list = prev.length ? [...prev] : [''];
-      if (list[list.length - 1] === '') return list; // не плодим пустые
+      if (list[list.length - 1] === '') return list;
       return [...list, ''];
     });
   };
@@ -193,7 +192,7 @@ export default function FilterBar({
   const removeRow = (rowIndex) => {
     setRegionCodes((prev) => {
       const isSingleEmpty = prev.length === 1 && (prev[0] === '' || !prev[0]);
-      if (isSingleEmpty) return prev; // защищаемся
+      if (isSingleEmpty) return prev;
       const next = [...prev];
       next.splice(rowIndex, 1);
       return next.length ? next : [''];
@@ -239,7 +238,7 @@ export default function FilterBar({
                     −
                   </button>
 
-                  {/* селект */}
+                  {/* селект по центру */}
                   <select
                     className="input pro select region-select"
                     value={value}
@@ -371,7 +370,7 @@ export default function FilterBar({
           --line: #dbe3ed;
           --filters-bg: rgba(230, 238, 248, .8);
           --danger: #ef4444;
-          --icon-size: 20px;
+          --icon-size: 18px; /* меньше кнопки */
         }
 
         .filters-panel-pro {
@@ -416,7 +415,7 @@ export default function FilterBar({
 
         .input.pro {
           width: 100%;
-          height: 38px;
+          height: 36px; /* чуть ниже */
           border: 1px solid var(--line);
           border-radius: 10px;
           padding: 0 12px;
@@ -440,14 +439,20 @@ export default function FilterBar({
 
         .summary { margin: 2px 0 6px; font-size: 12px; color: var(--muted); min-height: 18px; }
 
-        .region-multi { display: grid; gap: 8px; }
+        /* меньше расстояние между строками регионов */
+        .region-multi { display: grid; gap: 4px; }
+
         .region-row {
           display: grid;
           grid-template-columns: minmax(var(--icon-size), auto) 1fr minmax(var(--icon-size), auto);
-          gap: 6px;
+          column-gap: 6px;
           align-items: center;
         }
-        .region-select { width: 100%; }
+
+        /* Жёстко задаем места элементов в сетке */
+        .region-row .minus { grid-column: 1; }
+        .region-row .region-select { grid-column: 2; width: 100%; }
+        .region-row .plus { grid-column: 3; }
 
         .btn.icon {
           display: inline-grid;
@@ -459,7 +464,7 @@ export default function FilterBar({
           background: var(--brand);
           color: #fff;
           font-weight: 800;
-          font-size: 14px;
+          font-size: 12px;
           line-height: 1;
           padding: 0;
           cursor: pointer;
