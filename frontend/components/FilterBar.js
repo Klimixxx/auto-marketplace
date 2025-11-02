@@ -12,14 +12,9 @@ function normalizeRegionCodes(value) {
   if (value === undefined || value === null) return [];
   const toArray = (input) => {
     if (input === undefined || input === null) return [];
-    if (Array.isArray(input)) {
-      return input.flatMap((entry) => toArray(entry));
-    }
+    if (Array.isArray(input)) return input.flatMap((entry) => toArray(entry));
     const text = typeof input === 'string' ? input : String(input);
-    return text
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean);
+    return text.split(',').map((p) => p.trim()).filter(Boolean);
   };
   const flattened = toArray(value);
   const unique = new Set();
@@ -45,20 +40,19 @@ export default function FilterBar({
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
   const [minPrice, setMinPrice] = useState(initial?.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(initial?.maxPrice || '');
+
   const EMPTY_META = useMemo(
     () => ({ regions: RUSSIAN_REGIONS, cities: [], brands: [], tradeTypes: [] }),
     []
   );
-
   const [meta, setMeta] = useState(EMPTY_META);
 
-  // --- Регион: состояние выпадающего списка
+  // -------- Регионы: селект-подобный дропдаун ----------
   const [isRegionMenuOpen, setRegionMenuOpen] = useState(false);
   const [regionSearchTerm, setRegionSearchTerm] = useState('');
   const regionMenuRef = useRef(null);
   const regionSearchInputRef = useRef(null);
 
-  // Собираем опции регионов (мета + fallback), нормализуем {code, name}
   const regionOptions = useMemo(() => {
     const fallback = Array.isArray(RUSSIAN_REGIONS) ? RUSSIAN_REGIONS : [];
     const metaRegions = Array.isArray(meta.regions) && meta.regions.length ? meta.regions : fallback;
@@ -73,9 +67,7 @@ export default function FilterBar({
       if (!entry) return;
       if (typeof entry === 'string') {
         const code = entry;
-        if (!map.has(code)) {
-          map.set(code, { code, name: code });
-        }
+        if (!map.has(code)) map.set(code, { code, name: code });
       } else if (typeof entry === 'object') {
         const code = entry.code ?? entry.value ?? entry.id;
         if (!code) return;
@@ -89,76 +81,66 @@ export default function FilterBar({
 
   const selectedRegionRecords = useMemo(() => {
     if (!Array.isArray(regionCodes) || !regionCodes.length) return [];
-    const map = new Map(regionOptions.map((region) => [region.code, region]));
+    const map = new Map(regionOptions.map((r) => [r.code, r]));
     return regionCodes.map((code) => map.get(code) || { code, name: code }).filter(Boolean);
   }, [regionCodes, regionOptions]);
 
   const filteredRegionOptions = useMemo(() => {
     if (!regionSearchTerm) return regionOptions;
-    const query = regionSearchTerm.trim().toLowerCase();
-    if (!query) return regionOptions;
-    return regionOptions.filter((region) => {
-      const name = region?.name ? String(region.name).toLowerCase() : '';
-      const code = region?.code ? String(region.code).toLowerCase() : '';
-      return name.includes(query) || code.includes(query);
+    const q = regionSearchTerm.trim().toLowerCase();
+    if (!q) return regionOptions;
+    return regionOptions.filter((r) => {
+      const name = r?.name ? String(r.name).toLowerCase() : '';
+      const code = r?.code ? String(r.code).toLowerCase() : '';
+      return name.includes(q) || code.includes(q);
     });
   }, [regionOptions, regionSearchTerm]);
 
   const regionSummary = useMemo(() => {
     if (!regionCodes.length) return 'Все регионы';
-    const names = selectedRegionRecords.map((region) => region.name || region.code);
+    const names = selectedRegionRecords.map((r) => r.name || r.code);
+    if (names.length <= 1) return names.join(', ');
     if (names.length <= 3) return names.join(', ');
     return `${names.length} регионов`;
   }, [regionCodes, selectedRegionRecords]);
 
   const canResetRegions = regionCodes.length > 0 || regionSearchTerm.trim().length > 0;
 
-  // Клик снаружи — закрываем меню
   useEffect(() => {
-    if (typeof document === 'undefined') return undefined;
-    function handleClickOutside(event) {
+    if (typeof document === 'undefined') return;
+    function handleClickOutside(e) {
       if (!regionMenuRef.current) return;
-      if (regionMenuRef.current.contains(event.target)) return;
+      if (regionMenuRef.current.contains(e.target)) return;
       setRegionMenuOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Фокус в поиске + Esc
   useEffect(() => {
-    if (!isRegionMenuOpen || typeof document === 'undefined') return undefined;
+    if (!isRegionMenuOpen || typeof document === 'undefined') return;
     const input = regionSearchInputRef.current;
-    if (input) {
-      input.focus({ preventScroll: true });
-      input.select?.();
+    input?.focus({ preventScroll: true });
+    function onKey(e) {
+      if (e.key === 'Escape') setRegionMenuOpen(false);
     }
-    function handleKey(event) {
-      if (event.key === 'Escape') {
-        setRegionMenuOpen(false);
-      }
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [isRegionMenuOpen]);
 
-  // Очистка строки поиска при закрытии
   useEffect(() => {
-    if (!isRegionMenuOpen) {
-      setRegionSearchTerm('');
-    }
+    if (!isRegionMenuOpen) setRegionSearchTerm('');
   }, [isRegionMenuOpen]);
 
-  // Список типов торгов (с приоритетом)
+  // --------- Типы торгов ----------
   const tradeTypeOptions = useMemo(() => {
     const normalized = new Set();
     const preferredOrder = ['public_offer', 'open_auction'];
-    preferredOrder.forEach((code) => normalized.add(code));
+    preferredOrder.forEach((c) => normalized.add(c));
     (meta.tradeTypes || []).forEach((value) => {
       const code = normalizeTradeTypeCode(value);
       if (code) normalized.add(code);
     });
-
     const options = Array.from(normalized);
     options.sort((a, b) => {
       const ia = preferredOrder.indexOf(a);
@@ -166,16 +148,14 @@ export default function FilterBar({
       if (ia !== -1 && ib !== -1) return ia - ib;
       if (ia !== -1) return -1;
       if (ib !== -1) return 1;
-
-      const labelA = TRADE_TYPE_LABELS[a] || formatTradeTypeLabel(a) || a;
-      const labelB = TRADE_TYPE_LABELS[b] || formatTradeTypeLabel(b) || b;
-      return labelA.localeCompare(labelB, 'ru');
+      const la = TRADE_TYPE_LABELS[a] || formatTradeTypeLabel(a) || a;
+      const lb = TRADE_TYPE_LABELS[b] || formatTradeTypeLabel(b) || b;
+      return la.localeCompare(lb, 'ru');
     });
-
     return options;
   }, [meta.tradeTypes]);
 
-  // Загрузка метаданных для фильтров
+  // --------- Загрузка меты ----------
   useEffect(() => {
     let ignore = false;
     async function loadMeta() {
@@ -184,15 +164,14 @@ export default function FilterBar({
         if (!res.ok) throw new Error('meta');
         const data = await res.json();
         if (!ignore) {
-          const next =
-            data && typeof data === 'object' && !Array.isArray(data)
-              ? {
-                  regions: Array.isArray(data.regions) && data.regions.length ? data.regions : RUSSIAN_REGIONS,
-                  cities: Array.isArray(data.cities) ? data.cities : [],
-                  brands: Array.isArray(data.brands) ? data.brands : [],
-                  tradeTypes: Array.isArray(data.tradeTypes) ? data.tradeTypes : [],
-                }
-              : EMPTY_META;
+          const next = data && typeof data === 'object' && !Array.isArray(data)
+            ? {
+                regions: Array.isArray(data.regions) && data.regions.length ? data.regions : RUSSIAN_REGIONS,
+                cities: Array.isArray(data.cities) ? data.cities : [],
+                brands: Array.isArray(data.brands) ? data.brands : [],
+                tradeTypes: Array.isArray(data.tradeTypes) ? data.tradeTypes : [],
+              }
+            : EMPTY_META;
           setMeta(next);
         }
       } catch (e) {
@@ -204,7 +183,7 @@ export default function FilterBar({
     return () => { ignore = true; };
   }, [EMPTY_META]);
 
-  // Сбрасываем локальные состояния при смене initial
+  // --------- Сброс при смене initial ----------
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
@@ -264,35 +243,34 @@ export default function FilterBar({
           </div>
         </label>
 
-        {/* Регион — упрощённый кастомный «select» с мультивыбором и поиском */}
+        {/* Регион — выглядит как обычный select, но с мультивыбором */}
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Регион</span>
-          <div className="custom-select" ref={regionMenuRef}>
+          <div className="region-select-wrap" ref={regionMenuRef}>
             <button
               type="button"
-              className={`select-display ${isRegionMenuOpen ? 'open' : ''}`}
-              onClick={() => setRegionMenuOpen((prev) => !prev)}
+              className={`input pro select region-trigger ${isRegionMenuOpen ? 'open' : ''}`}
+              onClick={() => setRegionMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={isRegionMenuOpen}
               title={regionSummary}
             >
-              <span className="select-text">{regionSummary}</span>
-              <span aria-hidden="true" className={`select-caret ${isRegionMenuOpen ? 'up' : ''}`} />
+              <span className="truncate">{regionSummary}</span>
             </button>
 
             {isRegionMenuOpen && (
-              <div className="select-dropdown" role="listbox" aria-multiselectable="true">
-                <div className="dropdown-head">
-                  <div className="dropdown-title">
-                    <span className="headline">Выбор регионов</span>
-                    <span className="subline">
+              <div className="select-like-dropdown" role="listbox" aria-multiselectable="true">
+                <div className="select-like-head">
+                  <div className="head-left">
+                    <strong>Выбор регионов</strong>
+                    <span className="muted">
                       {regionCodes.length ? `Выбрано: ${regionCodes.length}` : 'Все регионы'}
                     </span>
                   </div>
-                  <div className="dropdown-actions">
+                  <div className="head-actions">
                     <button
                       type="button"
-                      className={`clear-btn ${canResetRegions ? '' : 'disabled'}`.trim()}
+                      className="link-btn"
                       disabled={!canResetRegions}
                       onClick={() => {
                         if (!canResetRegions) return;
@@ -305,8 +283,7 @@ export default function FilterBar({
                   </div>
                 </div>
 
-                <div className="select-search">
-                  <span className="search-icon" aria-hidden="true" />
+                <div className="select-like-search">
                   <input
                     ref={regionSearchInputRef}
                     type="search"
@@ -317,31 +294,36 @@ export default function FilterBar({
                 </div>
 
                 {filteredRegionOptions.length ? (
-                  <div className="select-options" role="group" aria-label="Список регионов">
+                  <ul className="select-like-list">
                     {filteredRegionOptions.map((region) => {
                       const checked = regionCodes.includes(region.code);
                       return (
-                        <label key={region.code} className={`option ${checked ? 'checked' : ''}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setRegionCodes((prev) => {
-                                const exists = prev.includes(region.code);
-                                if (exists) return prev.filter((c) => c !== region.code);
-                                return [...prev, region.code];
-                              });
-                            }}
-                          />
-                          <span className="option-name">{region.name}</span>
-                        </label>
+                        <li key={region.code}>
+                          <label className={`select-like-option ${checked ? 'selected' : ''}`}>
+                            {/* скрытый чекбокс, чтобы строка выглядела как у обычного select */}
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setRegionCodes((prev) => {
+                                  const exists = prev.includes(region.code);
+                                  if (exists) return prev.filter((c) => c !== region.code);
+                                  return [...prev, region.code];
+                                });
+                              }}
+                              aria-label={region.name}
+                            />
+                            <span className="option-text">{region.name}</span>
+                            <span className="option-check" aria-hidden="true" />
+                          </label>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 ) : (
-                  <div className="empty">
+                  <div className="select-like-empty">
                     <strong>Ничего не нашлось</strong>
-                    <span>Попробуйте изменить запрос</span>
+                    <span className="muted">Измените запрос</span>
                   </div>
                 )}
               </div>
@@ -420,13 +402,7 @@ export default function FilterBar({
         {/* Кнопки */}
         <div
           className="actions col-span-12"
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: 8,
-            alignItems: 'center',
-            marginTop: 4,
-          }}
+          style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', marginTop: 4 }}
         >
           <button type="button" className="btn secondary hover-reset" onClick={resetFilters}>
             Сбросить
@@ -439,12 +415,7 @@ export default function FilterBar({
             <Link
               href="/favorites"
               className="btn ghost fav-btn"
-              style={{
-                background: '#ffffff',
-                color: '#374151',
-                border: '1px solid #D1D5DB',
-                whiteSpace: 'nowrap',
-              }}
+              style={{ background: '#ffffff', color: '#374151', border: '1px solid #D1D5DB', whiteSpace: 'nowrap' }}
             >
               Мои избранные{favoritesCount ? ` (${favoritesCount})` : ''}
             </Link>
@@ -540,215 +511,123 @@ export default function FilterBar({
           border: none;
           transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
         }
-        .btn.primary {
-          background: #1E90FF;
-          color: #fff;
-        }
-        .btn.primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 18px rgba(30,144,255,.28);
-          filter: brightness(1.03);
-        }
-        .btn.secondary {
-          background: rgba(255,255,255,.8);
-          color: #111827;
-          border: 1px solid var(--line);
-        }
-        .btn.secondary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 14px rgba(17,24,39,.08);
-          background: #fff;
-        }
-        .btn.ghost {
-          background: #ffffff;
-          color: #374151;
-          border: 1px solid #D1D5DB;
-        }
-        .btn.ghost:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 14px rgba(17,24,39,.08);
-          background: #F9FAFB;
-          border-color: #CBD5E1;
-          color: #111827;
-        }
+        .btn.primary { background: #1E90FF; color: #fff; }
+        .btn.primary:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(30,144,255,.28); filter: brightness(1.03); }
+        .btn.secondary { background: rgba(255,255,255,.8); color: #111827; border: 1px solid var(--line); }
+        .btn.secondary:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(17,24,39,.08); background: #fff; }
+        .btn.ghost { background: #ffffff; color: #374151; border: 1px solid #D1D5DB; }
+        .btn.ghost:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(17,24,39,.08); background: #F9FAFB; border-color: #CBD5E1; color: #111827; }
 
-        /* ---- Новый кастомный select для регионов ---- */
-        .custom-select { position: relative; width: 100%; }
-        .select-display {
-          width: 100%;
-          height: 38px;
-          border: 1px solid var(--line);
-          border-radius: 10px;
-          padding: 0 36px 0 12px;
-          background: rgba(255,255,255,.8);
-          color: var(--text);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-        }
-        .select-display:hover { background: #fff; }
-        .select-display.open {
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
-          background: #fff;
-        }
-        .select-text {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          flex: 1;
-        }
-        .select-caret {
-          position: absolute;
-          right: 10px;
-          width: 14px;
-          height: 14px;
-          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%23758596' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: center;
-          transition: transform .18s ease;
-        }
-        .select-caret.up { transform: rotate(180deg); }
+        /* ---------- Регионы: селект-подобный дропдаун ---------- */
+        .region-select-wrap { position: relative; }
+        .region-trigger { display: flex; align-items: center; justify-content: space-between; }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
-        .select-dropdown {
+        .select-like-dropdown {
           position: absolute;
-          z-index: 20;
-          top: calc(100% + 6px);
+          z-index: 30;
+          top: calc(100% + 4px);
           left: 0;
           min-width: 100%;
-          width: min(540px, calc(100vw - 32px));
+          width: min(560px, calc(100vw - 40px));
           background: #fff;
-          border: 1px solid rgba(203, 213, 225, 0.65);
-          border-radius: 12px;
-          box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
-          padding: 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          max-height: 320px;
+          border: 1px solid #d1d5db;
+          border-radius: 10px;
+          box-shadow: 0 16px 32px rgba(0,0,0,.08);
           overflow: hidden;
         }
 
-        .dropdown-head {
+        .select-like-head {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          padding: 0 2px;
+          padding: 8px 10px;
+          border-bottom: 1px solid #e5e7eb;
+          background: #fafafa;
         }
-        .dropdown-title { display: flex; flex-direction: column; gap: 2px; }
-        .headline { font-size: 14px; font-weight: 700; color: var(--text); }
-        .subline {
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: .04em;
-          color: var(--muted);
-        }
-        .clear-btn {
+        .head-left { display: grid; gap: 2px; }
+        .muted { color: #6b7280; font-size: 12px; }
+        .head-actions { display: flex; gap: 8px; }
+        .link-btn {
+          background: transparent;
           border: none;
-          background: rgba(30,144,255,.08);
-          color: var(--brand);
-          border-radius: 999px;
-          padding: 0 12px;
-          height: 28px;
-          font-size: 12px;
+          color: #1E90FF;
           font-weight: 700;
+          padding: 6px 8px;
+          border-radius: 8px;
           cursor: pointer;
-          transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
         }
-        .clear-btn:hover {
-          background: rgba(30,144,255,.15);
-          box-shadow: 0 6px 16px rgba(30,144,255,.2);
-          transform: translateY(-1px);
-        }
-        .clear-btn.disabled,
-        .clear-btn:disabled {
-          background: rgba(148,163,184,0.14);
-          color: rgba(100,116,139,0.7);
-          cursor: default;
-          box-shadow: none;
-          transform: none;
-        }
+        .link-btn:disabled { color: #94a3b8; cursor: default; }
 
-        .select-search {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid rgba(226,232,240,0.9);
-          border-radius: 10px;
-          padding: 0 10px;
-          height: 36px;
-          background: linear-gradient(180deg, rgba(248,250,252,0.94) 0%, rgba(255,255,255,0.96) 100%);
-          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-        }
-        .select-search:focus-within {
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(30,144,255,.14);
+        .select-like-search {
+          padding: 8px 10px;
+          border-bottom: 1px solid #f1f5f9;
           background: #fff;
         }
-        .search-icon {
-          width: 16px; height: 16px; flex-shrink: 0;
-          background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.188 11.188l3.07 3.07-1.06 1.06-3.07-3.07a6 6 0 1 1 1.06-1.06zM7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z' fill='%238B97A8'/%3E%3C/svg%3E");
-          background-repeat: no-repeat; background-position: center; opacity: .7;
+        .select-like-search input {
+          width: 100%;
+          height: 32px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 0 10px;
+          font-size: 14px;
+          outline: none;
         }
-        .select-search input {
-          flex: 1; border: none; outline: none; background: transparent;
-          font-size: 14px; color: var(--text);
+        .select-like-search input:focus {
+          border-color: #1E90FF;
+          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
         }
 
-        .select-options {
+        .select-like-list {
+          max-height: 280px;
           overflow-y: auto;
-          padding-right: 4px;
+          list-style: none;
+          margin: 0;
+          padding: 4px 0;
+        }
+        .select-like-list::-webkit-scrollbar { width: 8px; }
+        .select-like-list::-webkit-scrollbar-thumb { background: rgba(148,163,184,.45); border-radius: 999px; }
+
+        .select-like-option {
           display: flex;
-          flex-direction: column;
-          gap: 4px;
-          max-height: 220px;
-        }
-        .select-options::-webkit-scrollbar { width: 8px; }
-        .select-options::-webkit-scrollbar-thumb {
-          background: rgba(148,163,184,0.45); border-radius: 999px;
-        }
-
-        .option {
-          display: flex; align-items: center; gap: 10px;
-          padding: 8px 10px;
-          border-radius: 10px;
-          background: rgba(255,255,255,0.9);
-          border: 1px solid rgba(148,163,184,0.25);
-          font-size: 14px; color: var(--text);
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
           cursor: pointer;
-          transition: background .1s ease, border-color .1s ease;
+          transition: background .1s ease;
         }
-        .option:hover {
-          background: rgba(30,144,255,.08);
-          border-color: rgba(30,144,255,.25);
+        .select-like-option:hover { background: #f3f4f6; }
+        .select-like-option input { display: none; } /* прячем чекбокс */
+        .select-like-option .option-text {
+          flex: 1;
+          font-size: 14px;
+          color: #0f172a;
+          line-height: 1.35;
         }
-        .option.checked {
-          background: rgba(30,144,255,.12);
-          border-color: rgba(30,144,255,.4);
-          font-weight: 600;
+        .select-like-option .option-check::after {
+          content: '';
+          width: 0;
+          height: 0;
+          display: inline-block;
         }
-        .option input { margin-top: 0; flex-shrink: 0; accent-color: var(--brand); }
-        .option-name { flex: 1; line-height: 1.35; word-break: break-word; }
+        .select-like-option.selected .option-check::after {
+          content: '';
+          width: 14px;
+          height: 14px;
+          background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.5 9.5L2.5 6.5l1.1-1.1 1.9 1.9 4-4 1.1 1.1-5.1 5.1z' fill='%231E90FF'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: center;
+        }
 
-        .empty {
-          display: grid; place-items: center;
-          gap: 6px; padding: 28px 16px;
-          border-radius: 10px;
-          border: 1px dashed rgba(148,163,184,0.35);
-          background: rgba(248,250,252,0.92);
-          color: var(--muted);
-          font-size: 13px;
+        .select-like-empty {
+          padding: 28px 16px;
           text-align: center;
         }
-        .empty strong { color: var(--text); font-size: 14px; }
 
         @media (max-width: 719.98px) {
           .filters-panel-pro { padding: 10px; }
           .actions { flex-direction: column; align-items: stretch; }
-          .select-dropdown { width: calc(100vw - 32px); }
+          .select-like-dropdown { width: calc(100vw - 32px); }
         }
       `}</style>
     </form>
