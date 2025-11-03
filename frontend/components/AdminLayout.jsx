@@ -8,6 +8,7 @@ export default function AdminLayout({ me, title, children }) {
 
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
   const [tradeOrdersUnread, setTradeOrdersUnread] = useState(0);
+  const [autotekaUnread, setAutotekaUnread] = useState(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -86,6 +87,43 @@ export default function AdminLayout({ me, title, children }) {
     };
   }, [me]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      try {
+        if (me && me.role !== 'admin') {
+          setAutotekaUnread(0);
+          return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) { setAutotekaUnread(0); return; }
+        const res = await fetch(resolveApiUrl('/api/admin/autoteka-orders/unread-count'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) setAutotekaUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setAutotekaUnread(0);
+        console.error('Failed to load admin autoteka counter', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    const interval = setInterval(load, 60000);
+    window.addEventListener('admin-autoteka-refresh', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('admin-autoteka-refresh', handler);
+    };
+  }, [me]);
+
   // Используем токены из globals.css
   const UI = {
     pageBg: 'var(--bg-alt)',                 // молочный фон страницы
@@ -111,6 +149,8 @@ export default function AdminLayout({ me, title, children }) {
     { href: '/admin/trade-orders', label: 'Торги', icon: <IconCheck />, badge: tradeOrdersUnread },
     { href: '/admin/trade-pricing', label: 'Тарифы торгов', icon: <IconCoins /> },
     { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
+    { href: '/admin/autoteka-orders', label: 'Автотека', icon: <IconDoc />, badge: autotekaUnread },
+    { href: '/admin/autoteka-settings', label: 'Цена Автотеки', icon: <IconCoins /> },
     { href: '/admin/users', label: 'Пользователи', icon: <IconUsers /> },
     { href: '/admin/admins', label: 'Администраторы', icon: <IconShield /> },
     { href: '/admin/notify', label: 'Уведомления', icon: <IconBell /> },
@@ -300,6 +340,15 @@ function IconCheck({ size = 18, color = 'currentColor' }) {
     </svg>
   );
 }
+function IconDoc({ size = 18, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M7 4h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke={color} strokeWidth="1.5" />
+      <path d="M14 4v4h4" stroke={color} strokeWidth="1.5" />
+      <path d="M9 13h6M9 17h6" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 function IconCoins({ size = 18, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -347,3 +396,4 @@ function IconUser({ size = 18, color = 'currentColor' }) {
     </svg>
   );
 }
+
