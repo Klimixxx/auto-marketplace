@@ -1,13 +1,15 @@
 // backend/src/index.js
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { query } from './db.js';
+import { Server as SocketIOServer } from 'socket.io';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { query } from './db.js';
 import adminParserRouter from './routes/adminParser.js';
 import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
@@ -19,6 +21,10 @@ import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
 import { loadAutotekaSettings } from './services/autotekaSettings.js';
+import supportRouter from './routes/support.js';
+import adminSupportRouter from './routes/adminSupport.js';
+import { setSocketInstance } from './services/socket.js';
+import { canAccessTicket, formatDisplayName } from './services/support.js';
 import {
   RUSSIAN_REGIONS,
   getRegionNameByCode,
@@ -120,6 +126,7 @@ function resolveRegionCodeFromQuery(value) {
 }
 
 const app = express();
+const server = http.createServer(app);
 app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -153,6 +160,99 @@ await runMigrations();
 
 // CORS (расширенный: методы/заголовки/credentials + preflight)
 const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: allowed.length ? allowed : '*',
+    credentials: true,
+  },
+});
+setSocketInstance(io);
+
+io.use(async (socket, next) => {
+  try {
+    const rawToken = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+    const token = typeof rawToken === 'string' && rawToken.startsWith('Bearer ')
+      ? rawToken.slice(7)
+      : rawToken && !rawToken.startsWith('Bearer ')
+        ? rawToken
+        : null;
+    if (!token) return next(new Error('AUTH_REQUIRED'));
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = normalizeUserId(payload?.sub);
+    if (!userId) return next(new Error('AUTH_INVALID'));
+    const { rows } = await query(
+      `SELECT id, name, phone, email, role, user_code, is_blocked
+         FROM users
+        WHERE id::text = $1
+        LIMIT 1`,
+      [userId]
+    );
+    const row = rows[0];
+    if (!row) return next(new Error('AUTH_INVALID'));
+    if (row.is_blocked) return next(new Error('ACCOUNT_BLOCKED'));
+    const numericId = Number(row.id);
+    socket.user = {
+      id: Number.isFinite(numericId) ? numericId : row.id,
+      name: row.name,
+      phone: row.phone,
+      email: row.email,
+      role: row.role,
+      userCode: row.user_code,
+    };
+    return next();
+  } catch (error) {
+    console.error('socket auth error:', error);
+    return next(new Error('AUTH_ERROR'));
+  }
+});
+
+io.on('connection', (socket) => {
+  try {
+    if (socket.user?.role === 'admin') {
+      socket.join('support:agents');
+    }
+  } catch (err) {
+    console.error('socket connection init error:', err);
+  }
+
+  socket.on('support:join', async (payload = {}) => {
+    const ticketId = Number(payload.ticketId);
+    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
+    try {
+      const allowedAccess = await canAccessTicket(ticketId, socket.user);
+      if (!allowedAccess) return;
+      socket.join(`support:ticket:${ticketId}`);
+      socket.emit('support:joined', { ticketId });
+    } catch (error) {
+      console.error('socket join ticket error:', error);
+    }
+  });
+
+  socket.on('support:leave', (payload = {}) => {
+    const ticketId = Number(payload.ticketId);
+    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
+    socket.leave(`support:ticket:${ticketId}`);
+  });
+
+  socket.on('support:typing', async (payload = {}) => {
+    const ticketId = Number(payload.ticketId);
+    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
+    try {
+      const allowedAccess = await canAccessTicket(ticketId, socket.user);
+      if (!allowedAccess) return;
+      socket.to(`support:ticket:${ticketId}`).emit('support:typing', {
+        ticketId,
+        userId: socket.user?.id,
+        role: socket.user?.role === 'admin' ? 'support' : 'client',
+        name: formatDisplayName(socket.user),
+        isTyping: !!payload.isTyping,
+      });
+    } catch (error) {
+      console.error('socket typing error:', error);
+    }
+  });
+});
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
@@ -1246,6 +1346,8 @@ app.use('/api/admin/autoteka-orders', auth, requireAdmin, adminAutotekaRouter);
 app.use('/api/admin/autoteka-settings', auth, requireAdmin, adminAutotekaSettingsRouter);
 app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
 app.use('/api/admin/trade-pricing', auth, requireAdmin, adminTradePricingRouter);
+app.use('/api/support', auth, supportRouter);
+app.use('/api/admin/support', auth, requireAdmin, adminSupportRouter);
 
 
 
@@ -2048,4 +2150,4 @@ app.post('/admin/ingest/fedresurs', async (req, res) => {
 
 // ==================== /НОВОЕ ====================
 
-app.listen(PORT, () => console.log(`API listening on ${PORT}`));
+server.listen(PORT, () => console.log(`API listening on ${PORT}`));
