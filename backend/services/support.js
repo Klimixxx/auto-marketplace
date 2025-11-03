@@ -124,7 +124,7 @@ export async function fetchTicketById(ticketId) {
   return mapTicketRow(rows[0]);
 }
 
-export async function ensureActiveTicketForUser(clientId) {
+async function findLatestActiveTicketRow(clientId) {
   if (typeof clientId !== 'string' || !isUUID(clientId)) {
     const err = new Error('INVALID_USER_ID');
     err.statusCode = 401;
@@ -139,8 +139,18 @@ export async function ensureActiveTicketForUser(clientId) {
      LIMIT 1`,
     [clientId]
   );
-  if (existing.rows[0]) {
-    return mapTicketRow(existing.rows[0]);
+  return existing.rows[0] || null;
+}
+
+export async function findActiveTicketForUser(clientId) {
+  const row = await findLatestActiveTicketRow(clientId);
+  return mapTicketRow(row);
+}
+
+export async function ensureActiveTicketForUser(clientId) {
+  const existing = await findLatestActiveTicketRow(clientId);
+  if (existing) {
+    return mapTicketRow(existing);
   }
 
   const inserted = await query(
