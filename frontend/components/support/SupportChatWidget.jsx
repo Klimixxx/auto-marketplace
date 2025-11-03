@@ -24,6 +24,15 @@ function formatTime(value) {
   }
 }
 
+function formatDisplayName(user) {
+  if (!user) return '';
+  if (user.name && user.name.trim()) return user.name.trim();
+  if (user.userCode) return `ID ${user.userCode}`;
+  if (user.phone) return user.phone;
+  return '';
+}
+
+
 function normalizeMessages(list = []) {
   return list
     .filter(Boolean)
@@ -32,6 +41,29 @@ function normalizeMessages(list = []) {
 }
 
 function MessageBubble({ message, isOwn }) {
+  if (message?.isSystem || message?.senderRole === 'system' || message?.contentType === 'system') {
+    return (
+      <div className="system-message">
+        <span>{message?.content}</span>
+        <style jsx>{`
+          .system-message {
+            display: grid;
+            justify-content: center;
+            margin: 10px 0;
+          }
+          .system-message span {
+            background: rgba(42, 101, 247, 0.08);
+            color: var(--accent-700, ${palette.primary});
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+          }
+        `}</style>
+      </div>
+    );
+  }
   const isFile = message?.file && !['image'].includes(message.contentType);
   const isImage = message?.file && message.contentType === 'image';
   const fileUrl = message?.file?.url ? resolveApiUrl(message.file.url) : null;
@@ -119,9 +151,12 @@ export default function SupportChatWidget() {
   const [typing, setTyping] = useState({});
   const [connected, setConnected] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [showClosedBanner, setShowClosedBanner] = useState(false);
+  const [closedInfo, setClosedInfo] = useState(null);
   const socketRef = useRef(null);
   const listRef = useRef(null);
   const typingTimeout = useRef(null);
+  const previousTicketRef = useRef(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -218,8 +253,12 @@ export default function SupportChatWidget() {
 
   useEffect(() => {
     if (!listRef.current) return;
-    listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages.length, isOpen]);
+    if (showClosedBanner) {
+      listRef.current.scrollTop = 0;
+    } else {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [messages.length, isOpen, showClosedBanner]);
 
   useEffect(() => {
     if (!ticket?.id || !isOpen) return;
@@ -234,9 +273,44 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id, ticket?.unread?.client, isOpen]);
 
+  useEffect(() => {
+    const previous = previousTicketRef.current;
+    const isClosed = ticket?.status === 'closed';
+    if (isClosed) {
+      if (!previous || previous.status !== 'closed') {
+        setMessages([]);
+      }
+      setTyping({});
+      setShowClosedBanner(true);
+      setClosedInfo({
+        closedAt: ticket?.closedAt || ticket?.updatedAt || ticket?.lastMessageAt,
+        assignedName: formatDisplayName(ticket?.assigned),
+      });
+    } else {
+      setShowClosedBanner(false);
+      setClosedInfo(null);
+    }
+    previousTicketRef.current = ticket;
+  }, [ticket]);
+
   const hasTicket = !!ticket?.id;
-  const canCompose = !loading && !needsLogin;
+  const isTicketClosed = ticket?.status === 'closed';
+  const canCompose = !loading && !needsLogin && !isTicketClosed;
   const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
+  const assignedName = formatDisplayName(ticket?.assigned);
+
+  function resetClosedState() {
+    const socket = socketRef.current;
+    if (socket && ticket?.id) {
+      socket.emit('support:leave', { ticketId: ticket.id });
+    }
+    setTicket(null);
+    setMessages([]);
+    setShowClosedBanner(false);
+    setClosedInfo(null);
+    setComposer('');
+    previousTicketRef.current = null;
+  }
 
   async function sendMessage() {
     if (!composer.trim()) return;
@@ -329,19 +403,38 @@ export default function SupportChatWidget() {
           <div className="support-header">
             <div>
               <strong>Команда сопровождения</strong>
-              <p>Ответим на вопросы, поможем с документами и торгами.</p>
+              {assignedName && !isTicketClosed ? (
+                <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
+              ) : (
+                <p>Ответим на вопросы, поможем с документами и торгами.</p>
+              )}
             </div>
           </div>
           <div className="support-body" ref={listRef}>
+            {showClosedBanner && (
+              <div className="ticket-closed">
+                <div className="ticket-closed__title">ТИКЕТ ЗАКРЫТ</div>
+                {closedInfo?.assignedName && (
+                  <div className="ticket-closed__text">Специалист {closedInfo.assignedName} завершил обращение.</div>
+                )}
+                {closedInfo?.closedAt && (
+                  <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
+                )}
+                <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
+                <button type="button" onClick={resetClosedState} className="ticket-closed__action">
+                  Начать новый тикет
+                </button>
+              </div>
+            )}
             {loading && <p className="muted">Загружаем историю...</p>}
             {needsLogin && <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>}
             {!loading && !needsLogin && messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
             ))}
-            {!loading && messages.length === 0 && !needsLogin && (
+            {!loading && messages.length === 0 && !needsLogin && !showClosedBanner && (
               <p className="muted">Опишите свой вопрос — специалист подключится в течение нескольких минут.</p>
             )}
-            {otherTyping.length > 0 && (
+            {otherTyping.length > 0 && !showClosedBanner && (
               <div className="typing">
                 {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
               </div>
@@ -349,14 +442,22 @@ export default function SupportChatWidget() {
           </div>
           <div className="support-composer">
             <textarea
-              placeholder={needsLogin ? 'Необходимо авторизоваться' : 'Напишите сообщение...'}
+              placeholder={
+                needsLogin
+                  ? 'Необходимо авторизоваться'
+                  : isTicketClosed
+                  ? 'Диалог завершён — создайте новый тикет'
+                  : 'Напишите сообщение...'
+              }
               value={composer}
               onChange={handleInputChange}
               disabled={!canCompose || sending || uploading}
               rows={2}
             />
             <div className="composer-actions">
-              <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
+              <label
+                className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}
+              >
                 📎
                 <input
                   type="file"
@@ -448,6 +549,40 @@ export default function SupportChatWidget() {
           padding: 12px 18px;
           display: flex;
           flex-direction: column;
+        }
+        .ticket-closed {
+          border: 1px dashed var(--accent-200);
+          border-radius: 16px;
+          padding: 18px 16px;
+          margin-bottom: 16px;
+          background: var(--accent-50);
+          display: grid;
+          gap: 8px;
+          text-align: center;
+        }
+        .ticket-closed__title {
+          font-weight: 700;
+          font-size: 14px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--accent-700);
+        }
+        .ticket-closed__text {
+          font-size: 13px;
+          color: var(--text-600);
+        }
+        .ticket-closed__action {
+          margin-top: 4px;
+          border: none;
+          border-radius: 12px;
+          background: ${palette.primary};
+          color: #fff;
+          padding: 8px 14px;
+          font-size: 13px;
+          cursor: pointer;
+        }
+        .ticket-closed__action:hover {
+          opacity: 0.9;
         }
         .muted {
           font-size: 13px;
