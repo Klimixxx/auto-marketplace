@@ -26,6 +26,24 @@ function getUserId(req) {
   return null;
 }
 
+router.get('/tickets/open', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    const ticket = await findActiveTicketForUser(userId);
+    if (!ticket) {
+      return res.json({ ticket: null, messages: [] });
+    }
+
+    const messages = await listMessages(ticket.id, { limit: 200 });
+    res.json({ ticket, messages });
+  } catch (error) {
+    console.error('support get open ticket error:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
+});
+
 router.post('/tickets/open', async (req, res) => {
   try {
     const userId = getUserId(req);
