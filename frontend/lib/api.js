@@ -30,3 +30,15 @@ export async function apiFetch(path, { method='GET', body, headers } = {}) {
   });
   return res;
 }
+
+export function resolveSocketUrl() {
+  const base = process.env.NEXT_PUBLIC_API_BASE;
+  if (base && base.trim()) {
+    return base.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
+}
+
