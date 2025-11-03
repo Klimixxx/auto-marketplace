@@ -249,27 +249,39 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   }
 
   const normalizedRole = normalizeRole(senderRole);
-  if (normalizedRole === 'client' && participants.client_id !== senderId) {
-    const err = new Error('FORBIDDEN');
-    err.statusCode = 403;
-    throw err;
-  }
+
+  // === АВТО-НАЗНАЧЕНИЕ ДЛЯ САППОРТА ===
   if (normalizedRole === 'support') {
     if (participants.status === 'closed') {
       const err = new Error('TICKET_CLOSED');
       err.statusCode = 409;
       throw err;
     }
+
+    // если тикет никому не назначен — назначаем на отправителя и переводим в assigned
     if (!participants.assigned_id) {
+      await query(
+        `UPDATE support_tickets
+           SET assigned_id = $2::uuid,
+               status = 'assigned',
+               updated_at = now()
+         WHERE id = $1`,
+        [ticketId, senderId]
+      );
+      participants.assigned_id = senderId;
+      participants.status = 'assigned';
+    } else if (participants.assigned_id !== senderId) {
+      // если уже назначен другому — запрещаем отвечать
       const err = new Error('NOT_ASSIGNED');
       err.statusCode = 403;
       throw err;
     }
-    if (participants.assigned_id !== senderId) {
-      const err = new Error('NOT_ASSIGNED');
-      err.statusCode = 403;
-      throw err;
-    }
+  }
+
+  if (normalizedRole === 'client' && participants.client_id !== senderId) {
+    const err = new Error('FORBIDDEN');
+    err.statusCode = 403;
+    throw err;
   }
 
   if (!content && !fileMeta) {
@@ -299,10 +311,11 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   );
   const messageId = insertedRows[0]?.id;
 
-  const statusTransition =
-    participants.status === 'closed' && normalizedRole === 'client'
-      ? (participants.assigned_id ? 'assigned' : 'open')
-      : participants.status;
+  // статус тикета после сообщения
+  let statusTransition = participants.status;
+  if (normalizedRole === 'client' && participants.status === 'closed') {
+    statusTransition = participants.assigned_id ? 'assigned' : 'open';
+  }
 
   const updateQuery = `
     UPDATE support_tickets
