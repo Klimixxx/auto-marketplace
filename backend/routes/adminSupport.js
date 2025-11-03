@@ -25,7 +25,7 @@ function getAgentId(req) {
 }
 
 
-router.get('/support/overview', async (req, res) => {
+router.get('/overview', async (req, res) => {
   try {
     const agentId = getAgentId(req);
     if (!agentId) return res.status(401).json({ error: 'UNAUTHORIZED' });
@@ -38,7 +38,7 @@ router.get('/support/overview', async (req, res) => {
   }
 });
 
-router.get('/support/counters', async (req, res) => {
+router.get('/counters', async (req, res) => {
   try {
     const agentId = getAgentId(req);
     if (!agentId) return res.status(401).json({ error: 'UNAUTHORIZED' });
@@ -51,7 +51,7 @@ router.get('/support/counters', async (req, res) => {
   }
 });
 
-router.post('/support/tickets/:ticketId/assign', async (req, res) => {
+router.post('/tickets/:ticketId/assign', async (req, res) => {
   const ticketId = parseTicketId(req.params.ticketId);
   if (!ticketId) return res.status(400).json({ error: 'INVALID_TICKET' });
   try {
@@ -66,7 +66,7 @@ router.post('/support/tickets/:ticketId/assign', async (req, res) => {
   }
 });
 
-router.post('/support/tickets/:ticketId/close', async (req, res) => {
+router.post('/tickets/:ticketId/close', async (req, res) => {
   const ticketId = parseTicketId(req.params.ticketId);
   if (!ticketId) return res.status(400).json({ error: 'INVALID_TICKET' });
   try {
@@ -81,7 +81,7 @@ router.post('/support/tickets/:ticketId/close', async (req, res) => {
   }
 });
 
-router.post('/support/tickets/:ticketId/read', async (req, res) => {
+router.post('/tickets/:ticketId/read', async (req, res) => {
   const ticketId = parseTicketId(req.params.ticketId);
   if (!ticketId) return res.status(400).json({ error: 'INVALID_TICKET' });
   try {
