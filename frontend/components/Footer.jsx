@@ -76,6 +76,7 @@ export default function Footer() {
               {link("/my-trades", "Мои торги")}
               {link("/support", "Поддержка")}
               {link("/inspections", "Мои осмотры")}
+              {link("/autoteka", "Автотека")}
               {link("/profile", "Личный кабинет")}
             </div>
           </div>
@@ -241,3 +242,4 @@ function YoutubeIcon() {
     </svg>
   );
 }
+
