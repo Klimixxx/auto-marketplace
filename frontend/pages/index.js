@@ -873,6 +873,7 @@ export default function Home() {
 
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
   const [tradeUnread, setTradeUnread] = useState(0);
+  const [autotekaUnread, setAutotekaUnread] = useState(0);
   const router = useRouter();
 
 
@@ -969,6 +970,44 @@ export default function Home() {
       ignore = true;
       clearInterval(interval);
       window.removeEventListener("inspections-refresh-count", handler);
+    };
+  }, [authToken]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let ignore = false;
+
+    async function loadUnread() {
+      const token = authToken || localStorage.getItem("token");
+      if (!token) {
+        if (!ignore) setAutotekaUnread(0);
+        return;
+      }
+      try {
+        const res = await fetch(api("/api/autoteka/unread-count"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401) {
+          if (!ignore) setAutotekaUnread(0);
+          return;
+        }
+        if (!res.ok) throw new Error("status " + res.status);
+        const data = await res.json();
+        if (!ignore) setAutotekaUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setAutotekaUnread(0);
+        console.error("Failed to load autoteka unread count", err);
+      }
+    }
+
+    loadUnread();
+
+    const handler = () => loadUnread();
+    window.addEventListener("autoteka-refresh-count", handler);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener("autoteka-refresh-count", handler);
     };
   }, [authToken]);
 
@@ -1186,6 +1225,7 @@ export default function Home() {
         listingCount={summary?.totalListings ?? 0}
         inspectionsUnread={inspectionsUnread}
         tradeOrdersUnread={tradeUnread}
+        autotekaUnread={autotekaUnread}
       />
       {/* === НОВЫЕ ПРЕДЛОЖЕНИЯ (первые 6 как на /trades) === */}
       {(recent.length || loadingRecent) && (
@@ -1669,6 +1709,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
