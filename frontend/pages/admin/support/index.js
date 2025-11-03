@@ -33,7 +33,7 @@ function sortTickets(list = []) {
     });
 }
 
-function TicketItem({ ticket, active, onSelect, onAssign, isQueue }) {
+function TicketItem({ ticket, active, onSelect }) {
   const unread = ticket?.unread?.support || 0;
   const client = ticket?.client;
   return (
@@ -69,24 +69,6 @@ function TicketItem({ ticket, active, onSelect, onAssign, isQueue }) {
       <div style={{ fontSize: 12, color: 'var(--text-500)' }}>
         Обновлён: {formatDate(ticket.lastMessageAt || ticket.updatedAt)}
       </div>
-      {isQueue && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onAssign(ticket); }}
-          style={{
-            marginTop: 6,
-            background: 'var(--accent)',
-            border: 'none',
-            color: '#fff',
-            borderRadius: 10,
-            padding: '6px 10px',
-            fontSize: 13,
-            cursor: 'pointer',
-          }}
-        >
-          Взять тикет
-        </button>
-      )}
     </div>
   );
 }
@@ -300,12 +282,27 @@ export default function AdminSupportPage() {
     }
   }
 
-  function handleSelect(ticket) {
-    setSelectedId(ticket?.id || null);
+  async function handleSelect(ticket) {
+    if (!ticket) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId(ticket.id);
+    if (ticket.status === 'closed') return;
+    if (ticket.assigned?.id && ticket.assigned.id !== me?.id) return;
+    await handleAssign(ticket);
   }
 
   async function handleAssign(ticket) {
     if (!ticket) return;
+    if (ticket.status === 'closed') return;
+    if (ticket.assigned?.id === me?.id) {
+      setSelectedId(ticket.id);
+      return ticket;
+    }
+    if (ticket.assigned?.id && ticket.assigned.id !== me?.id) {
+      return ticket;
+    }
     try {
       const res = await apiFetch(`/api/admin/support/tickets/${ticket.id}/assign`, { method: 'POST' });
       if (!res.ok) throw new Error('assign failed');
@@ -313,15 +310,28 @@ export default function AdminSupportPage() {
       setOverview((prev) => updateOverviewWithTicket(prev, data.ticket, me));
       setSelectedId(data.ticket?.id || ticket.id);
       dispatchSupportRefresh();
+      return data.ticket;
     } catch (err) {
       console.error('assign ticket error', err);
+      return ticket;
     }
   }
 
   async function handleClose(ticket) {
     if (!ticket) return;
     try {
-      const res = await apiFetch(`/api/admin/support/tickets/${ticket.id}/close`, { method: 'POST' });
+      let target = ticket;
+      if (ticket.status !== 'closed' && (!ticket.assigned || ticket.assigned.id !== me?.id)) {
+        const assigned = await handleAssign(ticket);
+        if (assigned) {
+          target = assigned;
+        }
+        if (target.assigned?.id !== me?.id) {
+          console.warn('cannot close ticket that is not assigned to current agent');
+          return;
+        }
+      }
+      const res = await apiFetch(`/api/admin/support/tickets/${target.id}/close`, { method: 'POST' });
       if (!res.ok) throw new Error('close failed');
       const data = await res.json();
       setOverview((prev) => updateOverviewWithTicket(prev, data.ticket, me));
@@ -403,8 +413,6 @@ export default function AdminSupportPage() {
                   ticket={ticket}
                   active={selectedId === ticket.id}
                   onSelect={handleSelect}
-                  onAssign={handleAssign}
-                  isQueue
                 />
               ))}
             </div>
@@ -419,7 +427,6 @@ export default function AdminSupportPage() {
                   ticket={ticket}
                   active={selectedId === ticket.id}
                   onSelect={handleSelect}
-                  onAssign={() => {}}
                 />
               ))}
             </div>
@@ -445,13 +452,13 @@ export default function AdminSupportPage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  {selectedTicket.status !== 'closed' && selectedTicket.assigned?.id !== me?.id && (
-                    <button className="button" onClick={() => handleAssign(selectedTicket)} style={{ whiteSpace: 'nowrap' }}>
-                      Взять тикет
-                    </button>
-                  )}
-                  {selectedTicket.status !== 'closed' && selectedTicket.assigned?.id === me?.id && (
-                    <button className="button" onClick={() => handleClose(selectedTicket)} style={{ whiteSpace: 'nowrap', background: 'var(--danger-500)', borderColor: 'var(--danger-500)' }}>
+                  {selectedTicket.status !== 'closed' && (
+                    <button
+                      className="button"
+                      onClick={() => handleClose(selectedTicket)}
+                      style={{ whiteSpace: 'nowrap', background: 'var(--danger-500)', borderColor: 'var(--danger-500)' }}
+                      disabled={Boolean(selectedTicket.assigned?.id && selectedTicket.assigned.id !== me?.id)}
+                    >
                       Закрыть тикет
                     </button>
                   )}
