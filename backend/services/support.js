@@ -249,19 +249,102 @@ export async function saveUploadedFile(ticketId, file) {
   return { url: relative, size: file.size, name: file.originalname, mime: file.mimetype };
 }
 
-async function emitTicketSnapshot(ticketId) {
+async function emitTicketSnapshot(ticketId, { ticket: providedTicket = null, reason = 'update' } = {}) {
   const io = getSocket();
   if (!io) return;
-  const ticket = await fetchTicketById(ticketId);
+  const ticket = providedTicket || (await fetchTicketById(ticketId));
   if (!ticket) return;
   io.to(`support:ticket:${ticketId}`).emit('support:ticket', ticket);
-  emitTicketToAgents(ticket, 'update');
+  emitTicketToAgents(ticket, reason);
+  return ticket;
 }
 
 export function emitTicketToAgents(ticket, reason = 'update') {
   const io = getSocket();
   if (!io || !ticket) return;
   io.to('support:agents').emit('support:ticket-update', { ticket, reason });
+}
+
+async function insertSystemMessage(ticketId, text, { emitSnapshot = false } = {}) {
+  const normalizedText = String(text || '').trim();
+  if (!normalizedText) return null;
+
+  const { rows } = await query(
+    `INSERT INTO support_messages
+       (ticket_id, sender_id, sender_role, content, content_type, created_at, is_system)
+     VALUES ($1, NULL, 'system', $2, 'system', now(), true)
+     RETURNING id`,
+    [ticketId, normalizedText]
+  );
+  const messageId = rows[0]?.id;
+  await query(
+    `UPDATE support_tickets
+        SET updated_at = now(),
+            last_message_at = now()
+      WHERE id = $1`,
+    [ticketId]
+  );
+  const message = messageId ? await fetchMessageById(messageId) : null;
+  const io = getSocket();
+  if (io && message) {
+    io.to(`support:ticket:${ticketId}`).emit('support:message', message);
+  }
+  if (emitSnapshot) {
+    await emitTicketSnapshot(ticketId, { ticket: null });
+  }
+  return message;
+}
+
+async function createUserNotification(userId, title, body) {
+  if (!userId || !isUUID(userId)) return;
+  const trimmedTitle = String(title || '').trim();
+  const trimmedBody = String(body || '').trim();
+  if (!trimmedTitle || !trimmedBody) return;
+  try {
+    await query(
+      `INSERT INTO user_notifications(user_id, title, body)
+       VALUES ($1::uuid, $2, $3)`,
+      [userId, trimmedTitle, trimmedBody]
+    );
+  } catch (error) {
+    console.error('create user notification error:', error);
+  }
+}
+
+async function handleTicketAssigned(ticket) {
+  if (!ticket?.id) return ticket;
+  const assigneeName = formatDisplayName(ticket.assigned) || 'Специалист поддержки';
+  const systemText = `${assigneeName} подключился к вашему обращению.`;
+  await insertSystemMessage(ticket.id, systemText, { emitSnapshot: false });
+  if (ticket.client?.id) {
+    await createUserNotification(
+      ticket.client.id,
+      'Тикет принят в работу',
+      `${assigneeName} взял ваш тикет в работу.`
+    );
+  }
+  const refreshed = await fetchTicketById(ticket.id);
+  return refreshed || ticket;
+}
+
+async function handleTicketClosed(ticket) {
+  if (!ticket?.id) return ticket;
+  const assigneeName = formatDisplayName(ticket.assigned);
+  const systemText = assigneeName
+    ? `${assigneeName} закрыл тикет. Если останутся вопросы, создайте новое обращение.`
+    : 'Тикет закрыт. Если останутся вопросы, создайте новое обращение.';
+  await insertSystemMessage(ticket.id, systemText, { emitSnapshot: false });
+  if (ticket.client?.id) {
+    await createUserNotification(
+      ticket.client.id,
+      'Тикет закрыт',
+      assigneeName
+        ? `${assigneeName} закрыл ваш тикет. Если вопрос остаётся актуальным, отправьте новое обращение.`
+        : 'Ваш тикет закрыт. Если вопрос остаётся актуальным, отправьте новое обращение.'
+    );
+  }
+  const refreshed = await fetchTicketById(ticket.id);
+  return refreshed || ticket;
 }
 
 export async function addMessage(ticketId, { senderId, senderRole, content, contentType, fileMeta }) {
@@ -282,6 +365,8 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
     id: senderId,
     role: senderRole,
   });
+
+  const assignmentJustAdded = normalizedRole === 'support' && !participants.assigned_id;
 
   // === АВТО-НАЗНАЧЕНИЕ ДЛЯ САППОРТА ===
   if (normalizedRole === 'support') {
@@ -365,10 +450,20 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   const io = getSocket();
   if (io && message) {
     io.to(`support:ticket:${ticketId}`).emit('support:message', message);
-    emitTicketSnapshot(ticketId);
-  } else {
-    await emitTicketSnapshot(ticketId);
   }
+
+  let snapshotTicket = null;
+  let snapshotReason = 'update';
+  if (assignmentJustAdded) {
+    const currentTicket = await fetchTicketById(ticketId);
+    snapshotTicket = await handleTicketAssigned(currentTicket);
+    snapshotReason = 'assigned';
+  }
+
+  await emitTicketSnapshot(ticketId, {
+    ticket: snapshotTicket,
+    reason: snapshotReason,
+  });
 
   return message;
 }
@@ -459,6 +554,7 @@ export async function assignTicket(ticketId, agentId) {
     err.statusCode = 404;
     throw err;
   }
+  const wasUnassigned = !participants.assigned_id;
   if (participants.status === 'closed') {
     const err = new Error('TICKET_CLOSED');
     err.statusCode = 409;
@@ -478,9 +574,13 @@ export async function assignTicket(ticketId, agentId) {
       WHERE id = $1`,
     [ticketId, validAgentId]
   );
-  const ticket = await fetchTicketById(ticketId);
-  emitTicketSnapshot(ticketId);
-  emitTicketToAgents(ticket, 'assigned');
+  let ticket = await fetchTicketById(ticketId);
+  let reason = 'update';
+  if (wasUnassigned) {
+    ticket = await handleTicketAssigned(ticket);
+    reason = 'assigned';
+  }
+  ticket = (await emitTicketSnapshot(ticketId, { ticket, reason })) || ticket;
   return ticket;
 }
 
@@ -505,9 +605,9 @@ export async function closeTicket(ticketId, agentId) {
       WHERE id = $1`,
     [ticketId]
   );
-  const ticket = await fetchTicketById(ticketId);
-  emitTicketSnapshot(ticketId);
-  emitTicketToAgents(ticket, 'closed');
+  let ticket = await fetchTicketById(ticketId);
+  ticket = await handleTicketClosed(ticket);
+  ticket = (await emitTicketSnapshot(ticketId, { ticket, reason: 'closed' })) || ticket;
   return ticket;
 }
 
