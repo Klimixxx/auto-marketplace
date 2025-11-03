@@ -9,6 +9,7 @@ export default function AdminLayout({ me, title, children }) {
   const [inspectionsUnread, setInspectionsUnread] = useState(0);
   const [tradeOrdersUnread, setTradeOrdersUnread] = useState(0);
   const [autotekaUnread, setAutotekaUnread] = useState(0);
+  const [supportCounters, setSupportCounters] = useState({ queue: 0, myUnread: 0, myActive: 0 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -124,6 +125,49 @@ export default function AdminLayout({ me, title, children }) {
     };
   }, [me]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      try {
+        if (me && me.role !== 'admin') {
+          setSupportCounters({ queue: 0, myUnread: 0, myActive: 0 });
+          return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) { setSupportCounters({ queue: 0, myUnread: 0, myActive: 0 }); return; }
+        const res = await fetch(resolveApiUrl('/api/admin/support/counters'), {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        if (!ignore) {
+          setSupportCounters({
+            queue: Number(data?.queue) || 0,
+            myUnread: Number(data?.myUnread) || 0,
+            myActive: Number(data?.myActive) || 0,
+          });
+        }
+      } catch (err) {
+        if (!ignore) setSupportCounters({ queue: 0, myUnread: 0, myActive: 0 });
+        console.error('Failed to load support counters', err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    const interval = setInterval(load, 60000);
+    window.addEventListener('admin-support-refresh', handler);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      window.removeEventListener('admin-support-refresh', handler);
+    };
+  }, [me]);
+
   // Используем токены из globals.css
   const UI = {
     pageBg: 'var(--bg-alt)',                 // молочный фон страницы
@@ -142,12 +186,14 @@ export default function AdminLayout({ me, title, children }) {
   };
 
   const MAXW = 1200;
+  const supportBadge = Math.max(0, Number(supportCounters.queue || 0) + Number(supportCounters.myUnread || 0));
 
   const links = [
     { href: '/admin', label: 'Дэшборд', icon: <IconHome /> },
     { href: '/admin/listings', label: 'Объявления', icon: <IconCards /> },
     { href: '/admin/trade-orders', label: 'Торги', icon: <IconCheck />, badge: tradeOrdersUnread },
     { href: '/admin/trade-pricing', label: 'Тарифы торгов', icon: <IconCoins /> },
+    { href: '/admin/support', label: 'Поддержка', icon: <IconChat />, badge: supportBadge },
     { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
     { href: '/admin/autoteka-orders', label: 'Автотека', icon: <IconDoc />, badge: autotekaUnread },
     { href: '/admin/autoteka-settings', label: 'Цена Автотеки', icon: <IconCoins /> },
@@ -396,4 +442,19 @@ function IconUser({ size = 18, color = 'currentColor' }) {
     </svg>
   );
 }
+function IconChat({ size = 18, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4.5l-3.5 3-3.5-3H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 11h8M8 8h8" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 
