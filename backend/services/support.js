@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { query } from '../db.js';
 import { getSocket } from './socket.js';
+import { validate as isUUID } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +116,12 @@ export async function fetchTicketById(ticketId) {
 }
 
 export async function ensureActiveTicketForUser(clientId) {
+  if (typeof clientId !== 'string' || !isUUID(clientId)) {
+    const err = new Error('INVALID_USER_ID');
+    err.statusCode = 401;
+    throw err;
+  }
+
   const existing = await query(
     `${TICKET_SELECT}
      WHERE t.client_id = $1
@@ -126,13 +133,15 @@ export async function ensureActiveTicketForUser(clientId) {
   if (existing.rows[0]) {
     return mapTicketRow(existing.rows[0]);
   }
+
   const inserted = await query(
     `INSERT INTO support_tickets
        (client_id, status, created_at, updated_at, last_message_at)
-     VALUES ($1, 'open', now(), now(), now())
+     VALUES ($1::uuid, 'open', now(), now(), now())
      RETURNING id`,
     [clientId]
   );
+
   const ticketId = inserted.rows[0]?.id;
   const created = ticketId ? await fetchTicketById(ticketId) : null;
   if (created) {
@@ -226,6 +235,12 @@ export function emitTicketToAgents(ticket, reason = 'update') {
 }
 
 export async function addMessage(ticketId, { senderId, senderRole, content, contentType, fileMeta }) {
+  if (senderId && (!isUUID(senderId))) {
+    const err = new Error('INVALID_SENDER_ID');
+    err.statusCode = 401;
+    throw err;
+  }
+
   const participants = await getTicketParticipants(ticketId);
   if (!participants) {
     const err = new Error('TICKET_NOT_FOUND');
@@ -269,7 +284,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   const { rows: insertedRows } = await query(
     `INSERT INTO support_messages
        (ticket_id, sender_id, sender_role, content, content_type, file_name, file_size, file_url, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+     VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, now())
      RETURNING id`,
     [
       ticketId,
@@ -286,7 +301,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
 
   const statusTransition =
     participants.status === 'closed' && normalizedRole === 'client'
-      ? participants.assigned_id ? 'assigned' : 'open'
+      ? (participants.assigned_id ? 'assigned' : 'open')
       : participants.status;
 
   const updateQuery = `
@@ -304,11 +319,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   const io = getSocket();
   if (io && message) {
     io.to(`support:ticket:${ticketId}`).emit('support:message', message);
-    if (normalizedRole === 'client') {
-      emitTicketSnapshot(ticketId);
-    } else {
-      emitTicketSnapshot(ticketId);
-    }
+    emitTicketSnapshot(ticketId);
   } else {
     await emitTicketSnapshot(ticketId);
   }
