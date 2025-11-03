@@ -37,3 +37,4 @@ CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created
 
 ALTER TABLE support_tickets
   ALTER COLUMN last_message_at SET DEFAULT now();
+
