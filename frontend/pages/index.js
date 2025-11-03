@@ -1428,7 +1428,7 @@ export default function Home() {
               </div>
 
               <a
-                href="/education"
+                href="https://www.auctionafto.online/training.html"
                 role="button"
                 style={{
                   display: "inline-flex",
@@ -1709,6 +1709,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
