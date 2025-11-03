@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import TradeOrderModal from "../../components/TradeOrderModal";
 import InspectionModal from "../../components/InspectionModal";
+import AutotekaModal from "../../components/AutotekaModal";
 import {
   formatValueForDisplay,
   translateFieldKey,
@@ -615,6 +616,7 @@ export default function ListingPage({ item }) {
 
   const [openTradeModal, setOpenTradeModal] = useState(false);
   const [openInspectionModal, setOpenInspectionModal] = useState(false);
+  const [openAutotekaModal, setOpenAutotekaModal] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
   function handleOrderClick() {
@@ -630,6 +632,10 @@ export default function ListingPage({ item }) {
 
   function handleInspectionClick() {
     setOpenInspectionModal(true);
+  }
+
+  function handleAutotekaClick() {
+    setOpenAutotekaModal(true);
   }
 
   const photos = collectPhotos(details);
@@ -847,6 +853,12 @@ export default function ListingPage({ item }) {
               >
                 Заказать осмотр
               </button>
+              <button
+                onClick={handleAutotekaClick}
+                className="button button-outline"
+              >
+                Заказать автотеку
+              </button>
               {item?.source_url ? (
                 <a
                   href={item.source_url}
@@ -873,6 +885,11 @@ export default function ListingPage({ item }) {
         listingId={listingIdRaw}
         isOpen={openInspectionModal}
         onClose={() => setOpenInspectionModal(false)}
+      />
+      <AutotekaModal
+        listingId={listingIdRaw}
+        isOpen={openAutotekaModal}
+        onClose={() => setOpenAutotekaModal(false)}
       />
 
       <div className="detail-layout">
@@ -1152,6 +1169,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
