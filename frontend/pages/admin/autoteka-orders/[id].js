@@ -11,9 +11,10 @@ export default function AdminAutotekaDetail() {
 
   const [me, setMe] = useState(null);
   const [item, setItem] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState(null);
+  const [reportUrl, setReportUrl] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -51,6 +52,7 @@ export default function AdminAutotekaDetail() {
         const data = await res.json();
         if (ignore) return;
         setItem(data);
+        setReportUrl(data?.report_pdf_url || '');
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('admin-autoteka-refresh'));
         }
@@ -82,8 +84,8 @@ export default function AdminAutotekaDetail() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data?.error === 'PDF_REQUIRED') {
-          alert('Чтобы пометить заказ как обработанный, загрузите PDF отчёт.');
+        if (data?.error === 'REPORT_URL_REQUIRED') {
+          alert('Чтобы пометить заказ как обработанный, сохраните ссылку на отчёт.');
           return;
         }
         throw new Error('status');
@@ -97,6 +99,10 @@ export default function AdminAutotekaDetail() {
         status: data.status,
       }));
 
+      if (data?.report_pdf_url !== undefined) {
+        setReportUrl(data.report_pdf_url || '');
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('admin-autoteka-refresh'));
       }
@@ -109,20 +115,26 @@ export default function AdminAutotekaDetail() {
     }
   }
 
-  async function uploadPdf(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function saveReportLink(e) {
+    e.preventDefault();
+    const link = reportUrl.trim();
+    if (!link) {
+      alert('Введите ссылку на отчёт');
+      return;
+    }
 
-    setUploading(true);
+    setReportUrl(link);
+    setSavingReport(true);
     try {
       const token = localStorage.getItem('token');
-      const form = new FormData();
-      form.append('report_pdf', file);
 
       const res = await fetch(resolveApiUrl(`/api/admin/autoteka-orders/${id}/upload`), {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: form,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ report_url: link }),
       });
       if (!res.ok) throw new Error('upload');
 
@@ -133,16 +145,19 @@ export default function AdminAutotekaDetail() {
         admin_unread: false,
       }));
 
+      if (data?.order?.report_pdf_url !== undefined) {
+        setReportUrl(data.order.report_pdf_url || '');
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('admin-autoteka-refresh'));
       }
-      alert('PDF загружен');
+      alert('Ссылка сохранена');
     } catch (err) {
-      console.error('Failed to upload autoteka PDF', err);
-      alert('Ошибка загрузки PDF');
+      console.error('Failed to save autoteka report link', err);
+      alert('Ошибка сохранения ссылки');
     } finally {
-      setUploading(false);
-      if (e?.target) e.target.value = '';
+      setSavingReport(false);
     }
   }
 
@@ -190,9 +205,9 @@ export default function AdminAutotekaDetail() {
             <div style={{ marginTop: 12 }}>
               <b>Отчёт:</b>{' '}
               {item.report_pdf_url ? (
-                <a href={resolveApiUrl(item.report_pdf_url)} target="_blank" rel="noreferrer">Скачать PDF</a>
+                <a href={resolveApiUrl(item.report_pdf_url)} target="_blank" rel="noreferrer">Открыть</a>
               ) : (
-                <span style={{ opacity: 0.7 }}>не загружен</span>
+                <span style={{ opacity: 0.7 }}>не указана ссылка</span>
               )}
             </div>
           </div>
@@ -226,10 +241,33 @@ export default function AdminAutotekaDetail() {
           </div>
 
           <div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Загрузить PDF отчёт:</div>
-            <input type="file" accept="application/pdf" onChange={uploadPdf} disabled={uploading} />
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Ссылка на отчёт:</div>
+            <form onSubmit={saveReportLink} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input
+                type="url"
+                value={reportUrl}
+                onChange={(event) => setReportUrl(event.target.value)}
+                placeholder="https://example.com/report"
+                style={{ flex: '1 1 320px', minWidth: 260, padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+              />
+              <button
+                type="submit"
+                disabled={savingReport}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: savingReport ? '#cbd5f5' : '#4f46e5',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: savingReport ? 'default' : 'pointer',
+                }}
+              >
+                {savingReport ? 'Сохранение…' : 'Сохранить ссылку'}
+              </button>
+            </form>
             <div style={{ color: '#6b7280', marginTop: 6, fontSize: 13 }}>
-              При повторной загрузке новый файл заменит предыдущий для всех заказов по этому лоту.
+              Эта ссылка будет автоматически доступна всем заказам Автотеки по данному лоту.
             </div>
           </div>
         </div>
