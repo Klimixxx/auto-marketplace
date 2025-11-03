@@ -201,6 +201,17 @@ function normalizeRole(role) {
   return role === 'admin' ? 'support' : 'client';
 }
 
+function resolveParticipantRole(participants, viewer = {}) {
+  const viewerId = viewer.id;
+  if (viewerId && participants?.client_id === viewerId) {
+    return 'client';
+  }
+  if (viewerId && participants?.assigned_id === viewerId) {
+    return 'support';
+  }
+  return normalizeRole(viewer.role);
+}
+
 function buildFileInfo(ticketId, originalName) {
   const safeName = path.basename(originalName || 'file');
   const ext = path.extname(safeName);
@@ -257,7 +268,10 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
     throw err;
   }
 
-  const normalizedRole = normalizeRole(senderRole);
+  const normalizedRole = resolveParticipantRole(participants, {
+    id: senderId,
+    role: senderRole,
+  });
 
   // === АВТО-НАЗНАЧЕНИЕ ДЛЯ САППОРТА ===
   if (normalizedRole === 'support') {
@@ -376,14 +390,14 @@ export async function fetchMessageById(messageId) {
 }
 
 export async function markTicketRead(ticketId, viewer) {
-  const role = normalizeRole(viewer.role);
-  const viewerId = viewer.id;
   const participants = await getTicketParticipants(ticketId);
   if (!participants) {
     const err = new Error('TICKET_NOT_FOUND');
     err.statusCode = 404;
     throw err;
   }
+  const role = resolveParticipantRole(participants, viewer);
+  const viewerId = viewer.id;
   if (role === 'client' && participants.client_id !== viewerId) {
     const err = new Error('FORBIDDEN');
     err.statusCode = 403;
