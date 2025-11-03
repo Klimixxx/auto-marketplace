@@ -22,6 +22,15 @@ function ensureDirSync(dir) {
   }
 }
 
+function ensureAgentId(agentId) {
+  if (typeof agentId !== 'string' || !isUUID(agentId)) {
+    const err = new Error('INVALID_AGENT');
+    err.statusCode = 401;
+    throw err;
+  }
+  return agentId;
+}
+
 function mapTicketRow(row) {
   if (!row) return null;
   return {
@@ -398,6 +407,7 @@ export async function markTicketRead(ticketId, viewer) {
 }
 
 export async function loadAdminOverview(agentId) {
+  const validAgentId = ensureAgentId(agentId);
   const queueRows = await query(
     `${TICKET_SELECT}
       WHERE t.status = 'open'
@@ -406,10 +416,10 @@ export async function loadAdminOverview(agentId) {
   );
   const myRows = await query(
     `${TICKET_SELECT}
-      WHERE t.status <> 'closed' AND t.assigned_id = $1
+      WHERE t.status <> 'closed' AND t.assigned_id = $1::uuid
       ORDER BY t.last_message_at DESC NULLS LAST, t.created_at DESC
       LIMIT 50`,
-    [agentId]
+    [validAgentId]
   );
   return {
     queue: queueRows.rows.map(mapTicketRow),
@@ -418,6 +428,7 @@ export async function loadAdminOverview(agentId) {
 }
 
 export async function assignTicket(ticketId, agentId) {
+  const validAgentId = ensureAgentId(agentId);
   const participants = await getTicketParticipants(ticketId);
   if (!participants) {
     const err = new Error('TICKET_NOT_FOUND');
@@ -437,11 +448,11 @@ export async function assignTicket(ticketId, agentId) {
   }
   await query(
     `UPDATE support_tickets
-        SET assigned_id = $2,
+        SET assigned_id = $2::uuid,
             status = 'assigned',
             updated_at = now()
       WHERE id = $1`,
-    [ticketId, agentId]
+    [ticketId, validAgentId]
   );
   const ticket = await fetchTicketById(ticketId);
   emitTicketSnapshot(ticketId);
@@ -450,13 +461,14 @@ export async function assignTicket(ticketId, agentId) {
 }
 
 export async function closeTicket(ticketId, agentId) {
+  const validAgentId = ensureAgentId(agentId);
   const participants = await getTicketParticipants(ticketId);
   if (!participants) {
     const err = new Error('TICKET_NOT_FOUND');
     err.statusCode = 404;
     throw err;
   }
-  if (participants.assigned_id !== agentId) {
+  if (participants.assigned_id !== validAgentId) {
     const err = new Error('NOT_ASSIGNED');
     err.statusCode = 403;
     throw err;
@@ -482,23 +494,31 @@ export async function canAccessTicket(ticketId, viewer) {
   return participants.client_id === viewer.id;
 }
 
+export async function canAccessTicket(ticketId, viewer) {
+  const participants = await getTicketParticipants(ticketId);
+  if (!participants) return false;
+  if (viewer.role === 'admin') return true;
+  return participants.client_id === viewer.id;
+}
+
 export async function loadAdminCounters(agentId) {
+  const validAgentId = ensureAgentId(agentId);
   const [queueRes, myUnreadRes, myActiveRes] = await Promise.all([
     query(`SELECT count(*)::int AS cnt FROM support_tickets WHERE status = 'open'`),
     query(
       `SELECT count(*)::int AS cnt
          FROM support_tickets
-        WHERE assigned_id = $1
+        WHERE assigned_id = $1::uuid
           AND status <> 'closed'
           AND support_unread_count > 0`,
-      [agentId]
+      [validAgentId]
     ),
     query(
       `SELECT count(*)::int AS cnt
          FROM support_tickets
-        WHERE assigned_id = $1
+        WHERE assigned_id = $1::uuid
           AND status <> 'closed'`,
-      [agentId]
+      [validAgentId]
     ),
   ]);
   return {
