@@ -191,6 +191,7 @@ export default function Header({ user }) {
   const [notif, setNotif] = useState(0);
   const [tradeUnread, setTradeUnread] = useState(0);
   const [inspectionUnread, setInspectionUnread] = useState(0);
+  const [autotekaUnread, setAutotekaUnread] = useState(0);
   const menuRef = useRef(null);
 
   // профиль
@@ -353,6 +354,41 @@ export default function Header({ user }) {
     };
   }, [authed]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let ignore = false;
+
+    async function load() {
+      if (ignore) return;
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        setAutotekaUnread(0);
+        return;
+      }
+      try {
+        const res = await fetch(join("/api/autoteka/unread-count"), {
+          headers: { Authorization: "Bearer " + token },
+        });
+        if (!res.ok) throw new Error("status " + res.status);
+        const data = await res.json();
+        if (!ignore) setAutotekaUnread(Number(data?.count) || 0);
+      } catch (err) {
+        if (!ignore) setAutotekaUnread(0);
+        console.warn("Failed to load autoteka counter", err);
+      }
+    }
+
+    load();
+    const handler = () => load();
+    window.addEventListener("autoteka-refresh-count", handler);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener("autoteka-refresh-count", handler);
+    };
+  }, [authed]);
+
   // при заходе в /notifications обнуляем и помечаем прочитанными
   useEffect(() => {
     const onRoute = async (url) => {
@@ -489,6 +525,7 @@ export default function Header({ user }) {
             {renderNavLink("/trades", "Торги")}
             {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
             {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
+            {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
             {renderNavLink("/education", "Обучение")}
             {renderNavLink("/support", "Поддержка")}
             {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
@@ -912,5 +949,6 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
