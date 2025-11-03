@@ -1,9 +1,5 @@
 // backend/routes/adminAutoteka.js
-import express from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import express from 'express';;
 import { pool, query } from '../db.js';
 
 const router = express.Router();
@@ -24,19 +20,14 @@ async function fetchStatuses() {
   return r.rows.map((x) => x.enumlabel);
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const reportsDir = path.join(__dirname, '..', 'uploads', 'autoteka');
-fs.mkdirSync(reportsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, reportsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.pdf';
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
-  },
-});
-const upload = multer({ storage });
+function normalizeReportUrl(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^https?:\/\//i.test(text)) return text;
+  if (text.startsWith('/')) return text;
+  return null;
+}
 
 router.get('/statuses', async (_req, res) => {
   try {
@@ -143,7 +134,7 @@ router.put('/:id/status', async (req, res) => {
     if (!order) return res.status(404).json({ error: 'NOT_FOUND' });
 
     if (statusValue === 'Обработано' && !order.report_pdf_url) {
-      return res.status(400).json({ error: 'PDF_REQUIRED' });
+      return res.status(400).json({ error: 'REPORT_URL_REQUIRED' });
     }
 
     const updateSql = `
@@ -172,13 +163,15 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
-router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
+router.post('/:id/upload', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'BAD_ID' });
-    if (!req.file) return res.status(400).json({ error: 'NO_FILE' });
-
-    const publicUrl = `/uploads/autoteka/${req.file.filename}`;
+    const rawUrl = req.body?.report_url ?? req.body?.reportUrl ?? req.body?.url;
+    const reportUrl = normalizeReportUrl(rawUrl);
+    if (!reportUrl) {
+      return res.status(400).json({ error: 'REPORT_URL_REQUIRED' });
+    }
 
     const client = await pool.connect();
     let transactionStarted = false;
@@ -205,12 +198,12 @@ router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
                 admin_last_viewed_at = now()
           WHERE id = $2
           RETURNING *`,
-        [publicUrl, id]
+        [reportUrl, id]
       );
       const updatedOrder = updateCurrent.rows[0];
 
       await client.query('UPDATE listings SET autoteka_pdf_url = $1, updated_at = now() WHERE id = $2', [
-        publicUrl,
+        reportUrl,
         order.listing_id,
       ]);
 
@@ -221,7 +214,7 @@ router.post('/:id/upload', upload.single('report_pdf'), async (req, res) => {
                 updated_at = now()
           WHERE listing_id = $2 AND id <> $3
             AND (report_pdf_url IS DISTINCT FROM $1 OR status <> 'Обработано'::autoteka_status)`,
-        [publicUrl, order.listing_id, id]
+        [reportUrl, order.listing_id, id]
       );
 
       await client.query('COMMIT');
