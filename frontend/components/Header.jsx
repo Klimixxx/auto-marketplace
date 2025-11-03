@@ -526,7 +526,10 @@ export default function Header({ user }) {
             {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
             {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
             {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
-            {renderNavLink("/education", "Обучение")}
+                        {renderNavLink(
+              "https://www.auctionafto.online/training.html",
+              "Обучение"
+            )}
             {renderNavLink("/support", "Поддержка")}
             {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
           </nav>
@@ -949,6 +952,7 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
 
