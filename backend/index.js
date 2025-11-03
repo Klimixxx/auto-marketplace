@@ -11,10 +11,14 @@ import { fileURLToPath } from 'url';
 import adminParserRouter from './routes/adminParser.js';
 import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
+import autotekaRouter from './routes/autoteka.js';
+import adminAutotekaRouter from './routes/adminAutoteka.js';
+import adminAutotekaSettingsRouter from './routes/adminAutotekaSettings.js';
 import tradeOrdersRouter from './routes/tradeOrders.js';
 import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
+import { loadAutotekaSettings } from './services/autotekaSettings.js';
 import {
   RUSSIAN_REGIONS,
   getRegionNameByCode,
@@ -1224,10 +1228,22 @@ app.patch('/api/me', auth, async (req, res) => {
 });
 
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
+app.get('/api/autoteka/price', async (_req, res) => {
+  try {
+    const settings = await loadAutotekaSettings();
+    res.json({ price: settings?.price ?? 0 });
+  } catch (error) {
+    console.error('autoteka price meta error:', error);
+    res.status(500).json({ error: 'SERVER_ERROR' });
+  }
+});
 app.use('/api/inspections', auth, inspectionsRouter);
+app.use('/api/autoteka', auth, autotekaRouter);
 app.use('/api/trade-pricing', tradePricingRouter);
 app.use('/api/trade-orders', auth, tradeOrdersRouter);
 app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
+app.use('/api/admin/autoteka-orders', auth, requireAdmin, adminAutotekaRouter);
+app.use('/api/admin/autoteka-settings', auth, requireAdmin, adminAutotekaSettingsRouter);
 app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
 app.use('/api/admin/trade-pricing', auth, requireAdmin, adminTradePricingRouter);
 
