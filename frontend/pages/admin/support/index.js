@@ -74,6 +74,25 @@ function TicketItem({ ticket, active, onSelect }) {
 }
 
 function MessageBubble({ message, isOwn }) {
+  if (message?.isSystem || message?.senderRole === 'system' || message?.contentType === 'system') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
+        <div
+          style={{
+            padding: '6px 12px',
+            borderRadius: 999,
+            background: 'rgba(42,101,247,0.12)',
+            color: 'var(--accent-700, #1f4fe3)',
+            fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'center',
+          }}
+        >
+          {message?.content}
+        </div>
+      </div>
+    );
+  }
   const isFile = message?.file && !['image'].includes(message.contentType);
   const isImage = message?.file && message.contentType === 'image';
   const fileUrl = message?.file?.url ? resolveApiUrl(message.file.url) : null;
