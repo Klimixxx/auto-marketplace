@@ -126,7 +126,7 @@ export default function AutotekaOrders() {
                     <td style={td}>{(it.final_amount || 0).toLocaleString('ru-RU')} ₽</td>
                     <td style={td}>
                       {(it.status === 'Обработано' && it.report_pdf_url)
-                        ? <a href={resolveApiUrl(it.report_pdf_url)} target="_blank" rel="noreferrer">Скачать PDF</a>
+                        ? <a href={resolveApiUrl(it.report_pdf_url)} target="_blank" rel="noreferrer">Открыть</a>
                         : <span style={{ opacity: .6 }}>Недоступно</span>}
                     </td>
                   </tr>
