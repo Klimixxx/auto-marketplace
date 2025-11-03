@@ -157,8 +157,8 @@ export default function AdminAutotekaList() {
                     <td style={td}>{(it.final_amount || 0).toLocaleString('ru-RU')} ₽</td>
                     <td style={td}>
                       {(it.report_pdf_url)
-                        ? <a href={resolveApiUrl(it.report_pdf_url)} target="_blank" rel="noreferrer">PDF</a>
-                        : <span style={{ opacity: .6 }}>Нет</span>}
+                        ? <a href={resolveApiUrl(it.report_pdf_url)} target="_blank" rel="noreferrer">Открыть</a>
+                        : <span style={{ opacity: .6 }}>Нет ссылки</span>}
                     </td>
                     <td style={td}>
                       <a href={`/admin/autoteka-orders/${it.id}`} style={unread ? linkUnread : undefined}>перейти</a>
