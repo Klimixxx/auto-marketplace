@@ -487,13 +487,7 @@ export async function closeTicket(ticketId, agentId) {
   return ticket;
 }
 
-export async function canAccessTicket(ticketId, viewer) {
-  const participants = await getTicketParticipants(ticketId);
-  if (!participants) return false;
-  if (viewer.role === 'admin') return true;
-  return participants.client_id === viewer.id;
-}
-
+// ← ОСТАВЛЕН ТОЛЬКО ОДИН ВАРИАНТ
 export async function canAccessTicket(ticketId, viewer) {
   const participants = await getTicketParticipants(ticketId);
   if (!participants) return false;
