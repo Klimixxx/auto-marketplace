@@ -4,6 +4,7 @@ import multer from 'multer';
 import { validate as isUUID } from 'uuid';
 import {
   ensureActiveTicketForUser,
+  findActiveTicketForUser,
   listMessages,
   addMessage,
   markTicketRead,
