@@ -1,10 +1,9 @@
--- 014_support_chat.sql (fixed)
+-- 014_support_chat.sql (исправленный под UUID пользователей)
 
--- Тикеты
 CREATE TABLE IF NOT EXISTS support_tickets (
-  id SERIAL PRIMARY KEY,                                           -- int4 ок, локальный PK
-  client_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- тип совпадает с users.id
-  assigned_id BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,  -- тип совпадает с users.id
+  id SERIAL PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  assigned_id UUID NULL REFERENCES public.users(id) ON DELETE SET NULL,
   subject TEXT NULL,
   status TEXT NOT NULL DEFAULT 'open',
   created_at TIMESTAMP NOT NULL DEFAULT now(),
@@ -20,11 +19,10 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_client ON support_tickets(client_
 CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned ON support_tickets(assigned_id);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_last_message ON support_tickets(last_message_at DESC NULLS LAST);
 
--- Сообщения
 CREATE TABLE IF NOT EXISTS support_messages (
   id BIGSERIAL PRIMARY KEY,
-  ticket_id INT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE, -- int -> int, ок
-  sender_id BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,           -- тип как у users.id
+  ticket_id INT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  sender_id UUID NULL REFERENCES public.users(id) ON DELETE SET NULL,
   sender_role TEXT NOT NULL,
   content TEXT NULL,
   content_type TEXT NOT NULL DEFAULT 'text',
