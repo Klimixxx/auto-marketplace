@@ -139,7 +139,7 @@ export default function SupportChatWidget() {
     async function loadTicket() {
       setLoading(true);
       try {
-        const res = await apiFetch('/api/support/tickets/open', { method: 'POST' });
+        const res = await apiFetch('/api/support/tickets/open');
         if (!res.ok) throw new Error('FAILED');
         const data = await res.json();
         if (ignore) return;
@@ -234,21 +234,34 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id, ticket?.unread?.client, isOpen]);
 
-  const isReady = !!ticket && !loading;
+  const hasTicket = !!ticket?.id;
+  const canCompose = !loading && !needsLogin;
   const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
 
   async function sendMessage() {
-    if (!ticket?.id || !composer.trim()) return;
+    if (!composer.trim()) return;
     setSending(true);
     try {
-      const res = await apiFetch(`/api/support/tickets/${ticket.id}/messages`, {
+      let currentTicket = ticket;
+      if (!currentTicket?.id) {
+        const ensureRes = await apiFetch('/api/support/tickets/open', { method: 'POST' });
+        if (!ensureRes.ok) throw new Error('ensure failed');
+        const ensureData = await ensureRes.json();
+        currentTicket = ensureData.ticket || null;
+        if (currentTicket) {
+          setTicket(currentTicket);
+          setMessages(normalizeMessages(ensureData.messages || []));
+        }
+      }
+      if (!currentTicket?.id) throw new Error('no ticket');
+      const res = await apiFetch(`/api/support/tickets/${currentTicket.id}/messages`, {
         method: 'POST',
         body: { content: composer },
       });
       if (!res.ok) throw new Error('send failed');
       setComposer('');
       const socket = socketRef.current;
-      if (socket) socket.emit('support:typing', { ticketId: ticket.id, isTyping: false });
+      if (socket) socket.emit('support:typing', { ticketId: currentTicket.id, isTyping: false });
     } catch (err) {
       console.error('send support message error', err);
       setError('Не удалось отправить сообщение.');
@@ -339,15 +352,19 @@ export default function SupportChatWidget() {
               placeholder={needsLogin ? 'Необходимо авторизоваться' : 'Напишите сообщение...'}
               value={composer}
               onChange={handleInputChange}
-              disabled={sending || uploading || needsLogin || !isReady}
+              disabled={!canCompose || sending || uploading}
               rows={2}
             />
             <div className="composer-actions">
-              <label className={`attach ${uploading ? 'disabled' : ''}`}>
+              <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
                 📎
-                <input type="file" onChange={handleFileUpload} disabled={uploading || needsLogin || !isReady} />
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  disabled={uploading || !hasTicket || !canCompose}
+                />
               </label>
-              <button onClick={sendMessage} disabled={!composer.trim() || sending || needsLogin || !isReady}>
+              <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
                 Отправить
               </button>
             </div>
