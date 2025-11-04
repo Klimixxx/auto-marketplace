@@ -1,10 +1,10 @@
--- 20251214_listing_views.sql (robust & idempotent)
+-- 20251214_listing_views.sql (syntax-fixed, robust & idempotent)
 -- Track unique listing views per authenticated user and expose aggregate counters
 
 BEGIN;
 
 ----------------------------------------------------------------------
--- 1) Гарантируем, что у listings.id и users.id есть PRIMARY KEY
+-- 1) Гарантируем наличие PRIMARY KEY у listings.id и users.id
 ----------------------------------------------------------------------
 
 -- listings: ensure PK(id)
@@ -46,7 +46,7 @@ BEGIN
 END$$;
 
 ----------------------------------------------------------------------
--- 2) Определяем целевые типы id и создаём/нормализуем listing_views
+-- 2) Определяем типы PK и создаём/нормализуем listing_views
 ----------------------------------------------------------------------
 
 DO $$
@@ -61,7 +61,7 @@ DECLARE
 
   create_sql text;
 BEGIN
-  -- типы целевых PK
+  -- Фактические типы PK
   SELECT a.atttypid::regtype::text
     INTO t_listings_id
   FROM pg_attribute a
@@ -90,11 +90,11 @@ BEGIN
     RAISE EXCEPTION 'Column users.id not found';
   END IF;
 
-  -- существует ли listing_views
-  SELECT to_regclass((current_schema()||'.listing_views')) IS NOT NULL INTO lv_exists;
+  -- Есть ли listing_views
+  SELECT to_regclass(current_schema() || '.listing_views') IS NOT NULL INTO lv_exists;
 
   IF NOT lv_exists THEN
-    -- создаём сразу с точными типами
+    -- Создаём сразу с корректными типами
     create_sql := format($SQL$
       CREATE TABLE listing_views (
         listing_id %s NOT NULL,
@@ -106,7 +106,7 @@ BEGIN
     EXECUTE create_sql;
 
   ELSE
-    -- таблица есть: проверим типы
+    -- Проверка текущих типов колонок
     SELECT a.atttypid::regtype::text
       INTO lv_lid_ty
     FROM pg_attribute a
@@ -127,7 +127,6 @@ BEGIN
       AND a.attname = 'user_id'
       AND a.attnum > 0 AND NOT a.attisdropped;
 
-    -- пустая ли таблица
     EXECUTE 'SELECT NOT EXISTS (SELECT 1 FROM listing_views LIMIT 1)' INTO lv_empty;
 
     IF lv_lid_ty IS NULL OR lv_uid_ty IS NULL THEN
@@ -135,10 +134,8 @@ BEGIN
     END IF;
 
     IF lv_lid_ty = t_listings_id AND lv_uid_ty = t_users_id THEN
-      -- типы уже совпадают — ничего не делаем
-      NULL;
+      NULL; -- всё ок
     ELSE
-      -- Если пустая — дропаем и пересоздаём с корректными типами (самый безопасный путь)
       IF lv_empty THEN
         EXECUTE 'DROP TABLE listing_views';
         create_sql := format($SQL$
@@ -151,7 +148,6 @@ BEGIN
           )$SQL$, t_listings_id, t_users_id);
         EXECUTE create_sql;
       ELSE
-        -- Несовместимые типы при непустой таблице — не трогаем данные автоматически
         RAISE EXCEPTION
           'listing_views has incompatible types (listing_id: %, user_id: %) while targets are (%, %). Table is not empty — manual data migration required.',
           lv_lid_ty, lv_uid_ty, t_listings_id, t_users_id;
@@ -160,12 +156,12 @@ BEGIN
   END IF;
 END$$;
 
--- Индексы (повторные вызовы безопасны)
+-- Индексы
 CREATE INDEX IF NOT EXISTS idx_listing_views_listing ON listing_views(listing_id);
 CREATE INDEX IF NOT EXISTS idx_listing_views_user    ON listing_views(user_id);
 
 ----------------------------------------------------------------------
--- 3) FK после того, как типы точно совпадают
+-- 3) Внешние ключи (после выравнивания типов)
 ----------------------------------------------------------------------
 
 DO $$
@@ -198,9 +194,9 @@ BEGIN
     JOIN pg_class rel ON rel.oid = con.conrelid
     JOIN pg_namespace n ON n.oid = rel.relnamespace
     WHERE n.nspname = current_schema()
-      AND rel.relname = ''listing_views''
-      AND con.contype = ''f''
-      AND con.conname = ''listing_views_user_id_fkey''
+      AND rel.relname = 'listing_views'
+      AND con.contype = 'f'
+      AND con.conname = 'listing_views_user_id_fkey'
   ) INTO has_fk;
 
   IF NOT has_fk THEN
