@@ -600,6 +600,16 @@ export default function ListingPage({ item }) {
     (fallbackStatusLabel
       ? { label: fallbackStatusLabel, color: "#64748b" }
       : null);
+  const normalizedStatusLabels = [
+    statusInfo?.label,
+    fallbackStatusLabel,
+    typeof item?.status === "string" ? item.status : null,
+  ]
+    .filter(Boolean)
+    .map((value) => value.toLowerCase());
+  const isTradeFinished =
+    statusInfo?.key === "finished" ||
+    normalizedStatusLabels.some((label) => label.includes("торги завершены"));
   const summaryStartPrice =
     item?.start_price ??
     periods[0]?.priceNumber ??
@@ -743,6 +753,39 @@ export default function ListingPage({ item }) {
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
   const summaryAuctionStep =
     summaryAuctionStepNumber != null ? summaryAuctionStepNumber : summaryAuctionStepRaw;
+  const actionButtons = [
+    {
+      key: "participate",
+      label: "Участвовать в торгах",
+      onClick: handleOrderClick,
+      className: "button",
+      disabled: isTradeFinished,
+      title: isTradeFinished
+        ? "Торги завершены, участие недоступно"
+        : undefined,
+    },
+    {
+      key: "inspection",
+      label: "Заказать осмотр",
+      onClick: handleInspectionClick,
+      className: "button button-outline",
+    },
+    {
+      key: "autoteka",
+      label: "Заказать автотеку",
+      onClick: handleAutotekaClick,
+      className: "button button-outline",
+    },
+  ];
+
+  if (item?.source_url) {
+    actionButtons.push({
+      key: "source",
+      label: "Перейти к источнику",
+      href: item.source_url,
+      className: "button button-outline",
+    });
+  }
 
   return (
     <div className="container detail-page">
@@ -922,32 +965,32 @@ export default function ListingPage({ item }) {
               </div>
             )}
 
-            <div className="detail-summary__actions">
-              <button onClick={handleOrderClick} className="button">
-                Участвовать в торгах
-              </button>
-              <button
-                onClick={handleInspectionClick}
-                className="button button-outline"
-              >
-                Заказать осмотр
-              </button>
-              <button
-                onClick={handleAutotekaClick}
-                className="button button-outline"
-              >
-                Заказать автотеку
-              </button>
-              {item?.source_url ? (
-                <a
-                  href={item.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button button-outline"
-                >
-                  Перейти к источнику
-                </a>
-              ) : null}
+<div className="detail-summary__actions">
+              {actionButtons.map((action) =>
+                action.href ? (
+                  <a
+                    key={action.key}
+                    href={action.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={action.className}
+                  >
+                    {action.label}
+                  </a>
+                ) : (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={action.onClick}
+                    className={action.className}
+                    disabled={action.disabled}
+                    aria-disabled={action.disabled || undefined}
+                    title={action.title}
+                  >
+                    {action.label}
+                  </button>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -1310,6 +1353,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
