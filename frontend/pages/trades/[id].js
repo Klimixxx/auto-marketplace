@@ -769,12 +769,20 @@ export default function ListingPage({ item }) {
       label: "Заказать осмотр",
       onClick: handleInspectionClick,
       className: "button button-outline",
+      disabled: isTradeFinished,
+      title: isTradeFinished
+        ? "Торги завершены, заказ осмотра недоступен"
+        : undefined,
     },
     {
       key: "autoteka",
       label: "Заказать автотеку",
       onClick: handleAutotekaClick,
       className: "button button-outline",
+      disabled: isTradeFinished,
+      title: isTradeFinished
+        ? "Торги завершены, заказ автотеки недоступен"
+        : undefined,
     },
   ];
 
@@ -784,9 +792,12 @@ export default function ListingPage({ item }) {
       label: "Перейти к источнику",
       href: item.source_url,
       className: "button button-outline",
+      disabled: isTradeFinished,
+      title: isTradeFinished
+        ? "Торги завершены, переход к источнику недоступен"
+        : undefined,
     });
   }
-
   return (
     <div className="container detail-page">
       <div className="back-link">
@@ -966,14 +977,24 @@ export default function ListingPage({ item }) {
             )}
 
 <div className="detail-summary__actions">
-              {actionButtons.map((action) =>
+             {actionButtons.map((action) =>
                 action.href ? (
                   <a
                     key={action.key}
-                    href={action.href}
-                    target="_blank"
-                    rel="noreferrer"
+                    href={action.disabled ? undefined : action.href}
+                    target={action.disabled ? undefined : "_blank"}
+                    rel={action.disabled ? undefined : "noreferrer"}
                     className={action.className}
+                    onClick={
+                      action.disabled
+                        ? (event) => {
+                            event.preventDefault();
+                          }
+                        : undefined
+                    }
+                    aria-disabled={action.disabled || undefined}
+                    title={action.title}
+                    tabIndex={action.disabled ? -1 : undefined}
                   >
                     {action.label}
                   </a>
@@ -1353,6 +1374,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
