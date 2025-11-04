@@ -982,7 +982,7 @@ app.get('/api/listings', async (req, res) => {
            asset_type, trade_type, currency,
            start_price, current_price, min_price, max_price,
            status, end_date, source_url, photos, is_featured, published,
-           details
+           details, view_count
     FROM listings
     ${whereSql}
     ORDER BY end_date NULLS LAST, created_at DESC
@@ -1061,7 +1061,7 @@ app.get('/api/listings/featured', async (req, res) => {
               asset_type, trade_type, currency,
               start_price, current_price, min_price, max_price,
               status, end_date, source_url, photos, is_featured, published,
-              details
+              details, view_count
          FROM listings
         WHERE published = TRUE AND is_featured = TRUE
         ORDER BY published_at DESC NULLS LAST, updated_at DESC
@@ -1082,6 +1082,55 @@ app.get('/api/listings/:id', async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   res.json(withTradeTypeInfo(rows[0]));
 });
+
+app.post('/api/listings/:id/views', auth, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.sub;
+
+  try {
+    const { rows } = await query(
+      'SELECT id, published FROM listings WHERE id = $1 LIMIT 1',
+      [id]
+    );
+    const listing = rows[0];
+    if (!listing || listing.published !== true) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const insertResult = await query(
+      `INSERT INTO listing_views (listing_id, user_id, first_viewed_at, last_viewed_at)
+       VALUES ($1, $2, now(), now())
+       ON CONFLICT DO NOTHING`,
+      [id, userId]
+    );
+
+    if (insertResult.rowCount === 0) {
+      await query(
+        `UPDATE listing_views
+            SET last_viewed_at = now()
+          WHERE listing_id = $1 AND user_id = $2`,
+        [id, userId]
+      );
+    } else {
+      await query(
+        'UPDATE listings SET view_count = view_count + 1 WHERE id = $1',
+        [id]
+      );
+    }
+
+    const { rows: countRows } = await query(
+      'SELECT view_count FROM listings WHERE id = $1',
+      [id]
+    );
+    const countValue = Number(countRows[0]?.view_count) || 0;
+
+    res.json({ ok: true, viewCount: countValue });
+  } catch (error) {
+    console.error('listings view track error:', error);
+    res.status(500).json({ error: 'Failed to track view' });
+  }
+});
+
 
 // ===== Favorites =====
 app.post('/api/favorites/:id', auth, async (req, res) => {
