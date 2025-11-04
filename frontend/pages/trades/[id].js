@@ -13,6 +13,72 @@ import computeTradeTiming from "../../lib/tradeTiming";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || "";
 
+function buildApiUrl(pathname = "") {
+  const base = typeof API === "string" && API ? API.replace(/\/$/, "") : "";
+  if (!pathname) return base || "/";
+  if (pathname.startsWith("http://") || pathname.startsWith("https://")) {
+    return pathname;
+  }
+  if (pathname.startsWith("/")) return `${base}${pathname}`;
+  return `${base}/${pathname}`;
+}
+
+function parseViewCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.round(numeric);
+}
+
+function EyeIcon({ size = 18, color = "#475569" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M2.25 12s3.75-6 9.75-6 9.75 6 9.75 6-3.75 6-9.75 6-9.75-6-9.75-6Z"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="3.5"
+        stroke={color}
+        strokeWidth="1.5"
+        fill="none"
+      />
+      <circle cx="12" cy="12" r="1.5" fill={color} />
+    </svg>
+  );
+}
+
+function ViewCounter({ count }) {
+  const safeCount = parseViewCount(count);
+  const label = safeCount.toLocaleString("ru-RU");
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        color: "#475569",
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <EyeIcon />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 const VEHICLE_LABELS = new Set(
   [
     "марка",
@@ -624,6 +690,8 @@ export default function ListingPage({ item }) {
         item?.start_price ??
         null;
 
+  const [authToken, setAuthToken] = useState(null);
+  const [viewCount, setViewCount] = useState(() => parseViewCount(item?.view_count));
   const [openTradeModal, setOpenTradeModal] = useState(false);
   const [openInspectionModal, setOpenInspectionModal] = useState(false);
   const [openAutotekaModal, setOpenAutotekaModal] = useState(false);
@@ -651,11 +719,72 @@ export default function ListingPage({ item }) {
   }
 
   const photos = collectPhotos(details);
+
+  useEffect(() => {
+    setViewCount(parseViewCount(item?.view_count));
+  }, [item?.id, item?.view_count]);
+
   useEffect(() => {
     setActivePhotoIndex(0);
   }, [item?.id, photos.length]);
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
   const lightboxPhoto = photos[lightboxPhotoIndex] || null;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const stored = localStorage.getItem("token");
+    setAuthToken(stored || null);
+
+    function handleStorage(event) {
+      if (event.key === "token") {
+        setAuthToken(event.newValue || null);
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authToken || !listingIdRaw) return undefined;
+    let cancelled = false;
+
+    async function registerView() {
+      try {
+        const response = await fetch(
+          buildApiUrl(`/api/listings/${listingIdRaw}/views`),
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${authToken}` },
+          },
+        );
+
+        if (response.status === 401) {
+          if (typeof window !== "undefined") localStorage.removeItem("token");
+          setAuthToken(null);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!cancelled && data && typeof data.viewCount !== "undefined") {
+          setViewCount(parseViewCount(data.viewCount));
+        }
+      } catch (error) {
+        console.error("Failed to register listing view", error);
+      }
+    }
+
+    registerView();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, listingIdRaw]);
 
   useEffect(() => {
     if (!photos.length) {
@@ -956,10 +1085,32 @@ export default function ListingPage({ item }) {
                   </div>
                 ) : null}
                 {applicationDeadlineLabel ? (
-                  <div style={{ color: "#000000 !important" }}>
-                    <strong>Приём заявок до:</strong> {applicationDeadlineLabel}
+                  <div
+                    style={{
+                      color: "#000000 !important",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <strong>Приём заявок до:</strong> {applicationDeadlineLabel}
+                    </div>
+                    <ViewCounter count={viewCount} />
                   </div>
-                ) : null}
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      color: "#000000 !important",
+                    }}
+                  >
+                    <ViewCounter count={viewCount} />
+                  </div>
+                )}
                 {!stageEndLabel && !applicationDeadlineLabel && finishLabel ? (
                   <div style={{ color: "#000000 !important" }}>
                     <strong>Дата окончания:</strong> {finishLabel}
@@ -1374,6 +1525,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
