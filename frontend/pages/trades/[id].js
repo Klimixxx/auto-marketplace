@@ -924,7 +924,7 @@ export default function ListingPage({ item }) {
 
             <div className="detail-summary__actions">
               <button onClick={handleOrderClick} className="button">
-                Заказать сопровождение торгов
+                Участвовать в торгах
               </button>
               <button
                 onClick={handleInspectionClick}
@@ -1310,6 +1310,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
