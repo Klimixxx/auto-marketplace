@@ -490,6 +490,22 @@ listing-card__more-button {
   aspect-ratio: 4 / 3;
 }
 
+.detail-hero__main-photo-button {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.detail-hero__main-photo-button:focus-visible {
+  outline: 2px solid var(--accent-100);
+  outline-offset: 4px;
+}
+
 .detail-hero__main-photo img {
   position: absolute;
   inset: 0;
@@ -515,6 +531,113 @@ listing-card__more-button {
   place-items: center;
   color: rgba(226, 232, 240, 0.65);
   font-size: 15px;
+}
+
+.detail-photo-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 1000;
+}
+
+.detail-photo-lightbox__content {
+  position: relative;
+  width: min(1024px, 100%);
+  height: min(90vh, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-photo-lightbox__image-wrapper {
+  width: 100%;
+  height: 100%;
+  background: #0f172a;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.35);
+}
+
+.detail-photo-lightbox__image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.detail-photo-lightbox__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-photo-lightbox__close:hover,
+.detail-photo-lightbox__nav:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.detail-photo-lightbox__close:focus-visible,
+.detail-photo-lightbox__nav:focus-visible {
+  outline: 2px solid var(--accent-100);
+  outline-offset: 2px;
+}
+
+.detail-photo-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-photo-lightbox__nav--prev {
+  left: 12px;
+}
+
+.detail-photo-lightbox__nav--next {
+  right: 12px;
+}
+
+.detail-photo-lightbox__counter {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  letter-spacing: 0.02em;
 }
 
 .detail-hero__thumbs {
@@ -1329,3 +1452,4 @@ tbody tr.selected, tbody tr[aria-selected="true"] { background: var(--row-active
   background: #f3f3f3 !important;
 
 }
+
