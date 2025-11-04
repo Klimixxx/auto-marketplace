@@ -159,7 +159,35 @@ async function runMigrations() {
 await runMigrations();
 
 // CORS (расширенный: методы/заголовки/credentials + preflight)
-const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s=>s.trim()).filter(Boolean);
+function normalizeOriginValue(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if (trimmed === '*') return '*';
+  try {
+    const url = new URL(trimmed);
+    return `${url.protocol}//${url.host}`;
+  } catch (err) {
+    // значение может быть без протокола — вернём как есть
+    return trimmed;
+  }
+}
+
+const allowed = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((s) => normalizeOriginValue(s))
+  .filter(Boolean);
+
+const allowedHosts = allowed
+  .map((origin) => {
+    if (origin === '*') return '*';
+    try {
+      return new URL(origin).host;
+    } catch (err) {
+      return origin.replace(/^(https?:)?\/\//, '');
+    }
+  })
+  .filter(Boolean);
 
 const io = new SocketIOServer(server, {
   cors: {
@@ -256,7 +284,23 @@ io.on('connection', (socket) => {
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
-    if (allowed.includes(origin)) return cb(null, true);
+     if (!allowed.length || allowed.includes('*')) return cb(null, true);
+
+    const normalizedOrigin = normalizeOriginValue(origin);
+    const originHost = (() => {
+      try {
+        return new URL(normalizedOrigin || origin).host;
+      } catch (err) {
+        return (normalizedOrigin || origin || '').replace(/^(https?:)?\/\//, '');
+      }
+    })();
+
+    if (
+      (normalizedOrigin && allowed.includes(normalizedOrigin))
+      || (originHost && allowedHosts.includes(originHost))
+    ) {
+      return cb(null, true);
+    }
     return cb(new Error('Not allowed by CORS'));
   },
   credentials: true,
