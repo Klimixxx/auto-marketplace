@@ -618,6 +618,8 @@ export default function ListingPage({ item }) {
   const [openInspectionModal, setOpenInspectionModal] = useState(false);
   const [openAutotekaModal, setOpenAutotekaModal] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [isPhotoLightboxOpen, setIsPhotoLightboxOpen] = useState(false);
+  const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0);
 
   function handleOrderClick() {
     const token =
@@ -643,6 +645,76 @@ export default function ListingPage({ item }) {
     setActivePhotoIndex(0);
   }, [item?.id, photos.length]);
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
+  const lightboxPhoto = photos[lightboxPhotoIndex] || null;
+
+  useEffect(() => {
+    if (!photos.length) {
+      setIsPhotoLightboxOpen(false);
+      setLightboxPhotoIndex(0);
+      return;
+    }
+    if (lightboxPhotoIndex >= photos.length) {
+      setLightboxPhotoIndex(photos.length - 1);
+    }
+  }, [photos.length, lightboxPhotoIndex]);
+
+  useEffect(() => {
+    if (!isPhotoLightboxOpen) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsPhotoLightboxOpen(false);
+        return;
+      }
+      if (event.key === "ArrowRight" && photos.length > 1) {
+        event.preventDefault();
+        setLightboxPhotoIndex((prev) => (prev + 1) % photos.length);
+      }
+      if (event.key === "ArrowLeft" && photos.length > 1) {
+        event.preventDefault();
+        setLightboxPhotoIndex((prev) =>
+          (prev - 1 + photos.length) % photos.length,
+        );
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPhotoLightboxOpen, photos.length]);
+
+  useEffect(() => {
+    if (!isPhotoLightboxOpen) return undefined;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isPhotoLightboxOpen]);
+
+  function openPhotoLightbox(index) {
+    if (!photos.length) return;
+    setLightboxPhotoIndex(index);
+    setIsPhotoLightboxOpen(true);
+  }
+
+  function closePhotoLightbox() {
+    setIsPhotoLightboxOpen(false);
+  }
+
+  function showNextPhoto() {
+    if (photos.length <= 1) return;
+    setLightboxPhotoIndex((prev) => (prev + 1) % photos.length);
+  }
+
+  function showPrevPhoto() {
+    if (photos.length <= 1) return;
+    setLightboxPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  }
+
 
   const lotEntries = buildKeyValueEntries(details?.lot_details);
   const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
@@ -690,12 +762,19 @@ export default function ListingPage({ item }) {
         }}
       >
         <div className="detail-hero__gallery" style={{ marginTop: 60 }}>
-          <div className="detail-hero__main-photo">
+<div className="detail-hero__main-photo">
             {activePhoto ? (
-              <img
-                src={activePhoto.url}
-                alt={activePhoto.title || item?.title || "Фотография лота"}
-              />
+              <button
+                type="button"
+                className="detail-hero__main-photo-button"
+                onClick={() => openPhotoLightbox(activePhotoIndex)}
+                aria-label="Открыть фотографию в полноэкранном режиме"
+              >
+                <img
+                  src={activePhoto.url}
+                  alt={activePhoto.title || item?.title || "Фотография лота"}
+                />
+              </button>
             ) : (
               <div className="detail-hero__placeholder">
                 Фотографии появятся позже
@@ -873,6 +952,68 @@ export default function ListingPage({ item }) {
           </div>
         </div>
       </div>
+
+      {isPhotoLightboxOpen && lightboxPhoto ? (
+        <div
+          className="detail-photo-lightbox"
+          role="dialog"
+          aria-modal="true"
+          onClick={closePhotoLightbox}
+        >
+          <div
+            className="detail-photo-lightbox__content"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="detail-photo-lightbox__close"
+              onClick={closePhotoLightbox}
+              aria-label="Закрыть просмотр фотографии"
+            >
+              ×
+            </button>
+
+            {photos.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="detail-photo-lightbox__nav detail-photo-lightbox__nav--prev"
+                  onClick={showPrevPhoto}
+                  aria-label="Предыдущее фото"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="detail-photo-lightbox__nav detail-photo-lightbox__nav--next"
+                  onClick={showNextPhoto}
+                  aria-label="Следующее фото"
+                >
+                  ›
+                </button>
+              </>
+            ) : null}
+
+            <div className="detail-photo-lightbox__image-wrapper">
+              <img
+                src={lightboxPhoto.url}
+                alt={
+                  lightboxPhoto.title ||
+                  activePhoto?.title ||
+                  item?.title ||
+                  "Фотография лота"
+                }
+              />
+            </div>
+
+            {photos.length > 1 ? (
+              <div className="detail-photo-lightbox__counter">
+                {lightboxPhotoIndex + 1} / {photos.length}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <TradeOrderModal
         listingId={listingIdRaw}
@@ -1169,6 +1310,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
