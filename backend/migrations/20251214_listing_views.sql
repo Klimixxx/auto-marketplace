@@ -1,49 +1,55 @@
--- 20251214_listing_views.sql
+-- 20251214_listing_views.sql (fixed, idempotent)
 -- Track unique listing views per authenticated user and expose aggregate counters
 
 BEGIN;
 
 ----------------------------------------------------------------------
--- 1) БЕЗОПАСНО: убедимся, что в listings.id и users.id есть уникальность
---    (PRIMARY KEY или хотя бы UNIQUE). Если уже есть — блоки просто «проглотят» ошибку.
+-- 1) Убедимся, что у listings.id и users.id есть PRIMARY KEY.
+--    Добавляем PK ТОЛЬКО если его нет (без попыток «поверх» существующего).
 ----------------------------------------------------------------------
 
--- listings: требуем уникальность id
+-- listings: ensure PK(id)
 DO $$
+DECLARE
+  has_pk boolean;
 BEGIN
-  -- попробуем добавить PRIMARY KEY
-  EXECUTE 'ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id)';
-EXCEPTION
-  WHEN duplicate_table THEN RAISE; -- таблицы нет — пусть валится явно
-  WHEN duplicate_object THEN
-    -- PK уже есть или конфликт по имени. Попробуем хотя бы UNIQUE (на случай отсутствия PK).
-    BEGIN
-      EXECUTE 'ALTER TABLE listings ADD CONSTRAINT listings_id_key UNIQUE (id)';
-    EXCEPTION
-      WHEN duplicate_object THEN
-        -- уже есть UNIQUE/PK — ничего не делаем
-        NULL;
-    END;
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      JOIN pg_namespace n ON n.oid = rel.relnamespace
+     WHERE n.nspname = current_schema()
+       AND rel.relname = 'listings'
+       AND con.contype = 'p'
+  ) INTO has_pk;
+
+  IF NOT has_pk THEN
+    EXECUTE 'ALTER TABLE ONLY listings ADD PRIMARY KEY (id)';
+  END IF;
 END$$;
 
--- users: требуем уникальность id
+-- users: ensure PK(id)
 DO $$
+DECLARE
+  has_pk boolean;
 BEGIN
-  EXECUTE 'ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id)';
-EXCEPTION
-  WHEN duplicate_table THEN RAISE;
-  WHEN duplicate_object THEN
-    BEGIN
-      EXECUTE 'ALTER TABLE users ADD CONSTRAINT users_id_key UNIQUE (id)';
-    EXCEPTION
-      WHEN duplicate_object THEN
-        NULL;
-    END;
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      JOIN pg_namespace n ON n.oid = rel.relnamespace
+     WHERE n.nspname = current_schema()
+       AND rel.relname = 'users'
+       AND con.contype = 'p'
+  ) INTO has_pk;
+
+  IF NOT has_pk THEN
+    EXECUTE 'ALTER TABLE ONLY users ADD PRIMARY KEY (id)';
+  END IF;
 END$$;
 
 ----------------------------------------------------------------------
--- 2) Создаём таблицу listing_views (пока БЕЗ внешних ключей),
---    используем широкие типы, затем подгоним под реальные.
+-- 2) Создаём listing_views (без FK), затем приведём типы под реальные.
 ----------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS listing_views (
@@ -54,13 +60,12 @@ CREATE TABLE IF NOT EXISTS listing_views (
   PRIMARY KEY (listing_id, user_id)
 );
 
--- Индексы для ускорения джойнов/агрегаций (не мешают PK)
+-- Полезные индексы (не мешают PK)
 CREATE INDEX IF NOT EXISTS idx_listing_views_listing ON listing_views(listing_id);
 CREATE INDEX IF NOT EXISTS idx_listing_views_user    ON listing_views(user_id);
 
 ----------------------------------------------------------------------
--- 3) Подгоним ТИПЫ listing_views.* под ФАКТИЧЕСКИЕ типы listings.id и users.id
---    (если они не BIGINT). Это устраняет причину "foreign key ... cannot be implemented".
+-- 3) Приведём типы listing_views.listing_id/user_id к типам listings.id/users.id
 ----------------------------------------------------------------------
 
 DO $$
@@ -70,14 +75,14 @@ DECLARE
 BEGIN
   SELECT a.atttypid::regtype::text
     INTO t_listings_id
-  FROM   pg_attribute a
-  JOIN   pg_class c ON c.oid = a.attrelid
-  JOIN   pg_namespace n ON n.oid = c.relnamespace
-  WHERE  n.nspname = current_schema()
-    AND  c.relname = 'listings'
-    AND  a.attname = 'id'
-    AND  a.attnum > 0
-    AND  NOT a.attisdropped;
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = current_schema()
+    AND c.relname = 'listings'
+    AND a.attname = 'id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped;
 
   IF t_listings_id IS NULL THEN
     RAISE EXCEPTION 'Column listings.id not found';
@@ -85,14 +90,14 @@ BEGIN
 
   SELECT a.atttypid::regtype::text
     INTO t_users_id
-  FROM   pg_attribute a
-  JOIN   pg_class c ON c.oid = a.attrelid
-  JOIN   pg_namespace n ON n.oid = c.relnamespace
-  WHERE  n.nspname = current_schema()
-    AND  c.relname = 'users'
-    AND  a.attname = 'id'
-    AND  a.attnum > 0
-    AND  NOT a.attisdropped;
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = current_schema()
+    AND c.relname = 'users'
+    AND a.attname = 'id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped;
 
   IF t_users_id IS NULL THEN
     RAISE EXCEPTION 'Column users.id not found';
@@ -110,39 +115,66 @@ BEGIN
 END$$;
 
 ----------------------------------------------------------------------
--- 4) Теперь добавим ВНЕШНИЕ КЛЮЧИ (типы уже совпадают)
+-- 4) Добавим внешние ключи, ТОЛЬКО если их ещё нет
 ----------------------------------------------------------------------
 
+-- FK -> listings(id)
 DO $$
+DECLARE
+  has_fk boolean;
 BEGIN
-  EXECUTE '
-    ALTER TABLE listing_views
-      ADD CONSTRAINT listing_views_listing_id_fkey
-      FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
-  ';
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      JOIN pg_namespace n ON n.oid = rel.relnamespace
+     WHERE n.nspname = current_schema()
+       AND rel.relname = 'listing_views'
+       AND con.contype = 'f'
+       AND con.conname = 'listing_views_listing_id_fkey'
+  ) INTO has_fk;
+
+  IF NOT has_fk THEN
+    EXECUTE '
+      ALTER TABLE listing_views
+        ADD CONSTRAINT listing_views_listing_id_fkey
+        FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+    ';
+  END IF;
 END$$;
 
+-- FK -> users(id)
 DO $$
+DECLARE
+  has_fk boolean;
 BEGIN
-  EXECUTE '
-    ALTER TABLE listing_views
-      ADD CONSTRAINT listing_views_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  ';
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      JOIN pg_namespace n ON n.oid = rel.relnamespace
+     WHERE n.nspname = current_schema()
+       AND rel.relname = 'listing_views'
+       AND con.contype = 'f'
+       AND con.conname = 'listing_views_user_id_fkey'
+  ) INTO has_fk;
+
+  IF NOT has_fk THEN
+    EXECUTE '
+      ALTER TABLE listing_views
+        ADD CONSTRAINT listing_views_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ';
+  END IF;
 END$$;
 
 ----------------------------------------------------------------------
--- 5) Колонка-счётчик и дефолты
+-- 5) Счётчик просмотров
 ----------------------------------------------------------------------
 
 ALTER TABLE listings
   ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0;
 
--- На случай, если колонка существовала без DEFAULT
 ALTER TABLE listings
   ALTER COLUMN view_count SET DEFAULT 0;
 
@@ -152,7 +184,7 @@ UPDATE listings
  WHERE view_count IS NULL;
 
 ----------------------------------------------------------------------
--- 6) Бэкфилл агрегатов по уже имеющимся данным (уникальные просмотры)
+-- 6) Бэкфилл (уникальные просмотры per user)
 ----------------------------------------------------------------------
 
 WITH counters AS (
