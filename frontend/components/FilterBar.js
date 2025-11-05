@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
@@ -25,6 +25,306 @@ function normalizeRegionCodes(value) {
   return Array.from(unique.values());
 }
 
+// Компонент мультиселекта с чекбоксами и поиском
+function MultiSelectDropdown({ 
+  label, 
+  options, 
+  selectedValues, 
+  onChange, 
+  placeholder = 'Все',
+  getOptionValue = (opt) => opt,
+  getOptionLabel = (opt) => opt 
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    const searchLower = search.toLowerCase();
+    return options.filter(opt => 
+      getOptionLabel(opt).toLowerCase().includes(searchLower)
+    );
+  }, [options, search, getOptionLabel]);
+
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+
+  const handleToggle = (value) => {
+    const newSet = new Set(selectedSet);
+    if (newSet.has(value)) {
+      newSet.delete(value);
+    } else {
+      newSet.add(value);
+    }
+    onChange(Array.from(newSet));
+  };
+
+  const handleSelectAll = () => {
+    onChange(filteredOptions.map(getOptionValue));
+  };
+
+  const handleClearAll = () => {
+    onChange([]);
+  };
+
+  const displayText = useMemo(() => {
+    if (selectedValues.length === 0) return placeholder;
+    if (selectedValues.length <= 2) {
+      return selectedValues.map(val => {
+        const opt = options.find(o => getOptionValue(o) === val);
+        return opt ? getOptionLabel(opt) : val;
+      }).join(', ');
+    }
+    return `Выбрано: ${selectedValues.length}`;
+  }, [selectedValues, options, placeholder, getOptionValue, getOptionLabel]);
+
+  return (
+    <div className="multiselect-dropdown" ref={dropdownRef}>
+      <div 
+        className="multiselect-trigger"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="multiselect-text">{displayText}</span>
+        <svg 
+          className={`multiselect-arrow ${isOpen ? 'open' : ''}`}
+          width="14" 
+          height="14" 
+          viewBox="0 0 14 14"
+        >
+          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/>
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div className="multiselect-panel">
+          <div className="multiselect-search">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Поиск..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          <div className="multiselect-actions">
+            <button 
+              type="button" 
+              className="action-btn"
+              style={{background: "#2a65f7", color: "white"}}
+              onClick={(e) => { e.stopPropagation(); handleSelectAll(); }}
+            >
+              Выбрать все
+            </button>
+            <button 
+              type="button" 
+              className="action-btn"
+              style={{background: "red", color: "white"}}
+              onClick={(e) => { e.stopPropagation(); handleClearAll(); }}
+            >
+              Очистить
+            </button>
+          </div>
+
+          <div className="multiselect-options">
+            {filteredOptions.length === 0 ? (
+              <div className="no-options">Ничего не найдено</div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const value = getOptionValue(opt);
+                const label = getOptionLabel(opt);
+                const isChecked = selectedSet.has(value);
+
+                return (
+                  <label 
+                    key={value} 
+                    className="multiselect-option"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggle(value)}
+                      className="option-checkbox"
+                    />
+                    <span className="option-label">{label}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .multiselect-dropdown {
+          position: relative;
+          width: 100%;
+        }
+
+        .multiselect-trigger {
+          width: 100%;
+          height: 36px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          padding: 0 30px 0 12px;
+          background: rgba(255,255,255,.8);
+          color: var(--text);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+          position: relative;
+        }
+
+        .multiselect-trigger:hover {
+          background: #fff;
+        }
+
+        .multiselect-trigger:focus-within {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(30,144,255,.15);
+          background: #fff;
+        }
+
+        .multiselect-text {
+          flex: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-size: 14px;
+        }
+
+        .multiselect-arrow {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #758596;
+          transition: transform .2s ease;
+          pointer-events: none;
+        }
+
+        .multiselect-arrow.open {
+          transform: translateY(-50%) rotate(180deg);
+        }
+
+        .multiselect-panel {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+          z-index: 1000;
+          max-height: 320px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .multiselect-search {
+          padding: 8px;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .search-input {
+          width: 100%;
+          height: 32px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          padding: 0 10px;
+          font-size: 13px;
+          outline: none;
+          transition: border-color .15s ease;
+        }
+
+        .search-input:focus {
+          border-color: var(--brand);
+        }
+
+        .multiselect-actions {
+          display: flex;
+          gap: 8px;
+          padding: 8px;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .action-btn {
+          flex: 1;
+          height: 28px;
+          border: 1px solid var(--line);
+          border-radius: 6px;
+          background: rgba(255,255,255,.8);
+          color: var(--brand);
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all .15s ease;
+        }
+
+        .action-btn:hover {
+          background: rgba(30,144,255,.08);
+          border-color: var(--brand);
+        }
+
+        .multiselect-options {
+          overflow-y: auto;
+          max-height: 220px;
+        }
+
+        .multiselect-option {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          cursor: pointer;
+          transition: background .12s ease;
+          user-select: none;
+        }
+
+        .multiselect-option:hover {
+          background: rgba(30,144,255,.05);
+        }
+
+        .option-checkbox {
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+          accent-color: var(--brand);
+        }
+
+        .option-label {
+          flex: 1;
+          font-size: 14px;
+          color: var(--text);
+        }
+
+        .no-options {
+          padding: 16px;
+          text-align: center;
+          color: var(--muted);
+          font-size: 13px;
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function FilterBar({
   onSearch,
   initial,
@@ -35,8 +335,16 @@ export default function FilterBar({
   const [regionCodes, setRegionCodes] = useState(
     () => normalizeRegionCodes(initial?.region_code ?? initial?.region)
   );
-  const [city, setCity] = useState(initial?.city || '');
-  const [brand, setBrand] = useState(initial?.brand || '');
+  const [cities, setCities] = useState(() => {
+    const val = initial?.city || initial?.cities;
+    if (!val) return [];
+    return Array.isArray(val) ? val : [val].filter(Boolean);
+  });
+  const [brands, setBrands] = useState(() => {
+    const val = initial?.brand || initial?.brands;
+    if (!val) return [];
+    return Array.isArray(val) ? val : [val].filter(Boolean);
+  });
   const [tradeType, setTradeType] = useState(() => normalizeTradeTypeCode(initial?.trade_type) || '');
   const [minPrice, setMinPrice] = useState(initial?.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(initial?.maxPrice || '');
@@ -81,14 +389,6 @@ export default function FilterBar({
     [regionCodes]
   );
 
-  const regionSummary = useMemo(() => {
-    if (!validRegionCodes.length) return 'Все регионы';
-    const nameByCode = new Map(regionOptions.map((r) => [r.code, r.name || r.code]));
-    const names = validRegionCodes.map((c) => nameByCode.get(c) || c);
-    if (names.length <= 3) return names.join(', ');
-    return `${names.length} регионов`;
-  }, [validRegionCodes, regionOptions]);
-
   // загрузка меты
   useEffect(() => {
     let ignore = false;
@@ -121,8 +421,13 @@ export default function FilterBar({
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
-    setCity(initial?.city || '');
-    setBrand(initial?.brand || '');
+    
+    const cityVal = initial?.city || initial?.cities;
+    setCities(cityVal ? (Array.isArray(cityVal) ? cityVal : [cityVal].filter(Boolean)) : []);
+    
+    const brandVal = initial?.brand || initial?.brands;
+    setBrands(brandVal ? (Array.isArray(brandVal) ? brandVal : [brandVal].filter(Boolean)) : []);
+    
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
     setMinPrice(initial?.minPrice || '');
     setMaxPrice(initial?.maxPrice || '');
@@ -134,8 +439,8 @@ export default function FilterBar({
     onSearch({
       q,
       region_code: validRegionCodes,
-      city,
-      brand,
+      cities: cities.filter(Boolean),
+      brands: brands.filter(Boolean),
       trade_type: tradeType,
       minPrice,
       maxPrice,
@@ -144,60 +449,22 @@ export default function FilterBar({
 
   function resetFilters() {
     setQ('');
-    setRegionCodes(['']); // оставить одну пустую строку
-    setCity('');
-    setBrand('');
+    setRegionCodes([]);
+    setCities([]);
+    setBrands([]);
     setTradeType('');
     setMinPrice('');
     setMaxPrice('');
     onSearch({
       q: '',
       region_code: [],
-      city: '',
-      brand: '',
+      cities: [],
+      brands: [],
       trade_type: '',
       minPrice: '',
       maxPrice: '',
     });
   }
-
-  // --- регионы: несколько select
-  const rows = (regionCodes.length ? [...regionCodes] : ['']).map((v) => v || '');
-
-  const handleRowChange = (rowIndex, newCode) => {
-    setRegionCodes((prev) => {
-      const base = prev.length ? [...prev] : [''];
-      base[rowIndex] = newCode;
-      const seen = new Set();
-      const next = [];
-      for (const c of base) {
-        if (!c) continue;
-        if (!seen.has(c)) {
-          seen.add(c);
-          next.push(c);
-        }
-      }
-      return next.length ? next : [''];
-    });
-  };
-
-  const addRow = () => {
-    setRegionCodes((prev) => {
-      const list = prev.length ? [...prev] : [''];
-      if (list[list.length - 1] === '') return list;
-      return [...list, ''];
-    });
-  };
-
-  const removeRow = (rowIndex) => {
-    setRegionCodes((prev) => {
-      const isSingleEmpty = prev.length === 1 && (prev[0] === '' || !prev[0]);
-      if (isSingleEmpty) return prev;
-      const next = [...prev];
-      next.splice(rowIndex, 1);
-      return next.length ? next : [''];
-    });
-  };
 
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
@@ -218,82 +485,40 @@ export default function FilterBar({
         {/* Регионы */}
         <div className="field col-span-6 md:col-span-3 lg:col-span-4">
           <span className="label">Регион</span>
-          <div className="summary">{regionSummary}</div>
-
-          <div className="region-multi">
-            {rows.map((value, idx) => {
-              const isLast = idx === rows.length - 1;
-              const isSingleEmpty = rows.length === 1 && (rows[0] === '' || !rows[0]);
-              const canRemove = !isSingleEmpty;
-              return (
-                <div className="region-row" key={idx}>
-                  {/* минус слева */}
-                  <button
-                    type="button"
-                    className="btn icon minus"
-                    onClick={() => canRemove && removeRow(idx)}
-                    title={canRemove ? 'Удалить регион' : 'Нельзя удалить единственный регион'}
-                    aria-label="Удалить регион"
-                    disabled={!canRemove}
-                  >
-                    −
-                  </button>
-
-                  {/* селект по центру */}
-                  <select
-                    className="input pro select region-select"
-                    value={value}
-                    onChange={(e) => handleRowChange(idx, e.target.value)}
-                  >
-                    <option value="">{idx === 0 ? 'Все регионы' : 'Выберите регион'}</option>
-                    {regionOptions.map((r) => (
-                      <option key={r.code} value={r.code}>{r.name}</option>
-                    ))}
-                  </select>
-
-                  {/* плюс справа только у последнего */}
-                  {isLast ? (
-                    <button
-                      type="button"
-                      className="btn icon plus"
-                      onClick={addRow}
-                      title="Добавить регион"
-                      aria-label="Добавить регион"
-                    >
-                      +
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          <MultiSelectDropdown
+            label="Регион"
+            options={regionOptions}
+            selectedValues={validRegionCodes}
+            onChange={setRegionCodes}
+            placeholder="Все регионы"
+            getOptionValue={(opt) => opt.code}
+            getOptionLabel={(opt) => opt.name}
+          />
         </div>
 
         {/* Город */}
-        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
+        <div className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Город</span>
-          <div className="input-wrap">
-            <select className="input pro select" value={city} onChange={(e) => setCity(e.target.value)}>
-              <option value="">Все города</option>
-              {meta.cities?.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
-          </div>
-        </label>
+          <MultiSelectDropdown
+            label="Город"
+            options={meta.cities || []}
+            selectedValues={cities}
+            onChange={setCities}
+            placeholder="Все города"
+          />
+        </div>
 
         {/* Марка */}
-        <label className="field col-span-6 md:col-span-3 lg:col-span-2">
+        <div className="field col-span-6 md:col-span-3 lg:col-span-2">
           <span className="label">Марка</span>
-          <div className="input-wrap">
-            <select className="input pro select" value={brand} onChange={(e) => setBrand(e.target.value)}>
-              <option value="">Все марки</option>
-              {meta.brands?.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
-          </div>
-        </label>
+          <MultiSelectDropdown
+            label="Марка"
+            options={meta.brands || []}
+            selectedValues={brands}
+            onChange={setBrands}
+            placeholder="Все марки"
+          />
+        </div>
 
         {/* Тип торгов */}
         <label className="field col-span-6 md:col-span-3 lg:col-span-2">
@@ -372,7 +597,6 @@ export default function FilterBar({
           --line: #dbe3ed;
           --filters-bg: rgba(230, 238, 248, .8);
           --danger: #ef4444;
-          --icon-size: 26px;
         }
 
         .filters-panel-pro {
@@ -417,7 +641,7 @@ export default function FilterBar({
 
         .input.pro {
           width: 100%;
-          height: 36px; /* чуть ниже */
+          height: 36px;
           border: 1px solid var(--line);
           border-radius: 10px;
           padding: 0 12px;
@@ -437,53 +661,6 @@ export default function FilterBar({
           background-repeat: no-repeat;
           background-position: right 10px center;
           padding-right: 30px;
-        }
-
-        .summary { margin: 2px 0 6px; font-size: 12px; color: var(--muted); min-height: 18px; }
-
-        /* меньше расстояние между строками регионов */
-        .region-multi { display: grid; gap: 6px; }
-
-        .region-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .region-row .region-select {
-          flex: 1;
-          width: 100%;
-        }
-
-        .btn.icon {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: var(--icon-size);
-          height: var(--icon-size);
-          min-width: var(--icon-size);
-          border-radius: 999px;
-          border: 1px solid rgba(30, 144, 255, 0.28);
-          background: #ffffff;
-          color: var(--brand);
-          font-weight: 600;
-          font-size: 14px;
-          line-height: 1;
-          padding: 0;
-          cursor: pointer;
-          transition: background .15s ease, color .15s ease, box-shadow .15s ease, border-color .15s ease;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-        }
-        .btn.icon:hover { background: rgba(30,144,255,0.08); }
-        .btn.icon.plus { color: var(--brand); }
-        .btn.icon.minus { border-color: rgba(239, 68, 68, 0.35); color: var(--danger); }
-        .btn.icon:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-          border-color: rgba(148, 163, 184, 0.4);
-          color: rgba(148, 163, 184, 0.9);
-          background: rgba(248, 250, 252, 0.8);
-          box-shadow: none;
         }
 
         .actions { justify-content: flex-end; }
@@ -512,4 +689,3 @@ export default function FilterBar({
     </form>
   );
 }
-
