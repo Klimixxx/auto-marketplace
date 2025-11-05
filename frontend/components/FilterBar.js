@@ -439,8 +439,8 @@ export default function FilterBar({
     onSearch({
       q,
       region_code: validRegionCodes,
-      cities: cities.filter(Boolean),
-      brands: brands.filter(Boolean),
+      city: cities.filter(Boolean),
+      brand: brands.filter(Boolean),
       trade_type: tradeType,
       minPrice,
       maxPrice,

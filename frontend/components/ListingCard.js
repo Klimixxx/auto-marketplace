@@ -1246,7 +1246,7 @@ const articleHoverStyle = {
             borderRadius: 12,
             overflow: "hidden",
             background: "#e6eef8",
-            position: "relative",
+            // position: "relative",
             width: "100%",
             height: 200,
             minHeight: 200,
@@ -1262,8 +1262,8 @@ const articleHoverStyle = {
               src={photo}
               alt={l.title || "Фото лота"}
               style={{
-                position: "absolute",
-                inset: 0,
+                // position: "absolute",
+                // inset: 0,
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
@@ -1273,8 +1273,8 @@ const articleHoverStyle = {
           ) : (
             <div
               style={{
-                position: "absolute",
-                inset: 0,
+                // position: "absolute",
+                // inset: 0,
                 display: "grid",
                 placeItems: "center",
                 color: isSold ? "#dc2626" : "#9aa7b8",
@@ -1291,8 +1291,8 @@ const articleHoverStyle = {
           {isSold && photo ? (
             <div
               style={{
-                position: "absolute",
-                inset: 0,
+                // position: "absolute",
+                // inset: 0,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -1317,10 +1317,10 @@ const articleHoverStyle = {
           {hasMultiplePhotos ? (
             <div
               style={{
-                position: "absolute",
-                left: 16,
-                right: 16,
-                bottom: 12,
+                // position: "absolute",
+                // left: 16,
+                // right: 16,
+                // bottom: 12,
                 display: "flex",
                 gap: 6,
                 pointerEvents: "none",
