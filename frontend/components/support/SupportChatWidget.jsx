@@ -438,9 +438,9 @@ export default function SupportChatWidget() {
       setHistoryViewMode(false);
     }
   }, [needsLogin]);
+
   const hasTicket = !!ticket?.id;
   const isTicketClosed = ticket?.status === 'closed';
-  const canCompose = !loading && !needsLogin && !isTicketClosed;
   const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
   const assignedName = formatDisplayName(ticket?.assigned);
   const lastActiveMessage = messages[messages.length - 1] || null;
@@ -639,8 +639,10 @@ export default function SupportChatWidget() {
         {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
         <span className={`status ${connected ? 'online' : 'offline'}`}>{connected ? 'online' : 'offline'}</span>
       </button>
+
       {isOpen && (
         <div className="support-layout">
+          {/* LEFT: main panel */}
           <div className="support-panel">
             <div className="support-header">
               {isViewingHistory ? (
@@ -698,6 +700,7 @@ export default function SupportChatWidget() {
                 </div>
               )}
             </div>
+
             <div className="support-body" ref={listRef}>
               {needsLogin ? (
                 <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>
@@ -741,16 +744,20 @@ export default function SupportChatWidget() {
                       </button>
                     </div>
                   )}
+
                   {loading && <p className="muted">Загружаем историю...</p>}
+
                   {!loading &&
                     messages.map((msg) => (
                       <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
                     ))}
+
                   {!loading && messages.length === 0 && !showClosedBanner && (
                     <p className="muted">
                       Опишите свой вопрос — специалист подключится в течение нескольких минут.
                     </p>
                   )}
+
                   {otherTyping.length > 0 && !showClosedBanner && (
                     <div className="typing">
                       {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
@@ -759,6 +766,7 @@ export default function SupportChatWidget() {
                 </>
               )}
             </div>
+
             {isViewingHistory ? (
               <div className="history-view-footer">
                 <p>Вы просматриваете переписку из истории. Отправка сообщений недоступна.</p>
@@ -766,7 +774,7 @@ export default function SupportChatWidget() {
                   Вернуться к текущему чату
                 </button>
               </div>
-              ) : (
+            ) : (
               <div className="support-composer">
                 <textarea
                   placeholder={
@@ -797,8 +805,9 @@ export default function SupportChatWidget() {
                 {error && <div className="error">{error}</div>}
               </div>
             )}
-            </div>
           </div>
+
+          {/* RIGHT: history column — stays inside .support-layout */}
           <aside className="support-history">
             <div className="history-header">
               <strong>История обращений (30 дней)</strong>
@@ -811,11 +820,13 @@ export default function SupportChatWidget() {
                 Обновить
               </button>
             </div>
+
             {needsLogin ? (
               <p className="muted">Авторизуйтесь, чтобы увидеть историю обращений.</p>
             ) : (
               <div className="history-content">
                 {historyError && <p className="error">{historyError}</p>}
+
                 <div className="history-list-wrapper">
                   {historyLoading && history.length === 0 ? (
                     <p className="muted">Загружаем историю...</p>
@@ -857,12 +868,14 @@ export default function SupportChatWidget() {
                           </li>
                         );
                       })}
+
                       {!historyLoading && history.length === 0 && (
                         <li className="history-info">Нет обращений за последние 30 дней.</li>
                       )}
                     </ul>
                   )}
                 </div>
+
                 <div className="history-preview">
                   <div className="history-preview__header">
                     <strong>Переписка</strong>
@@ -895,6 +908,7 @@ export default function SupportChatWidget() {
           </aside>
         </div>
       )}
+
       <style jsx>{`
         .support-chat {
           position: sticky;
