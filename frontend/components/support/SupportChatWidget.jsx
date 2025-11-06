@@ -1034,8 +1034,9 @@ export default function SupportChatWidget() {
           display: grid;
           align-content: start;
           gap: 12px;
-          flex: 1;
+          flex: 0 1 auto;
           min-height: 0;
+          max-height: clamp(240px, 45vh, 420px);
           overflow-y: auto;
         }
         .history-list-wrapper p {
