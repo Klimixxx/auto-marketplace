@@ -767,6 +767,11 @@ export default function SupportChatWidget() {
                   <div className="history-preview__body">
                     {historyMessagesLoading && <p className="muted">Загружаем переписку...</p>}
                     {historyMessagesError && <p className="error">{historyMessagesError}</p>}
+                    {!selectedHistoryTicket &&
+                      !historyMessagesLoading &&
+                      !historyMessagesError && (
+                        <p className="muted">Выберите обращение, чтобы увидеть переписку.</p>
+                      )}
                     {!historyMessagesLoading && !historyMessagesError && historyMessages.length === 0 && (
                       <p className="muted">Нет сообщений для выбранного тикета.</p>
                     )}
@@ -835,8 +840,9 @@ export default function SupportChatWidget() {
         .support-layout {
           margin-top: 12px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 300px;
+          grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
           gap: 16px;
+          align-items: stretch;
         }
         .support-panel {
           background: ${palette.surface};
@@ -986,7 +992,7 @@ export default function SupportChatWidget() {
           padding: 16px;
           display: flex;
           flex-direction: column;
-          height: 560px;
+          gap: 16px;
           box-shadow: var(--shadow-md);
         }
         .history-header {
@@ -1013,15 +1019,24 @@ export default function SupportChatWidget() {
           cursor: not-allowed;
         }
         .history-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 16px;
+          align-items: stretch;
         }
         .history-list-wrapper {
-          flex: 1;
-          overflow-y: auto;
-          padding-right: 4px;
+          background: ${palette.surfaceAlt};
+          border: 1px solid ${palette.border};
+          border-radius: 16px;
+          padding: 14px;
+          display: grid;
+          align-content: start;
+          gap: 12px;
+        }
+        .history-list-wrapper p {
+          margin: 0;
+          font-size: 13px;
+          color: ${palette.muted};
         }
         .history-list {
           list-style: none;
@@ -1079,11 +1094,12 @@ export default function SupportChatWidget() {
           text-align: center;
         }
         .history-preview {
-          border-top: 1px solid ${palette.border};
-          padding-top: 8px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
+          background: ${palette.surfaceAlt};
+          border: 1px solid ${palette.border};
+          border-radius: 16px;
+          padding: 14px;
+          display: grid;
+          gap: 10px;
         }
         .history-preview__header {
           display: flex;
@@ -1097,11 +1113,8 @@ export default function SupportChatWidget() {
           color: ${palette.muted};
         }
         .history-preview__body {
-          max-height: 220px;
-          overflow-y: auto;
-          padding-right: 4px;
           display: grid;
-          gap: 6px;
+          gap: 8px;
         }
         @media (max-width: 1024px) {
           .support-layout {
@@ -1113,9 +1126,6 @@ export default function SupportChatWidget() {
           .support-panel,
           .support-history {
             min-height: 0;
-          }
-          .history-preview__body {
-            max-height: none;
           }
         }
         @media (max-width: 768px) {
