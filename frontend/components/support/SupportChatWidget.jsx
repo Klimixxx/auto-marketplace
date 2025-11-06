@@ -198,6 +198,7 @@ export default function SupportChatWidget() {
   const [historyMessagesLoading, setHistoryMessagesLoading] = useState(false);
   const [historyMessagesError, setHistoryMessagesError] = useState(null);
   const [historyViewMode, setHistoryViewMode] = useState(false);
+
   const socketRef = useRef(null);
   const listRef = useRef(null);
   const typingTimeout = useRef(null);
@@ -205,28 +206,7 @@ export default function SupportChatWidget() {
   const lastTicketIdRef = useRef(null);
   const lastTicketStatusRef = useRef(null);
 
-  // --- INIT AUTH ---
-  useEffect(() => {
-    setIsClient(true);
-    const token = getToken();
-    if (!token) {
-      setNeedsLogin(true);
-      return;
-    }
-    setAuthToken(token);
-  }, []);
-
-  // Сброс истории при потере токена
-  useEffect(() => {
-    if (!authToken) {
-      setHistory([]);
-      setSelectedHistoryId(null);
-      setHistoryMessages([]);
-      setHistoryViewMode(false);
-    }
-  }, [authToken]);
-
-  // --------- DERIVED FLAGS (ВЫЧИСЛЯЕМ РАНО, ДО ХУКОВ, ГДЕ ИСПОЛЬЗУЮТСЯ) ----------
+  // ---------------- DERIVED FLAGS (расположены ПЕРЕД эффектами) ----------------
   const hasTicket = !!ticket?.id;
   const isTicketClosed = ticket?.status === 'closed';
   const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
@@ -253,9 +233,27 @@ export default function SupportChatWidget() {
   );
 
   const canCompose = !loading && !needsLogin && !isTicketClosed && !isViewingHistory;
-  // ----------------------------------------------------------------------------------
+  // -----------------------------------------------------------------------------
 
-  // Загрузить текущий тикет
+  useEffect(() => {
+    setIsClient(true);
+    const token = getToken();
+    if (!token) {
+      setNeedsLogin(true);
+      return;
+    }
+    setAuthToken(token);
+  }, []);
+
+  useEffect(() => {
+    if (!authToken) {
+      setHistory([]);
+      setSelectedHistoryId(null);
+      setHistoryMessages([]);
+      setHistoryViewMode(false);
+    }
+  }, [authToken]);
+
   useEffect(() => {
     if (!authToken) return;
     let ignore = false;
@@ -281,7 +279,6 @@ export default function SupportChatWidget() {
     };
   }, [authToken]);
 
-  // Загрузить историю
   useEffect(() => {
     if (!authToken) return;
     let ignore = false;
@@ -307,7 +304,6 @@ export default function SupportChatWidget() {
     };
   }, [authToken, historyReloadKey]);
 
-  // Socket
   useEffect(() => {
     if (!authToken || !isClient) return;
     if (socketRef.current) return;
@@ -350,7 +346,6 @@ export default function SupportChatWidget() {
     };
   }, [authToken, isClient]);
 
-  // Join/leave комнаты тикета
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !ticket?.id) return;
@@ -360,7 +355,6 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id]);
 
-  // Автоскролл (использует isViewingHistory — он объявлен выше)
   useEffect(() => {
     if (!listRef.current) return;
     if (isViewingHistory) {
@@ -371,7 +365,6 @@ export default function SupportChatWidget() {
     else listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages.length, historyMessages.length, isOpen, showClosedBanner, isViewingHistory]);
 
-  // Маркировка прочитанным
   useEffect(() => {
     if (!ticket?.id || !isOpen) return;
     if (!ticket?.unread?.client) return;
@@ -385,7 +378,6 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id, ticket?.unread?.client, isOpen]);
 
-  // Закрытие тикета -> показать баннер, почистить печатает
   useEffect(() => {
     const previous = previousTicketRef.current;
     const isClosed = ticket?.status === 'closed';
@@ -404,7 +396,6 @@ export default function SupportChatWidget() {
     previousTicketRef.current = ticket;
   }, [ticket]);
 
-  // Перезагрузить историю при смене тикета/статуса
   useEffect(() => {
     const currentId = ticket?.id || null;
     if (currentId && lastTicketIdRef.current !== currentId) setHistoryReloadKey((k) => k + 1);
@@ -423,14 +414,12 @@ export default function SupportChatWidget() {
     lastTicketStatusRef.current = ticket.status;
   }, [ticket?.status, ticket?.id]);
 
-  // Подсветить текущий тикет в списке
   useEffect(() => {
     if (ticket?.id && selectedHistoryId !== ticket.id) {
       setSelectedHistoryId(ticket.id);
     }
   }, [ticket?.id, selectedHistoryId]);
 
-  // Держать выбранный id валидным
   useEffect(() => {
     if (!history.length) {
       if (selectedHistoryId) setSelectedHistoryId(null);
@@ -443,7 +432,6 @@ export default function SupportChatWidget() {
     });
   }, [history, ticket?.id]);
 
-  // Автовыход из просмотра истории, если вернулись на текущий тикет
   useEffect(() => {
     if (!historyViewMode) return;
     if (!selectedHistoryId) {
@@ -459,27 +447,6 @@ export default function SupportChatWidget() {
     if (needsLogin) setHistoryViewMode(false);
   }, [needsLogin]);
 
-  // Синхронизировать карточку истории для активного тикета
-  useEffect(() => {
-    if (!ticket?.id) return;
-    setHistory((prev) => {
-      if (!Array.isArray(prev)) return prev;
-      const idx = prev.findIndex((item) => item.id === ticket.id);
-      if (idx === -1) return prev;
-      const updated = prev.slice();
-      const lastMessage = messages[messages.length - 1] || null;
-      const currentItem = { ...updated[idx], ...ticket };
-      if (lastMessage) {
-        currentItem.lastMessage = { ...(currentItem.lastMessage || {}), ...lastMessage };
-      }
-      currentItem.queuePosition = ticket.queuePosition ?? currentItem.queuePosition ?? null;
-      currentItem.queueTotal = ticket.queueTotal ?? currentItem.queueTotal ?? null;
-      updated[idx] = currentItem;
-      return updated;
-    });
-  }, [messages, ticket]);
-
-  // Загрузка сообщений выбранного тикета истории
   useEffect(() => {
     if (!selectedHistoryId) {
       setHistoryMessages([]);
@@ -515,9 +482,8 @@ export default function SupportChatWidget() {
     return () => {
       ignore = true;
     };
-  }, [selectedHistoryId, ticket?.id, needsLogin, authToken, messages]);
+  }, [selectedHistoryId, ticket?.id, needsLogin, authToken]);
 
-  // Если листаем текущий тикет — синхронизировать из основного массива сообщений
   useEffect(() => {
     if (selectedHistoryId === ticket?.id) {
       setHistoryMessages(messages);
@@ -650,9 +616,7 @@ export default function SupportChatWidget() {
                     <>
                       <p>
                         {formatStatusLabel(selectedHistoryTicket.status)}
-                        {selectedHistoryTicket.assigned
-                          ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}`
-                          : ''}
+                        {selectedHistoryTicket.assigned ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}` : ''}
                       </p>
                       <p className="history-view-meta">
                         {selectedHistoryTicket.lastMessage?.createdAt || selectedHistoryTicket.updatedAt
@@ -732,9 +696,7 @@ export default function SupportChatWidget() {
                       {closedInfo?.closedAt && (
                         <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
                       )}
-                      <div className="ticket-closed__text">
-                        Если вопрос остался актуален — создайте новое обращение.
-                      </div>
+                      <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
                       <button type="button" onClick={resetClosedState} className="ticket-closed__action">
                         Начать новый тикет
                       </button>
@@ -753,9 +715,7 @@ export default function SupportChatWidget() {
                   )}
 
                   {otherTyping.length > 0 && !showClosedBanner && (
-                    <div className="typing">
-                      {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
-                    </div>
+                    <div className="typing">{otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...</div>
                   )}
                 </>
               )}
@@ -764,9 +724,7 @@ export default function SupportChatWidget() {
             {isViewingHistory ? (
               <div className="history-view-footer">
                 <p>Вы просматриваете переписку из истории. Отправка сообщений недоступна.</p>
-                <button type="button" onClick={handleExitHistoryView}>
-                  Вернуться к текущему чату
-                </button>
+                <button type="button" onClick={handleExitHistoryView}>Вернуться к текущему чату</button>
               </div>
             ) : (
               <div className="support-composer">
@@ -788,9 +746,7 @@ export default function SupportChatWidget() {
                     📎
                     <input type="file" onChange={handleFileUpload} disabled={uploading || !hasTicket || !canCompose} />
                   </label>
-                  <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
-                    Отправить
-                  </button>
+                  <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>Отправить</button>
                 </div>
                 {error && <div className="error">{error}</div>}
               </div>
@@ -858,7 +814,6 @@ export default function SupportChatWidget() {
                           </li>
                         );
                       })}
-
                       {!historyLoading && history.length === 0 && (
                         <li className="history-info">Нет обращений за последние 30 дней.</li>
                       )}
@@ -935,20 +890,18 @@ export default function SupportChatWidget() {
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
-        .status.online {
-          color: var(--green-600);
-        }
-        .status.offline {
-          color: ${palette.muted};
-        }
+        .status.online { color: var(--green-600); }
+        .status.offline { color: ${palette.muted}; }
+
         .support-layout {
           margin-top: 12px;
           display: flex;
           flex-wrap: wrap;
           justify-content: center;
-          align-items: stretch;
+          align-items: flex-start; /* важное: не выравниваем по центру */
           gap: 24px;
         }
+
         .support-panel {
           order: 1;
           flex: 1 1 360px;
@@ -958,30 +911,25 @@ export default function SupportChatWidget() {
           display: flex;
           flex-direction: column;
           min-height: clamp(520px, 60vh, 640px);
+          max-height: 640px;               /* фиксируем верхнюю границу */
           box-shadow: var(--shadow-md);
+          overflow: hidden;                 /* чтобы внутренности не выползали */
         }
+
         .support-header {
           padding: 16px 20px;
           border-bottom: 1px solid ${palette.border};
+          flex-shrink: 0;
         }
         .support-header strong {
           display: block;
           margin-bottom: 4px;
           font-size: 16px;
         }
-        .support-header p {
-          margin: 0;
-          font-size: 13px;
-          color: ${palette.muted};
-        }
-        .history-view-header {
-          display: grid;
-          gap: 8px;
-        }
-        .history-view-meta {
-          font-size: 12px;
-          color: ${palette.muted};
-        }
+        .support-header p { margin: 0; font-size: 13px; color: ${palette.muted}; }
+
+        .history-view-header { display: grid; gap: 8px; }
+        .history-view-meta { font-size: 12px; color: ${palette.muted}; }
         .history-exit {
           justify-self: start;
           border: 1px solid ${palette.border};
@@ -993,27 +941,29 @@ export default function SupportChatWidget() {
           cursor: pointer;
           transition: border-color 0.2s;
         }
-        .history-exit:hover {
-          border-color: ${palette.primary};
-        }
+        .history-exit:hover { border-color: ${palette.primary}; }
+
         .queue-info {
           margin-top: 6px;
           font-size: 13px;
           color: var(--accent-700, ${palette.primary});
           font-weight: 600;
         }
+
         .support-body {
           flex: 1;
+          min-height: 0;                    /* позволяет внутреннему скроллу работать */
           overflow-y: auto;
           padding: 12px 18px;
           display: flex;
-          flex-direction: column.
+          flex-direction: column;
+          gap: 8px;
         }
+
         .ticket-closed {
           border: 1px dashed var(--accent-200);
           border-radius: 16px;
           padding: 18px 16px;
-          margin-bottom: 16px;
           background: var(--accent-50);
           display: grid;
           gap: 8px;
@@ -1026,10 +976,7 @@ export default function SupportChatWidget() {
           text-transform: uppercase;
           color: var(--accent-700);
         }
-        .ticket-closed__text {
-          font-size: 13px;
-          color: var(--text-600);
-        }
+        .ticket-closed__text { font-size: 13px; color: var(--text-600); }
         .ticket-closed__action {
           margin-top: 4px;
           border: none;
@@ -1040,49 +987,18 @@ export default function SupportChatWidget() {
           font-size: 13px;
           cursor: pointer;
         }
-        .ticket-closed__action:hover {
-          opacity: 0.9;
-        }
-        .muted {
-          font-size: 13px;
-          color: ${palette.muted};
-        }
-        .typing {
-          font-size: 12px;
-          color: ${palette.primary};
-          margin-top: auto;
-        }
+        .ticket-closed__action:hover { opacity: 0.9; }
+
+        .muted { font-size: 13px; color: ${palette.muted}; }
+        .typing { font-size: 12px; color: ${palette.primary}; margin-top: auto; }
+
         .support-composer {
           padding: 12px 18px 18px;
           border-top: 1px solid ${palette.border};
           display: grid;
           gap: 8px;
-        }
-        .history-view-footer {
-          padding: 16px 20px;
-          border-top: 1px solid ${palette.border};
-          background: ${palette.surfaceAlt};
-          display: grid;
-          gap: 10px;
-        }
-        .history-view-footer p {
-          margin: 0;
-          font-size: 13px;
-          color: ${palette.muted};
-        }
-        .history-view-footer button {
-          justify-self: start;
-          border: 1px solid ${palette.border};
-          border-radius: 10px;
+          flex-shrink: 0;
           background: ${palette.surface};
-          color: ${palette.text};
-          padding: 6px 14px;
-          font-size: 13px;
-          cursor: pointer;
-          transition: border-color 0.2s;
-        }
-        .history-view-footer button:hover {
-          border-color: ${palette.primary};
         }
         textarea {
           resize: none;
@@ -1092,6 +1008,8 @@ export default function SupportChatWidget() {
           padding: 10px 12px;
           font-size: 14px;
           outline: none;
+          background: ${palette.surfaceAlt};
+          color: ${palette.text};
         }
         textarea:focus {
           border-color: ${palette.primary};
@@ -1112,17 +1030,12 @@ export default function SupportChatWidget() {
           justify-content: center;
           cursor: pointer;
           transition: border-color 0.2s;
+          background: ${palette.surface};
         }
-        .attach:hover {
-          border-color: ${palette.primary};
-        }
-        .attach.disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .attach input {
-          display: none;
-        }
+        .attach:hover { border-color: ${palette.primary}; }
+        .attach.disabled { opacity: 0.5; cursor: not-allowed; }
+        .attach input { display: none; }
+
         .composer-actions button {
           background: ${palette.primary};
           border: none;
@@ -1130,21 +1043,17 @@ export default function SupportChatWidget() {
           padding: 9px 18px;
           border-radius: 12px;
           font-size: 14px;
-          cursor: pointer.
+          cursor: pointer;
         }
-        .composer-actions button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .error {
-          font-size: 12px;
-          color: var(--danger-600, #d1434b);
-        }
+        .composer-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .error { font-size: 12px; color: var(--danger-600, #d1434b); }
+
+        /* ————— Правый столбец ————— */
         .support-history {
           order: 2;
           flex: 0 1 360px;
           max-width: 420px;
-          margin: 0 auto;
           background: ${palette.surface};
           border: 1px solid ${palette.border};
           border-radius: 20px;
@@ -1153,18 +1062,19 @@ export default function SupportChatWidget() {
           flex-direction: column;
           gap: 16px;
           min-height: clamp(520px, 60vh, 640px);
+          max-height: 640px;               /* одинаково с левой колонкой */
           box-shadow: var(--shadow-md);
+          overflow: hidden;                 /* чтобы список не выползал наружу */
         }
         .history-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          margin-bottom: 8px;
+          margin-bottom: 4px;
+          flex-shrink: 0;
         }
-        .history-header strong {
-          font-size: 16px;
-        }
+        .history-header strong { font-size: 16px; }
         .history-refresh {
           border: 1px solid ${palette.border};
           border-radius: 10px;
@@ -1174,17 +1084,16 @@ export default function SupportChatWidget() {
           font-size: 12px;
           cursor: pointer;
         }
-        .history-refresh:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .history-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+
         .history-content {
           display: flex;
           flex-direction: column;
           gap: 16px;
           flex: 1;
-          min-height: 0;
+          min-height: 0;                    /* ключ к внутреннему скроллу */
         }
+
         .history-list-wrapper {
           background: ${palette.surfaceAlt};
           border: 1px solid ${palette.border};
@@ -1193,16 +1102,13 @@ export default function SupportChatWidget() {
           display: grid;
           align-content: start;
           gap: 12px;
-          flex: 0 1 auto;
+          flex: 1 1 auto;
           min-height: 0;
-          max-height: clamp(240px, 45vh, 420px);
-          overflow-y: auto.
+          max-height: 100%;
+          overflow-y: auto;                 /* СКРОЛЛ ЗДЕСЬ */
         }
-        .history-list-wrapper p {
-          margin: 0;
-          font-size: 13px;
-          color: ${palette.muted};
-        }
+        .history-list-wrapper p { margin: 0; font-size: 13px; color: ${palette.muted}; }
+
         .history-list {
           list-style: none;
           margin: 0;
@@ -1215,7 +1121,7 @@ export default function SupportChatWidget() {
           text-align: left;
           border: 1px solid ${palette.border};
           border-radius: 14px;
-          background: ${palette.surfaceAlt};
+          background: ${palette.surface};
           padding: 10px 12px;
           display: grid;
           gap: 6px;
@@ -1232,32 +1138,13 @@ export default function SupportChatWidget() {
           font-size: 12px;
           color: ${palette.muted};
         }
-        .history-status {
-          font-weight: 600;
-        }
-        .history-time {
-          font-size: 11px;
-          color: ${palette.muted};
-        }
-        .history-subject {
-          font-size: 12px;
-          color: ${palette.text};
-        }
-        .history-preview-text {
-          font-size: 12px;
-          color: ${palette.muted};
-        }
-        .history-queue {
-          font-size: 11px;
-          color: ${palette.primary};
-          font-weight: 600;
-        }
-        .history-info {
-          font-size: 12px;
-          color: ${palette.muted};
-          padding: 8px;
-          text-align: center;
-        }
+        .history-status { font-weight: 600; }
+        .history-time { font-size: 11px; color: ${palette.muted}; }
+        .history-subject { font-size: 12px; color: ${palette.text}; }
+        .history-preview-text { font-size: 12px; color: ${palette.muted}; }
+        .history-queue { font-size: 11px; color: ${palette.primary}; font-weight: 600; }
+        .history-info { font-size: 12px; color: ${palette.muted}; padding: 8px; text-align: center; }
+
         .history-preview {
           background: ${palette.surfaceAlt};
           border: 1px solid ${palette.border};
@@ -1274,14 +1161,8 @@ export default function SupportChatWidget() {
           font-size: 13px;
           color: ${palette.muted};
         }
-        .history-preview__meta {
-          font-size: 12px;
-          color: ${palette.muted};
-        }
-        .history-preview__body {
-          display: grid;
-          gap: 8px;
-        }
+        .history-preview__meta { font-size: 12px; color: ${palette.muted}; }
+        .history-preview__body { display: grid; gap: 8px; }
         .history-preview__action {
           justify-self: start;
           border: 1px solid ${palette.border};
@@ -1293,9 +1174,8 @@ export default function SupportChatWidget() {
           cursor: pointer;
           transition: border-color 0.2s;
         }
-        .history-preview__action:hover {
-          border-color: ${palette.primary};
-        }
+        .history-preview__action:hover { border-color: ${palette.primary}; }
+
         @media (max-width: 1024px) {
           .support-layout {
             flex-direction: column;
@@ -1304,17 +1184,19 @@ export default function SupportChatWidget() {
           .support-panel,
           .support-history {
             min-height: 0;
+            max-height: none;
             width: 100%;
             max-width: 520px;
           }
+          .history-list-wrapper {
+            max-height: clamp(240px, 45vh, 420px);
+          }
+          .support-body { max-height: clamp(240px, 45vh, 420px); }
         }
+
         @media (max-width: 768px) {
-          .support-chat {
-            width: 100%;
-          }
-          .support-body {
-            max-height: 320px;
-          }
+          .support-chat { width: 100%; }
+          .support-body { max-height: 320px; }
         }
       `}</style>
     </div>
