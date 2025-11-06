@@ -76,6 +76,33 @@ export default function AdminInspectionsList() {
     return { activeItems: active, completedItems: completed };
   }, [items]);
 
+  const [activeTab, setActiveTab] = useState('active');
+
+  const tabs = useMemo(
+    () => [
+      {
+        key: 'active',
+        label: `В работе (${activeItems.length})`,
+        description: null,
+        emptyText: 'Заявок в работе нет.',
+        list: activeItems,
+      },
+      {
+        key: 'completed',
+        label: `Завершены (${completedItems.length})`,
+        description: 'Отображаются последние 100 заявок со статусом «Осмотр завершен».',
+        emptyText: 'Завершенных осмотров пока нет.',
+        list: completedItems,
+      },
+    ],
+    [activeItems, completedItems]
+  );
+
+  const currentTab = useMemo(
+    () => tabs.find((tab) => tab.key === activeTab) || tabs[0],
+    [tabs, activeTab]
+  );
+
   const renderTable = (list) => (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -124,23 +151,32 @@ export default function AdminInspectionsList() {
       {!loading && error && <div style={{ color: '#ef4444' }}>{error}</div>}
 
       {!loading && !error && (
-        <div style={{ display: 'grid', gap: 32 }}>
-          <section>
-            <h2 style={sectionTitle}>В работе</h2>
-            {activeItems.length > 0 ? (
-              renderTable(activeItems)
-            ) : (
-              <div style={emptyState}>Заявок в работе нет.</div>
-            )}
-          </section>
+        <div style={{ display: 'grid', gap: 24 }}>
+          <div style={tabsContainer}>
+            {tabs.map((tab) => {
+              const isActive = tab.key === currentTab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  style={isActive ? tabButtonActive : tabButton}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
           <section>
-            <h2 style={sectionTitle}>Завершены</h2>
-            <p style={sectionDescription}>Отображаются последние 100 заявок со статусом «Осмотр завершен».</p>
-            {completedItems.length > 0 ? (
-              renderTable(completedItems)
+            <h2 style={sectionTitle}>{currentTab.key === 'active' ? 'В работе' : 'Завершены'}</h2>
+            {currentTab.description ? (
+              <p style={sectionDescription}>{currentTab.description}</p>
+            ) : null}
+            {currentTab.list.length > 0 ? (
+              renderTable(currentTab.list)
             ) : (
-              <div style={emptyState}>Завершенных осмотров пока нет.</div>
+              <div style={emptyState}>{currentTab.emptyText}</div>
             )}
           </section>
         </div>
@@ -157,9 +193,32 @@ const linkUnread = { fontWeight: 700 };
 const sectionTitle = { margin: '0 0 8px', fontSize: 20, fontWeight: 700 };
 const sectionDescription = { margin: '0 0 16px', color: 'var(--text-muted)' };
 const emptyState = { padding: '12px 0', color: 'var(--text-muted)' };
+const tabsContainer = {
+  display: 'flex',
+  gap: 8,
+  borderBottom: '1px solid #eee',
+};
+const tabButton = {
+  appearance: 'none',
+  border: 'none',
+  background: 'transparent',
+  padding: '12px 16px',
+  cursor: 'pointer',
+  fontSize: 16,
+  fontWeight: 500,
+  color: 'var(--text-muted)',
+  borderBottom: '2px solid transparent',
+};
+const tabButtonActive = {
+  ...tabButton,
+  color: 'var(--text-primary, #0f172a)',
+  fontWeight: 600,
+  borderBottom: '2px solid var(--text-primary, #0f172a)',
+};
 
 function isCompletedInspection(item) {
   const statusText = (item?.status || '').toString().toLowerCase();
   return statusText.includes('осмотр') && statusText.includes('заверш');
 }
+
 
