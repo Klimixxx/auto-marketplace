@@ -723,8 +723,6 @@ export default function SupportChatWidget() {
 
             {isViewingHistory ? (
               <div className="history-view-footer">
-                <p>Вы просматриваете переписку из истории. Отправка сообщений недоступна.</p>
-                <button type="button" onClick={handleExitHistoryView}>Вернуться к текущему чату</button>
               </div>
             ) : (
               <div className="support-composer">
