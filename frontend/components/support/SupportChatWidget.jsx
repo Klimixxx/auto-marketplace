@@ -839,12 +839,15 @@ export default function SupportChatWidget() {
         }
         .support-layout {
           margin-top: 12px;
-          display: grid;
-          gap: 16px;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
           align-items: stretch;
-          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 24px;
         }
         .support-panel {
+          order: 1;
+          flex: 1 1 360px;
           background: ${palette.surface};
           border: 1px solid ${palette.border};
           border-radius: 20px;
@@ -986,6 +989,10 @@ export default function SupportChatWidget() {
           color: var(--danger-600, #d1434b);
         }
         .support-history {
+          order: 2;
+          flex: 0 1 360px;
+          max-width: 420px;
+          margin: 0 auto;
           background: ${palette.surface};
           border: 1px solid ${palette.border};
           border-radius: 20px;
@@ -1125,11 +1132,14 @@ export default function SupportChatWidget() {
         }
         @media (max-width: 1024px) {
           .support-layout {
-            grid-template-columns: 1fr;
+            flex-direction: column;
+            align-items: center;
           }
           .support-panel,
           .support-history {
             min-height: 0;
+            width: 100%;
+            max-width: 520px;
           }
         }
         @media (max-width: 768px) {
