@@ -201,6 +201,7 @@ export default function SupportChatWidget() {
   const [historyMessages, setHistoryMessages] = useState([]);
   const [historyMessagesLoading, setHistoryMessagesLoading] = useState(false);
   const [historyMessagesError, setHistoryMessagesError] = useState(null);
+  const [historyViewMode, setHistoryViewMode] = useState(false);
   const socketRef = useRef(null);
   const listRef = useRef(null);
   const typingTimeout = useRef(null);
@@ -223,6 +224,7 @@ export default function SupportChatWidget() {
       setHistory([]);
       setSelectedHistoryId(null);
       setHistoryMessages([]);
+      setHistoryViewMode(false);
     }
   }, [authToken]);
 
@@ -336,12 +338,16 @@ export default function SupportChatWidget() {
 
   useEffect(() => {
     if (!listRef.current) return;
+    if (isViewingHistory) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+      return;
+    }
     if (showClosedBanner) {
       listRef.current.scrollTop = 0;
     } else {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [messages.length, isOpen, showClosedBanner]);
+  }, [messages.length, historyMessages.length, isOpen, showClosedBanner, isViewingHistory]);
 
   useEffect(() => {
     if (!ticket?.id || !isOpen) return;
@@ -416,6 +422,22 @@ export default function SupportChatWidget() {
     });
   }, [history, ticket?.id]);
 
+  useEffect(() => {
+    if (!historyViewMode) return;
+    if (!selectedHistoryId) {
+      setHistoryViewMode(false);
+      return;
+    }
+    if (ticket?.id && selectedHistoryId === ticket.id) {
+      setHistoryViewMode(false);
+    }
+  }, [historyViewMode, selectedHistoryId, ticket?.id]);
+
+  useEffect(() => {
+    if (needsLogin) {
+      setHistoryViewMode(false);
+    }
+  }, [needsLogin]);
   const hasTicket = !!ticket?.id;
   const isTicketClosed = ticket?.status === 'closed';
   const canCompose = !loading && !needsLogin && !isTicketClosed;
@@ -435,6 +457,10 @@ export default function SupportChatWidget() {
     selectedHistoryId && ticket?.id && selectedHistoryId === ticket.id
       ? { ...ticket, lastMessage: lastActiveMessage }
       : history.find((item) => item.id === selectedHistoryId) || null;
+  const isViewingHistory = Boolean(
+    historyViewMode && selectedHistoryId && (!ticket?.id || selectedHistoryId !== ticket.id)
+  );
+  const canCompose = !loading && !needsLogin && !isTicketClosed && !isViewingHistory;
 
   useEffect(() => {
     if (!ticket?.id) return;
@@ -500,10 +526,17 @@ export default function SupportChatWidget() {
 
   function handleSelectHistoryTicket(id) {
     setSelectedHistoryId(id);
+    setHistoryMessagesError(null);
+    setHistoryViewMode(true);
   }
 
   function handleRefreshHistory() {
     setHistoryReloadKey((key) => key + 1);
+  }
+
+  function handleExitHistoryView() {
+    setHistoryViewMode(false);
+    setSelectedHistoryId(ticket?.id || null);
   }
 
   function resetClosedState() {
@@ -517,6 +550,7 @@ export default function SupportChatWidget() {
     setClosedInfo(null);
     setComposer('');
     previousTicketRef.current = null;
+    setHistoryViewMode(false);
   }
 
   async function sendMessage() {
@@ -609,83 +643,160 @@ export default function SupportChatWidget() {
         <div className="support-layout">
           <div className="support-panel">
             <div className="support-header">
-              <div>
-                <strong>Команда сопровождения</strong>
-                {assignedName && !isTicketClosed ? (
-                  <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
-                ) : (
-                  <p>Ответим на вопросы, поможем с документами и торгами.</p>
-                )}
-                {showQueueInfo && (
-                  <p className="queue-info">
-                    Ваша позиция в очереди: {queuePosition}
-                    {queueTotal && queueTotal > 0 ? ` из ${queueTotal}` : ''}
-                  </p>
-                )}
-                <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
-                <button type="button" onClick={resetClosedState} className="ticket-closed__action">
-                  Начать новый тикет
-                </button>
-              </div>
-            </div>
-            <div className="support-body" ref={listRef}>
-              {showClosedBanner && (
-                <div className="ticket-closed">
-                  <div className="ticket-closed__title">ТИКЕТ ЗАКРЫТ</div>
-                  {closedInfo?.assignedName && (
-                    <div className="ticket-closed__text">Специалист {closedInfo.assignedName} завершил обращение.</div>
+              {isViewingHistory ? (
+                <div className="history-view-header">
+                  <strong>Переписка из истории</strong>
+                  {selectedHistoryTicket ? (
+                    <>
+                      <p>
+                        {formatStatusLabel(selectedHistoryTicket.status)}
+                        {selectedHistoryTicket.assigned
+                          ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}`
+                          : ''}
+                      </p>
+                      <p className="history-view-meta">
+                        {selectedHistoryTicket.lastMessage?.createdAt || selectedHistoryTicket.updatedAt
+                          ? `Обновлено ${formatDateTime(
+                              selectedHistoryTicket.lastMessage?.createdAt ||
+                                selectedHistoryTicket.updatedAt ||
+                                selectedHistoryTicket.lastMessageAt
+                            )}`
+                          : 'Обращение создано'}
+                      </p>
+                    </>
+                  ) : (
+                    <p>Выберите обращение в списке, чтобы просмотреть переписку.</p>
                   )}
-                  {closedInfo?.closedAt && (
-                    <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
-                  )}
-                  <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
-                  <button type="button" onClick={resetClosedState} className="ticket-closed__action">
-                    Начать новый тикет
+                  <button type="button" onClick={handleExitHistoryView} className="history-exit">
+                    Вернуться к текущему чату
                   </button>
                 </div>
-              )}
-              {loading && <p className="muted">Загружаем историю...</p>}
-              {needsLogin && <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>}
-              {!loading && !needsLogin && messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
-              ))}
-              {!loading && messages.length === 0 && !needsLogin && !showClosedBanner && (
-                <p className="muted">Опишите свой вопрос — специалист подключится в течение нескольких минут.</p>
-              )}
-              {otherTyping.length > 0 && !showClosedBanner && (
-                <div className="typing">
-                  {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
+              ) : (
+                <div>
+                  <strong>Команда сопровождения</strong>
+                  {assignedName && !isTicketClosed ? (
+                    <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
+                  ) : (
+                    <p>Ответим на вопросы, поможем с документами и торгами.</p>
+                  )}
+                  {showQueueInfo && (
+                    <p className="queue-info">
+                      Ваша позиция в очереди: {queuePosition}
+                      {queueTotal && queueTotal > 0 ? ` из ${queueTotal}` : ''}
+                    </p>
+                  )}
+                  {isTicketClosed && (
+                    <>
+                      <div className="ticket-closed__text">
+                        Если вопрос остался актуален — создайте новое обращение.
+                      </div>
+                      <button type="button" onClick={resetClosedState} className="ticket-closed__action">
+                        Начать новый тикет
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
-            <div className="support-composer">
-              <textarea
-                placeholder={
-                  needsLogin
-                    ? 'Необходимо авторизоваться'
-                    : isTicketClosed
-                    ? 'Диалог завершён — создайте новый тикет'
-                    : 'Напишите сообщение...'
-                }
-                value={composer}
-                onChange={handleInputChange}
-                disabled={!canCompose || sending || uploading}
-                rows={2}
-              />
-              <div className="composer-actions">
-                <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
-                  📎
-                  <input
-                    type="file"
-                    onChange={handleFileUpload}
-                    disabled={uploading || !hasTicket || !canCompose}
-                  />
-                </label>
-                <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
-                  Отправить
+            <div className="support-body" ref={listRef}>
+              {needsLogin ? (
+                <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>
+              ) : isViewingHistory ? (
+                <>
+                  {historyMessagesLoading && <p className="muted">Загружаем переписку...</p>}
+                  {historyMessagesError && <p className="error">{historyMessagesError}</p>}
+                  {!historyMessagesLoading &&
+                    !historyMessagesError &&
+                    historyMessages.length === 0 && (
+                      <p className="muted">Нет сообщений для выбранного тикета.</p>
+                    )}
+                  {!historyMessagesLoading &&
+                    !historyMessagesError &&
+                    historyMessages.map((msg) => (
+                      <MessageBubble
+                        key={`${selectedHistoryId || 'history'}-${msg.id}`}
+                        message={msg}
+                        isOwn={msg.senderRole !== 'support'}
+                      />
+                    ))}
+                </>
+              ) : (
+                <>
+                  {showClosedBanner && (
+                    <div className="ticket-closed">
+                      <div className="ticket-closed__title">ТИКЕТ ЗАКРЫТ</div>
+                      {closedInfo?.assignedName && (
+                        <div className="ticket-closed__text">
+                          Специалист {closedInfo.assignedName} завершил обращение.
+                        </div>
+                      )}
+                      {closedInfo?.closedAt && (
+                        <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
+                      )}
+                      <div className="ticket-closed__text">
+                        Если вопрос остался актуален — создайте новое обращение.
+                      </div>
+                      <button type="button" onClick={resetClosedState} className="ticket-closed__action">
+                        Начать новый тикет
+                      </button>
+                    </div>
+                  )}
+                  {loading && <p className="muted">Загружаем историю...</p>}
+                  {!loading &&
+                    messages.map((msg) => (
+                      <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
+                    ))}
+                  {!loading && messages.length === 0 && !showClosedBanner && (
+                    <p className="muted">
+                      Опишите свой вопрос — специалист подключится в течение нескольких минут.
+                    </p>
+                  )}
+                  {otherTyping.length > 0 && !showClosedBanner && (
+                    <div className="typing">
+                      {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {isViewingHistory ? (
+              <div className="history-view-footer">
+                <p>Вы просматриваете переписку из истории. Отправка сообщений недоступна.</p>
+                <button type="button" onClick={handleExitHistoryView}>
+                  Вернуться к текущему чату
                 </button>
               </div>
-              {error && <div className="error">{error}</div>}
+              ) : (
+              <div className="support-composer">
+                <textarea
+                  placeholder={
+                    needsLogin
+                      ? 'Необходимо авторизоваться'
+                      : isTicketClosed
+                      ? 'Диалог завершён — создайте новый тикет'
+                      : 'Напишите сообщение...'
+                  }
+                  value={composer}
+                  onChange={handleInputChange}
+                  disabled={!canCompose || sending || uploading}
+                  rows={2}
+                />
+                <div className="composer-actions">
+                  <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
+                    📎
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      disabled={uploading || !hasTicket || !canCompose}
+                    />
+                  </label>
+                  <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
+                    Отправить
+                  </button>
+                </div>
+                {error && <div className="error">{error}</div>}
+              </div>
+            )}
             </div>
           </div>
           <aside className="support-history">
@@ -765,25 +876,18 @@ export default function SupportChatWidget() {
                     )}
                   </div>
                   <div className="history-preview__body">
-                    {historyMessagesLoading && <p className="muted">Загружаем переписку...</p>}
-                    {historyMessagesError && <p className="error">{historyMessagesError}</p>}
-                    {!selectedHistoryTicket &&
-                      !historyMessagesLoading &&
-                      !historyMessagesError && (
-                        <p className="muted">Выберите обращение, чтобы увидеть переписку.</p>
-                      )}
-                    {!historyMessagesLoading && !historyMessagesError && historyMessages.length === 0 && (
-                      <p className="muted">Нет сообщений для выбранного тикета.</p>
+                    {isViewingHistory ? (
+                      <>
+                        <p className="muted">Переписка открыта в основном окне.</p>
+                        <button type="button" className="history-preview__action" onClick={handleExitHistoryView}>
+                          Вернуться к текущему чату
+                        </button>
+                      </>
+                    ) : (
+                      <p className="muted">
+                        Выберите обращение, чтобы просмотреть переписку в основном окне.
+                      </p>
                     )}
-                    {!historyMessagesLoading &&
-                      !historyMessagesError &&
-                      historyMessages.map((msg) => (
-                        <MessageBubble
-                          key={`${selectedHistoryId || 'history'}-${msg.id}`}
-                          message={msg}
-                          isOwn={msg.senderRole !== 'support'}
-                        />
-                      ))}
                   </div>
                 </div>
               </div>
@@ -870,6 +974,28 @@ export default function SupportChatWidget() {
           font-size: 13px;
           color: ${palette.muted};
         }
+        .history-view-header {
+          display: grid;
+          gap: 8px;
+        }
+        .history-view-meta {
+          font-size: 12px;
+          color: ${palette.muted};
+        }
+        .history-exit {
+          justify-self: start;
+          border: 1px solid ${palette.border};
+          border-radius: 10px;
+          background: ${palette.surfaceAlt};
+          color: ${palette.text};
+          padding: 6px 12px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: border-color 0.2s;
+        }
+        .history-exit:hover {
+          border-color: ${palette.primary};
+        }
         .queue-info {
           margin-top: 6px;
           font-size: 13px;
@@ -931,6 +1057,32 @@ export default function SupportChatWidget() {
           border-top: 1px solid ${palette.border};
           display: grid;
           gap: 8px;
+        }
+        .history-view-footer {
+          padding: 16px 20px;
+          border-top: 1px solid ${palette.border};
+          background: ${palette.surfaceAlt};
+          display: grid;
+          gap: 10px;
+        }
+        .history-view-footer p {
+          margin: 0;
+          font-size: 13px;
+          color: ${palette.muted};
+        }
+        .history-view-footer button {
+          justify-self: start;
+          border: 1px solid ${palette.border};
+          border-radius: 10px;
+          background: ${palette.surface};
+          color: ${palette.text};
+          padding: 6px 14px;
+          font-size: 13px;
+          cursor: pointer;
+          transition: border-color 0.2s;
+        }
+        .history-view-footer button:hover {
+          border-color: ${palette.primary};
         }
         textarea {
           resize: none;
@@ -1129,6 +1281,20 @@ export default function SupportChatWidget() {
         .history-preview__body {
           display: grid;
           gap: 8px;
+        }
+        .history-preview__action {
+          justify-self: start;
+          border: 1px solid ${palette.border};
+          border-radius: 10px;
+          background: ${palette.surface};
+          color: ${palette.text};
+          padding: 6px 12px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: border-color 0.2s;
+        }
+        .history-preview__action:hover {
+          border-color: ${palette.primary};
         }
         @media (max-width: 1024px) {
           .support-layout {
