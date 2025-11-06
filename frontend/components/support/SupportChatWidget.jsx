@@ -73,7 +73,6 @@ function formatMessagePreview(message) {
   return 'Сообщение';
 }
 
-
 function normalizeMessages(list = []) {
   return list
     .filter(Boolean)
@@ -617,7 +616,7 @@ export default function SupportChatWidget() {
                 ) : (
                   <p>Ответим на вопросы, поможем с документами и торгами.</p>
                 )}
-               {showQueueInfo && (
+                {showQueueInfo && (
                   <p className="queue-info">
                     Ваша позиция в очереди: {queuePosition}
                     {queueTotal && queueTotal > 0 ? ` из ${queueTotal}` : ''}
@@ -628,7 +627,6 @@ export default function SupportChatWidget() {
                   Начать новый тикет
                 </button>
               </div>
-            )}
             </div>
             <div className="support-body" ref={listRef}>
               {showClosedBanner && (
@@ -840,7 +838,7 @@ export default function SupportChatWidget() {
           grid-template-columns: minmax(0, 1fr) 300px;
           gap: 16px;
         }
-        .support-panel 
+        .support-panel {
           background: ${palette.surface};
           border: 1px solid ${palette.border};
           border-radius: 20px;
