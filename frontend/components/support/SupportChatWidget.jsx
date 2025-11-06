@@ -722,8 +722,6 @@ export default function SupportChatWidget() {
             </div>
 
             {isViewingHistory ? (
-              <div className="history-view-footer">
-              </div>
             ) : (
               <div className="support-composer">
                 <textarea
