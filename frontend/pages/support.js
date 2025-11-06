@@ -147,16 +147,34 @@ export default function Support() {
           marginTop: 40,
           display: 'grid',
           gap: 32,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          alignItems: 'start',
         }}
       >
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div
+          style={{
+            display: 'grid',
+            gap: 12,
+            textAlign: 'center',
+            justifyItems: 'center',
+            maxWidth: 720,
+            margin: '0 auto',
+          }}
+        >
           <h2 style={{ margin: 0, fontSize: 28, color: palette.title }}>Быстрый чат с поддержкой</h2>
-          <p style={{ margin: 0, color: palette.text, fontSize: 16 }}>
+          <p style={{ margin: 0, color: palette.text, fontSize: 16, maxWidth: 560 }}>
             Опишите ситуацию и прикрепите файлы — специалист сопровождения подключится в течение нескольких минут. Мы видим всю историю переписки, кто ведёт ваш тикет, и оперативно реагируем на новые сообщения.
           </p>
-          <ul style={{ margin: '8px 0 0', paddingLeft: 20, color: palette.text, fontSize: 15, display: 'grid', gap: 6 }}>
+          <ul
+            style={{
+              margin: '8px 0 0',
+              paddingLeft: 20,
+              color: palette.text,
+              fontSize: 15,
+              display: 'grid',
+              gap: 6,
+              textAlign: 'left',
+              maxWidth: 520,
+            }}
+          >
             <li>Онлайн-уведомления о новых сообщениях и печати специалиста.</li>
             <li>Возможность прикрепить фотографии, договоры и другие документы.</li>
             <li>История переписки всегда доступна в вашем личном кабинете.</li>
@@ -327,6 +345,7 @@ export default function Support() {
     </div>
   );
 }
+
 
 
 
