@@ -9,7 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { query } from './db.js';
+import { pool, query } from './db.js';
 import adminParserRouter from './routes/adminParser.js';
 import inspectionsRouter from './routes/inspections.js';
 import adminInspectionsRouter from './routes/adminInspections.js';
@@ -737,6 +737,52 @@ function resolveListingTradeType(record) {
   if (hasPublic || base === 'public_offer') return 'public_offer';
   if (hasAuction || base === 'open_auction') return 'open_auction';
   if (base) return base;
+  return null;
+}
+
+function pickStatusCandidate(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const text = String(value).trim();
+    return text || null;
+  }
+  if (typeof value === 'object') {
+    const order = ['name', 'title', 'label', 'status', 'value'];
+    for (const key of order) {
+      if (value[key] !== undefined) {
+        const candidate = pickStatusCandidate(value[key]);
+        if (candidate) return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+function extractStatusFromSource(source) {
+  if (!source || typeof source !== 'object') return null;
+  const direct = pickStatusCandidate(source.status);
+  if (direct) return direct;
+  const keys = ['status_name', 'statusName', 'status_label', 'statusLabel', 'lot_status'];
+  for (const key of keys) {
+    if (source[key] !== undefined) {
+      const candidate = pickStatusCandidate(source[key]);
+      if (candidate) return candidate;
+    }
+  }
+  return null;
+}
+
+function extractListingStatus(record) {
+  const direct = pickStatusCandidate(record?.status);
+  if (direct) return direct;
+  const fromRecord = extractStatusFromSource(record);
+  if (fromRecord) return fromRecord;
+  const details = record?.details;
+  const fromDetails = extractStatusFromSource(details);
+  if (fromDetails) return fromDetails;
+  const lot = details?.lot_details;
+  const fromLot = extractStatusFromSource(lot);
+  if (fromLot) return fromLot;
   return null;
 }
 
@@ -1481,6 +1527,35 @@ app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
   }
 });
 
+// убрать администратора
+app.delete('/api/admin/admins/:code', auth, requireAdmin, async (req, res) => {
+  const code = String(req.params?.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
+
+  try {
+    const { rows: current } = await query(
+      `SELECT user_code FROM users WHERE id::text = $1`,
+      [req.user.sub]
+    );
+    if (current[0]?.user_code === code) {
+      return res.status(400).json({ error: 'Нельзя удалить себя из администраторов' });
+    }
+
+    const { rows } = await query(
+      `UPDATE users
+          SET role = 'user', updated_at = now()
+        WHERE user_code = $1 AND role = 'admin'
+        RETURNING user_code, role`,
+      [code]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден или уже не админ' });
+    res.json({ ok: true, user: rows[0] });
+  } catch (e) {
+    console.error('remove admin error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 // статистика дешборда
 app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
   try {
@@ -1507,6 +1582,12 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
       { rows: [inspectionsStats] },
       { rows: [{ pro_count: proUsers }] },
       participationStats,
+      { rows: [{ count: newUsers30 }] },
+      { rows: [{ count: activeUsers30 }] },
+      { rows: [{ count: positiveBalanceUsers }] },
+      { rows: [{ count: tradeOrdersCount }] },
+      { rows: [{ count: autotekaOrdersCount }] },
+      { rows: [balanceTopupsSums] },
     ] = await Promise.all([
       query(`SELECT count(*)::int c FROM users`),
       query(
@@ -1524,6 +1605,18 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
       `),
       query(`SELECT count(*)::int AS pro_count FROM users WHERE lower(coalesce(subscription_status,'')) = 'pro'`),
       resolveParticipationStats(),
+      query(`SELECT count(*)::int AS count FROM users WHERE created_at >= now() - INTERVAL '30 days'`),
+      query(`SELECT count(DISTINCT user_id)::int AS count FROM user_sessions WHERE created_at >= now() - INTERVAL '30 days'`),
+      query(`SELECT count(*)::int AS count FROM users WHERE COALESCE(balance, 0) > 0`),
+      query(`SELECT count(*)::int AS count FROM trade_orders`),
+      query(`SELECT count(*)::int AS count FROM autoteka_orders`),
+      query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '1 month' THEN amount END), 0)::numeric AS month,
+          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '6 months' THEN amount END), 0)::numeric AS half_year,
+          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '1 year' THEN amount END), 0)::numeric AS year
+        FROM balance_topups
+      `),
     ]);
 
     const map = new Map(visits.map(v => [String(v.day), v.cnt]));
@@ -1533,6 +1626,48 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
       const iso = d.toISOString().slice(0,10);
       out.push({ day: iso, cnt: map.get(iso) || 0 });
     }
+
+    const { rows: listings } = await query(`
+      SELECT id, region_code, region, trade_type, details,
+             current_price, start_price, min_price, max_price, status
+        FROM listings
+       WHERE published = TRUE
+    `);
+
+    let offersCount = 0;
+    let auctionsCount = 0;
+    let totalValue = 0;
+    let finishedCount = 0;
+
+    for (const row of listings) {
+      const resolvedType = resolveListingTradeType(row) || row?.trade_type;
+      const normalizedType = normalizeTradeTypeCode(resolvedType);
+      if (normalizedType === 'public_offer') {
+        offersCount += 1;
+      } else if (normalizedType === 'open_auction') {
+        auctionsCount += 1;
+      }
+
+      const priceSources = [row?.current_price, row?.start_price, row?.min_price, row?.max_price];
+      let price = 0;
+      for (const value of priceSources) {
+        const num = Number(value);
+        if (Number.isFinite(num) && num > 0) { price = num; break; }
+        if (Number.isFinite(num) && !price) price = num;
+      }
+      totalValue += price;
+
+      const statusName = extractListingStatus(row);
+      if (statusName && statusName.toLowerCase().includes('заверш')) {
+        finishedCount += 1;
+      }
+    }
+
+    const balanceTopups = {
+      month: Number(balanceTopupsSums?.month ?? 0) || 0,
+      halfYear: Number(balanceTopupsSums?.half_year ?? 0) || 0,
+      year: Number(balanceTopupsSums?.year ?? 0) || 0,
+    };
 
     res.json({
       users,
@@ -1548,6 +1683,25 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
       },
       proUsers: proUsers ?? 0,
       participation: participationStats,
+      usersStats: {
+        total: users ?? 0,
+        new30Days: newUsers30 ?? 0,
+        active30Days: activeUsers30 ?? 0,
+        positiveBalance: positiveBalanceUsers ?? 0,
+      },
+      listingsStats: {
+        publicOffers: offersCount,
+        openAuctions: auctionsCount,
+        totalListings: listings.length,
+        totalValue,
+        finished: finishedCount,
+      },
+      finance: {
+        tradeOrders: tradeOrdersCount ?? 0,
+        autotekaOrders: autotekaOrdersCount ?? 0,
+        inspectionOrders: inspectionsStats?.total ?? 0,
+        balanceTopups,
+      },
     });
   } catch (e) {
     console.error('admin stats error:', e);
@@ -1560,8 +1714,10 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
   const userId = req.user.sub;
   const amount = Number(req.body?.amount);
   if (!amount || amount <= 0) return res.status(400).json({ error: 'Некорректная сумма' });
+  const client = await pool.connect();
   try {
-    const { rows } = await query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `UPDATE users
           SET balance = COALESCE(balance,0) + $1,
               updated_at = now()
@@ -1569,10 +1725,22 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
         RETURNING balance`,
       [amount, userId]
     );
+    if (!rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    await client.query(
+      `INSERT INTO balance_topups(user_id, amount) VALUES ($1, $2)`,
+      [userId, amount]
+    );
+    await client.query('COMMIT');
     return res.json({ ok: true, balance: rows[0].balance });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('balance-add error:', e);
     res.status(500).json({ error: 'Не удалось пополнить' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1772,20 +1940,37 @@ app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req
 // === ADMIN: отправить уведомление пользователю ===
 app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
   try {
-    const code = String(req.body?.user_code || '').trim();
+    const rawCode = String(req.body?.user_code || '').trim();
     const title = String(req.body?.title || '').trim();
     const body = String(req.body?.body || '').trim();
-    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
+    const sendAllRaw = req.body?.send_all ?? req.body?.sendAll;
+    const sendAll =
+      sendAllRaw === true ||
+      sendAllRaw === 'true' ||
+      sendAllRaw === '1' ||
+      sendAllRaw === 1;
+
     if (!title || !body) return res.status(400).json({ error: 'Введите заголовок и описание' });
 
-    const { rows: u } = await query(`SELECT id FROM users WHERE user_code = $1`, [code]);
+    if (sendAll) {
+      await query(
+        `INSERT INTO user_notifications(user_id, title, body)
+         SELECT id, $1, $2 FROM users`,
+        [title, body]
+      );
+      return res.json({ ok: true, audience: 'all' });
+    }
+
+    if (!/^\d{6}$/.test(rawCode)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
+
+    const { rows: u } = await query(`SELECT id FROM users WHERE user_code = $1`, [rawCode]);
     if (!u.length) return res.status(404).json({ error: 'Пользователь не найден' });
 
     await query(
       `INSERT INTO user_notifications(user_id, title, body) VALUES ($1,$2,$3)`,
       [String(u[0].id), title, body]
     );
-    res.json({ ok: true });
+    res.json({ ok: true, audience: 'single' });
   } catch (e) {
     console.error('admin notify error:', e);
     res.status(500).json({ error: 'failed' });
