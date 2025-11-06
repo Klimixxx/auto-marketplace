@@ -1246,7 +1246,7 @@ const articleHoverStyle = {
             borderRadius: 12,
             overflow: "hidden",
             background: "#e6eef8",
-            // position: "relative",
+            position: "relative",
             width: "100%",
             height: 200,
             minHeight: 200,
@@ -1284,6 +1284,7 @@ const articleHoverStyle = {
                 fontSize: 24,
                 letterSpacing: 1.5,
                 textTransform: "uppercase",
+
               }}
             >
               {isSold ? "ПРОДАНО" : "Нет фото"}
@@ -1293,8 +1294,8 @@ const articleHoverStyle = {
           {isSold && photo ? (
             <div
               style={{
-                // position: "absolute",
-                // inset: 0,
+                position: "absolute",
+                inset: 0,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
