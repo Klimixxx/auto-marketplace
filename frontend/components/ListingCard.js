@@ -1251,6 +1251,8 @@ const articleHoverStyle = {
             height: 200,
             minHeight: 200,
             flexShrink: 0,
+            display: "flex",
+            justifyContent: "center"
           }}
           onMouseMove={handlePhotoMouseMove}
           onMouseLeave={handlePhotoMouseLeave}
