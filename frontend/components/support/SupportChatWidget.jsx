@@ -722,6 +722,9 @@ export default function SupportChatWidget() {
             </div>
 
             {isViewingHistory ? (
+              <div className="history-view-footer">
+                <p>Вы просматриваете переписку из истории. Отправка сообщений недоступна.</p>
+              </div>
             ) : (
               <div className="support-composer">
                 <textarea
