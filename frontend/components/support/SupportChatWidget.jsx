@@ -840,9 +840,9 @@ export default function SupportChatWidget() {
         .support-layout {
           margin-top: 12px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
           gap: 16px;
           align-items: stretch;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         }
         .support-panel {
           background: ${palette.surface};
@@ -850,7 +850,7 @@ export default function SupportChatWidget() {
           border-radius: 20px;
           display: flex;
           flex-direction: column;
-          height: 560px;
+          min-height: clamp(520px, 60vh, 640px);
           box-shadow: var(--shadow-md);
         }
         .support-header {
@@ -993,6 +993,7 @@ export default function SupportChatWidget() {
           display: flex;
           flex-direction: column;
           gap: 16px;
+          min-height: clamp(520px, 60vh, 640px);
           box-shadow: var(--shadow-md);
         }
         .history-header {
@@ -1019,10 +1020,11 @@ export default function SupportChatWidget() {
           cursor: not-allowed;
         }
         .history-content {
-          display: grid;
-          grid-template-columns: 1fr;
+          display: flex;
+          flex-direction: column;
           gap: 16px;
-          align-items: stretch;
+          flex: 1;
+          min-height: 0;
         }
         .history-list-wrapper {
           background: ${palette.surfaceAlt};
@@ -1032,6 +1034,9 @@ export default function SupportChatWidget() {
           display: grid;
           align-content: start;
           gap: 12px;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
         }
         .history-list-wrapper p {
           margin: 0;
@@ -1100,6 +1105,7 @@ export default function SupportChatWidget() {
           padding: 14px;
           display: grid;
           gap: 10px;
+          flex-shrink: 0;
         }
         .history-preview__header {
           display: flex;
@@ -1120,9 +1126,6 @@ export default function SupportChatWidget() {
           .support-layout {
             grid-template-columns: 1fr;
           }
-          .support-history {
-            height: auto;
-          }
           .support-panel,
           .support-history {
             min-height: 0;
@@ -1131,9 +1134,6 @@ export default function SupportChatWidget() {
         @media (max-width: 768px) {
           .support-chat {
             width: 100%;
-          }
-          .support-panel {
-            height: auto;
           }
           .support-body {
             max-height: 320px;
