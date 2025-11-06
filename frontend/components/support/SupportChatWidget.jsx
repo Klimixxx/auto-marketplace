@@ -63,9 +63,7 @@ function formatStatusLabel(status) {
 function formatMessagePreview(message) {
   if (!message) return 'Нет сообщений';
   if (message.isSystem) return message.content || 'Системное уведомление';
-  if (message.file) {
-    return message.file.name ? `Вложение: ${message.file.name}` : 'Вложение';
-  }
+  if (message.file) return message.file.name ? `Вложение: ${message.file.name}` : 'Вложение';
   if (message.content && message.content.trim()) {
     const text = message.content.trim();
     return text.length > 140 ? `${text.slice(0, 137)}…` : text;
@@ -110,9 +108,7 @@ function MessageBubble({ message, isOwn }) {
   return (
     <div className={`bubble ${isOwn ? 'own' : 'remote'}`}>
       <div className="bubble-body">
-        {message.content && !message.file && (
-          <p className="bubble-text">{message.content}</p>
-        )}
+        {message.content && !message.file && <p className="bubble-text">{message.content}</p>}
         {isImage && fileUrl && (
           <a href={fileUrl} target="_blank" rel="noreferrer" className="bubble-image-link">
             <img src={fileUrl} alt={message.file?.name || 'Вложение'} />
@@ -209,6 +205,7 @@ export default function SupportChatWidget() {
   const lastTicketIdRef = useRef(null);
   const lastTicketStatusRef = useRef(null);
 
+  // --- INIT AUTH ---
   useEffect(() => {
     setIsClient(true);
     const token = getToken();
@@ -219,6 +216,7 @@ export default function SupportChatWidget() {
     setAuthToken(token);
   }, []);
 
+  // Сброс истории при потере токена
   useEffect(() => {
     if (!authToken) {
       setHistory([]);
@@ -228,6 +226,36 @@ export default function SupportChatWidget() {
     }
   }, [authToken]);
 
+  // --------- DERIVED FLAGS (ВЫЧИСЛЯЕМ РАНО, ДО ХУКОВ, ГДЕ ИСПОЛЬЗУЮТСЯ) ----------
+  const hasTicket = !!ticket?.id;
+  const isTicketClosed = ticket?.status === 'closed';
+  const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
+  const assignedName = formatDisplayName(ticket?.assigned);
+  const lastActiveMessage = messages[messages.length - 1] || null;
+
+  const queuePositionRaw = ticket?.queuePosition;
+  const queueTotalRaw = ticket?.queueTotal;
+  const queuePosition =
+    queuePositionRaw != null && Number.isFinite(Number(queuePositionRaw))
+      ? Number(queuePositionRaw)
+      : null;
+  const queueTotal =
+    queueTotalRaw != null && Number.isFinite(Number(queueTotalRaw)) ? Number(queueTotalRaw) : null;
+  const showQueueInfo = !isTicketClosed && queuePosition != null && queuePosition > 0;
+
+  const selectedHistoryTicket =
+    selectedHistoryId && ticket?.id && selectedHistoryId === ticket.id
+      ? { ...ticket, lastMessage: lastActiveMessage }
+      : history.find((item) => item.id === selectedHistoryId) || null;
+
+  const isViewingHistory = Boolean(
+    historyViewMode && selectedHistoryId && (!ticket?.id || selectedHistoryId !== ticket.id)
+  );
+
+  const canCompose = !loading && !needsLogin && !isTicketClosed && !isViewingHistory;
+  // ----------------------------------------------------------------------------------
+
+  // Загрузить текущий тикет
   useEffect(() => {
     if (!authToken) return;
     let ignore = false;
@@ -253,6 +281,7 @@ export default function SupportChatWidget() {
     };
   }, [authToken]);
 
+  // Загрузить историю
   useEffect(() => {
     if (!authToken) return;
     let ignore = false;
@@ -278,6 +307,7 @@ export default function SupportChatWidget() {
     };
   }, [authToken, historyReloadKey]);
 
+  // Socket
   useEffect(() => {
     if (!authToken || !isClient) return;
     if (socketRef.current) return;
@@ -298,24 +328,17 @@ export default function SupportChatWidget() {
         if (exists) return prev;
         return normalizeMessages([...prev, message]);
       });
-      if (message.senderRole === 'support') {
-        setTyping({});
-      }
+      if (message.senderRole === 'support') setTyping({});
     });
     socket.on('support:ticket', (payload) => {
-      if (payload) {
-        setTicket(payload);
-      }
+      if (payload) setTicket(payload);
     });
     socket.on('support:typing', (payload) => {
       setTyping((prev) => {
         const next = { ...prev };
         if (!payload?.userId) return next;
-        if (payload.isTyping) {
-          next[payload.userId] = payload;
-        } else {
-          delete next[payload.userId];
-        }
+        if (payload.isTyping) next[payload.userId] = payload;
+        else delete next[payload.userId];
         return next;
       });
     });
@@ -327,6 +350,7 @@ export default function SupportChatWidget() {
     };
   }, [authToken, isClient]);
 
+  // Join/leave комнаты тикета
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !ticket?.id) return;
@@ -336,19 +360,18 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id]);
 
+  // Автоскролл (использует isViewingHistory — он объявлен выше)
   useEffect(() => {
     if (!listRef.current) return;
     if (isViewingHistory) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
       return;
     }
-    if (showClosedBanner) {
-      listRef.current.scrollTop = 0;
-    } else {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
+    if (showClosedBanner) listRef.current.scrollTop = 0;
+    else listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages.length, historyMessages.length, isOpen, showClosedBanner, isViewingHistory]);
 
+  // Маркировка прочитанным
   useEffect(() => {
     if (!ticket?.id || !isOpen) return;
     if (!ticket?.unread?.client) return;
@@ -362,13 +385,12 @@ export default function SupportChatWidget() {
     };
   }, [ticket?.id, ticket?.unread?.client, isOpen]);
 
+  // Закрытие тикета -> показать баннер, почистить печатает
   useEffect(() => {
     const previous = previousTicketRef.current;
     const isClosed = ticket?.status === 'closed';
     if (isClosed) {
-      if (!previous || previous.status !== 'closed') {
-        setMessages([]);
-      }
+      if (!previous || previous.status !== 'closed') setMessages([]);
       setTyping({});
       setShowClosedBanner(true);
       setClosedInfo({
@@ -382,14 +404,11 @@ export default function SupportChatWidget() {
     previousTicketRef.current = ticket;
   }, [ticket]);
 
+  // Перезагрузить историю при смене тикета/статуса
   useEffect(() => {
     const currentId = ticket?.id || null;
-    if (currentId && lastTicketIdRef.current !== currentId) {
-      setHistoryReloadKey((key) => key + 1);
-    }
-    if (!currentId && lastTicketIdRef.current) {
-      setHistoryReloadKey((key) => key + 1);
-    }
+    if (currentId && lastTicketIdRef.current !== currentId) setHistoryReloadKey((k) => k + 1);
+    if (!currentId && lastTicketIdRef.current) setHistoryReloadKey((k) => k + 1);
     lastTicketIdRef.current = currentId;
   }, [ticket?.id]);
 
@@ -399,17 +418,19 @@ export default function SupportChatWidget() {
       return;
     }
     if (lastTicketStatusRef.current && lastTicketStatusRef.current !== ticket.status) {
-      setHistoryReloadKey((key) => key + 1);
+      setHistoryReloadKey((k) => k + 1);
     }
     lastTicketStatusRef.current = ticket.status;
   }, [ticket?.status, ticket?.id]);
 
+  // Подсветить текущий тикет в списке
   useEffect(() => {
     if (ticket?.id && selectedHistoryId !== ticket.id) {
       setSelectedHistoryId(ticket.id);
     }
-  }, [ticket?.id]);
+  }, [ticket?.id, selectedHistoryId]);
 
+  // Держать выбранный id валидным
   useEffect(() => {
     if (!history.length) {
       if (selectedHistoryId) setSelectedHistoryId(null);
@@ -422,6 +443,7 @@ export default function SupportChatWidget() {
     });
   }, [history, ticket?.id]);
 
+  // Автовыход из просмотра истории, если вернулись на текущий тикет
   useEffect(() => {
     if (!historyViewMode) return;
     if (!selectedHistoryId) {
@@ -434,34 +456,10 @@ export default function SupportChatWidget() {
   }, [historyViewMode, selectedHistoryId, ticket?.id]);
 
   useEffect(() => {
-    if (needsLogin) {
-      setHistoryViewMode(false);
-    }
+    if (needsLogin) setHistoryViewMode(false);
   }, [needsLogin]);
 
-  const hasTicket = !!ticket?.id;
-  const isTicketClosed = ticket?.status === 'closed';
-  const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
-  const assignedName = formatDisplayName(ticket?.assigned);
-  const lastActiveMessage = messages[messages.length - 1] || null;
-  const queuePositionRaw = ticket?.queuePosition;
-  const queueTotalRaw = ticket?.queueTotal;
-  const queuePosition =
-    queuePositionRaw != null && Number.isFinite(Number(queuePositionRaw))
-      ? Number(queuePositionRaw)
-      : null;
-  const queueTotal =
-    queueTotalRaw != null && Number.isFinite(Number(queueTotalRaw)) ? Number(queueTotalRaw) : null;
-  const showQueueInfo = !isTicketClosed && queuePosition != null && queuePosition > 0;
-  const selectedHistoryTicket =
-    selectedHistoryId && ticket?.id && selectedHistoryId === ticket.id
-      ? { ...ticket, lastMessage: lastActiveMessage }
-      : history.find((item) => item.id === selectedHistoryId) || null;
-  const isViewingHistory = Boolean(
-    historyViewMode && selectedHistoryId && (!ticket?.id || selectedHistoryId !== ticket.id)
-  );
-  const canCompose = !loading && !needsLogin && !isTicketClosed && !isViewingHistory;
-
+  // Синхронизировать карточку истории для активного тикета
   useEffect(() => {
     if (!ticket?.id) return;
     setHistory((prev) => {
@@ -481,6 +479,7 @@ export default function SupportChatWidget() {
     });
   }, [messages, ticket]);
 
+  // Загрузка сообщений выбранного тикета истории
   useEffect(() => {
     if (!selectedHistoryId) {
       setHistoryMessages([]);
@@ -516,8 +515,9 @@ export default function SupportChatWidget() {
     return () => {
       ignore = true;
     };
-  }, [selectedHistoryId, ticket?.id, needsLogin, authToken]);
+  }, [selectedHistoryId, ticket?.id, needsLogin, authToken, messages]);
 
+  // Если листаем текущий тикет — синхронизировать из основного массива сообщений
   useEffect(() => {
     if (selectedHistoryId === ticket?.id) {
       setHistoryMessages(messages);
@@ -541,9 +541,7 @@ export default function SupportChatWidget() {
 
   function resetClosedState() {
     const socket = socketRef.current;
-    if (socket && ticket?.id) {
-      socket.emit('support:leave', { ticketId: ticket.id });
-    }
+    if (socket && ticket?.id) socket.emit('support:leave', { ticketId: ticket.id });
     setTicket(null);
     setMessages([]);
     setShowClosedBanner(false);
@@ -708,11 +706,9 @@ export default function SupportChatWidget() {
                 <>
                   {historyMessagesLoading && <p className="muted">Загружаем переписку...</p>}
                   {historyMessagesError && <p className="error">{historyMessagesError}</p>}
-                  {!historyMessagesLoading &&
-                    !historyMessagesError &&
-                    historyMessages.length === 0 && (
-                      <p className="muted">Нет сообщений для выбранного тикета.</p>
-                    )}
+                  {!historyMessagesLoading && !historyMessagesError && historyMessages.length === 0 && (
+                    <p className="muted">Нет сообщений для выбранного тикета.</p>
+                  )}
                   {!historyMessagesLoading &&
                     !historyMessagesError &&
                     historyMessages.map((msg) => (
@@ -753,9 +749,7 @@ export default function SupportChatWidget() {
                     ))}
 
                   {!loading && messages.length === 0 && !showClosedBanner && (
-                    <p className="muted">
-                      Опишите свой вопрос — специалист подключится в течение нескольких минут.
-                    </p>
+                    <p className="muted">Опишите свой вопрос — специалист подключится в течение нескольких минут.</p>
                   )}
 
                   {otherTyping.length > 0 && !showClosedBanner && (
@@ -792,11 +786,7 @@ export default function SupportChatWidget() {
                 <div className="composer-actions">
                   <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
                     📎
-                    <input
-                      type="file"
-                      onChange={handleFileUpload}
-                      disabled={uploading || !hasTicket || !canCompose}
-                    />
+                    <input type="file" onChange={handleFileUpload} disabled={uploading || !hasTicket || !canCompose} />
                   </label>
                   <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
                     Отправить
@@ -807,7 +797,7 @@ export default function SupportChatWidget() {
             )}
           </div>
 
-          {/* RIGHT: history column — stays inside .support-layout */}
+          {/* RIGHT: history column */}
           <aside className="support-history">
             <div className="history-header">
               <strong>История обращений (30 дней)</strong>
@@ -882,9 +872,7 @@ export default function SupportChatWidget() {
                     {selectedHistoryTicket && (
                       <span className="history-preview__meta">
                         {formatStatusLabel(selectedHistoryTicket.status)}
-                        {selectedHistoryTicket.assigned
-                          ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}`
-                          : ''}
+                        {selectedHistoryTicket.assigned ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}` : ''}
                       </span>
                     )}
                   </div>
@@ -897,9 +885,7 @@ export default function SupportChatWidget() {
                         </button>
                       </>
                     ) : (
-                      <p className="muted">
-                        Выберите обращение, чтобы просмотреть переписку в основном окне.
-                      </p>
+                      <p className="muted">Выберите обращение, чтобы просмотреть переписку в основном окне.</p>
                     )}
                   </div>
                 </div>
@@ -1021,7 +1007,7 @@ export default function SupportChatWidget() {
           overflow-y: auto;
           padding: 12px 18px;
           display: flex;
-          flex-direction: column;
+          flex-direction: column.
         }
         .ticket-closed {
           border: 1px dashed var(--accent-200);
@@ -1144,7 +1130,7 @@ export default function SupportChatWidget() {
           padding: 9px 18px;
           border-radius: 12px;
           font-size: 14px;
-          cursor: pointer;
+          cursor: pointer.
         }
         .composer-actions button:disabled {
           opacity: 0.6;
@@ -1210,7 +1196,7 @@ export default function SupportChatWidget() {
           flex: 0 1 auto;
           min-height: 0;
           max-height: clamp(240px, 45vh, 420px);
-          overflow-y: auto;
+          overflow-y: auto.
         }
         .history-list-wrapper p {
           margin: 0;
