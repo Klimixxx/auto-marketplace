@@ -63,6 +63,7 @@ function mapTicketRow(row) {
           email: row.assigned_email,
         }
       : null,
+    // могут проставляться attachTicketMeta
     queuePosition: row.queue_position != null ? toNumber(row.queue_position, null) : null,
     queueTotal: row.queue_total != null ? toNumber(row.queue_total, null) : null,
   };
@@ -374,9 +375,16 @@ async function createUserNotification(userId, title, body) {
   }
 }
 
+function formatDisplayNameInternal(user) {
+  if (!user) return '';
+  if (user.name && user.name.trim()) return user.name.trim();
+  if (user.userCode) return `ID ${user.userCode}`;
+  return user.phone || '';
+}
+
 async function handleTicketAssigned(ticket) {
   if (!ticket?.id) return ticket;
-  const assigneeName = formatDisplayName(ticket.assigned) || 'Специалист поддержки';
+  const assigneeName = formatDisplayNameInternal(ticket.assigned) || 'Специалист поддержки';
   const systemText = `${assigneeName} подключился к вашему обращению.`;
   await insertSystemMessage(ticket.id, systemText, { emitSnapshot: false });
   if (ticket.client?.id) {
@@ -392,7 +400,7 @@ async function handleTicketAssigned(ticket) {
 
 async function handleTicketClosed(ticket) {
   if (!ticket?.id) return ticket;
-  const assigneeName = formatDisplayName(ticket.assigned);
+  const assigneeName = formatDisplayNameInternal(ticket.assigned);
   const systemText = assigneeName
     ? `${assigneeName} закрыл тикет. Если останутся вопросы, создайте новое обращение.`
     : 'Тикет закрыт. Если останутся вопросы, создайте новое обращение.';
@@ -411,7 +419,7 @@ async function handleTicketClosed(ticket) {
 }
 
 export async function addMessage(ticketId, { senderId, senderRole, content, contentType, fileMeta }) {
-  if (senderId && (!isUUID(senderId))) {
+  if (senderId && !isUUID(senderId)) {
     const err = new Error('INVALID_SENDER_ID');
     err.statusCode = 401;
     throw err;
@@ -431,7 +439,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
 
   const assignmentJustAdded = normalizedRole === 'support' && !participants.assigned_id;
 
-  // === АВТО-НАЗНАЧЕНИЕ ДЛЯ САППОРТА ===
+  // Авто-назначение для саппорта
   if (normalizedRole === 'support') {
     if (participants.status === 'closed') {
       const err = new Error('TICKET_CLOSED');
@@ -439,7 +447,6 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
       throw err;
     }
 
-    // если тикет никому не назначен — назначаем на отправителя и переводим в assigned
     if (!participants.assigned_id) {
       await query(
         `UPDATE support_tickets
@@ -452,7 +459,6 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
       participants.assigned_id = senderId;
       participants.status = 'assigned';
     } else if (participants.assigned_id !== senderId) {
-      // если уже назначен другому — запрещаем отвечать
       const err = new Error('NOT_ASSIGNED');
       err.statusCode = 403;
       throw err;
@@ -492,7 +498,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   );
   const messageId = insertedRows[0]?.id;
 
-  // статус тикета после сообщения
+  // Статус тикета после сообщения
   let statusTransition = participants.status;
   if (normalizedRole === 'client' && participants.status === 'closed') {
     statusTransition = participants.assigned_id ? 'assigned' : 'open';
@@ -510,6 +516,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   await query(updateQuery, [ticketId, normalizedRole, statusTransition]);
 
   const message = messageId ? await fetchMessageById(messageId) : null;
+
   const io = getSocket();
   if (io && message) {
     io.to(`support:ticket:${ticketId}`).emit('support:message', message);
@@ -692,7 +699,7 @@ export async function closeTicket(ticketId, agentId) {
   return ticket;
 }
 
-// ← ОСТАВЛЕН ТОЛЬКО ОДИН ВАРИАНТ
+// Один корректный вариант проверки доступа
 export async function canAccessTicket(ticketId, viewer) {
   const participants = await getTicketParticipants(ticketId);
   if (!participants) return false;
@@ -728,10 +735,7 @@ export async function loadAdminCounters(agentId) {
 }
 
 export function formatDisplayName(user) {
-  if (!user) return '';
-  if (user.name && user.name.trim()) return user.name.trim();
-  if (user.userCode) return `ID ${user.userCode}`;
-  return user.phone || '';
+  return formatDisplayNameInternal(user);
 }
 
 export function resolveUploadsRoot() {
@@ -798,3 +802,4 @@ export async function listRecentTicketsForUser(clientId, { days = 30, limit = 30
     mapped.push(await attachTicketMeta(ticket));
   }
   return mapped;
+}
