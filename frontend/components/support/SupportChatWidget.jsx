@@ -32,6 +32,47 @@ function formatDisplayName(user) {
   return '';
 }
 
+function formatDateTime(value) {
+  if (!value) return '';
+  try {
+    const date = new Date(value);
+    return date.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function formatStatusLabel(status) {
+  switch (status) {
+    case 'open':
+      return 'Ожидает специалиста';
+    case 'assigned':
+      return 'В работе';
+    case 'closed':
+      return 'Закрыт';
+    default:
+      return '—';
+  }
+}
+
+function formatMessagePreview(message) {
+  if (!message) return 'Нет сообщений';
+  if (message.isSystem) return message.content || 'Системное уведомление';
+  if (message.file) {
+    return message.file.name ? `Вложение: ${message.file.name}` : 'Вложение';
+  }
+  if (message.content && message.content.trim()) {
+    const text = message.content.trim();
+    return text.length > 140 ? `${text.slice(0, 137)}…` : text;
+  }
+  return 'Сообщение';
+}
+
 
 function normalizeMessages(list = []) {
   return list
@@ -153,10 +194,20 @@ export default function SupportChatWidget() {
   const [needsLogin, setNeedsLogin] = useState(false);
   const [showClosedBanner, setShowClosedBanner] = useState(false);
   const [closedInfo, setClosedInfo] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+  const [historyMessages, setHistoryMessages] = useState([]);
+  const [historyMessagesLoading, setHistoryMessagesLoading] = useState(false);
+  const [historyMessagesError, setHistoryMessagesError] = useState(null);
   const socketRef = useRef(null);
   const listRef = useRef(null);
   const typingTimeout = useRef(null);
   const previousTicketRef = useRef(null);
+  const lastTicketIdRef = useRef(null);
+  const lastTicketStatusRef = useRef(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -167,6 +218,14 @@ export default function SupportChatWidget() {
     }
     setAuthToken(token);
   }, []);
+
+  useEffect(() => {
+    if (!authToken) {
+      setHistory([]);
+      setSelectedHistoryId(null);
+      setHistoryMessages([]);
+    }
+  }, [authToken]);
 
   useEffect(() => {
     if (!authToken) return;
@@ -192,6 +251,31 @@ export default function SupportChatWidget() {
       ignore = true;
     };
   }, [authToken]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    let ignore = false;
+    async function loadHistory() {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const res = await apiFetch('/api/support/tickets/history?days=30');
+        if (!res.ok) throw new Error('FAILED');
+        const data = await res.json();
+        if (ignore) return;
+        setHistory(Array.isArray(data?.tickets) ? data.tickets : []);
+      } catch (err) {
+        console.error('load support history error', err);
+        if (!ignore) setHistoryError('Не удалось загрузить историю тикетов.');
+      } finally {
+        if (!ignore) setHistoryLoading(false);
+      }
+    }
+    loadHistory();
+    return () => {
+      ignore = true;
+    };
+  }, [authToken, historyReloadKey]);
 
   useEffect(() => {
     if (!authToken || !isClient) return;
@@ -293,11 +377,135 @@ export default function SupportChatWidget() {
     previousTicketRef.current = ticket;
   }, [ticket]);
 
+  useEffect(() => {
+    const currentId = ticket?.id || null;
+    if (currentId && lastTicketIdRef.current !== currentId) {
+      setHistoryReloadKey((key) => key + 1);
+    }
+    if (!currentId && lastTicketIdRef.current) {
+      setHistoryReloadKey((key) => key + 1);
+    }
+    lastTicketIdRef.current = currentId;
+  }, [ticket?.id]);
+
+  useEffect(() => {
+    if (!ticket?.id) {
+      lastTicketStatusRef.current = null;
+      return;
+    }
+    if (lastTicketStatusRef.current && lastTicketStatusRef.current !== ticket.status) {
+      setHistoryReloadKey((key) => key + 1);
+    }
+    lastTicketStatusRef.current = ticket.status;
+  }, [ticket?.status, ticket?.id]);
+
+  useEffect(() => {
+    if (ticket?.id && selectedHistoryId !== ticket.id) {
+      setSelectedHistoryId(ticket.id);
+    }
+  }, [ticket?.id]);
+
+  useEffect(() => {
+    if (!history.length) {
+      if (selectedHistoryId) setSelectedHistoryId(null);
+      return;
+    }
+    setSelectedHistoryId((prev) => {
+      if (prev && history.some((item) => item.id === prev)) return prev;
+      if (ticket?.id && history.some((item) => item.id === ticket.id)) return ticket.id;
+      return history[0]?.id || null;
+    });
+  }, [history, ticket?.id]);
+
   const hasTicket = !!ticket?.id;
   const isTicketClosed = ticket?.status === 'closed';
   const canCompose = !loading && !needsLogin && !isTicketClosed;
   const otherTyping = useMemo(() => Object.values(typing || {}), [typing]);
   const assignedName = formatDisplayName(ticket?.assigned);
+  const lastActiveMessage = messages[messages.length - 1] || null;
+  const queuePositionRaw = ticket?.queuePosition;
+  const queueTotalRaw = ticket?.queueTotal;
+  const queuePosition =
+    queuePositionRaw != null && Number.isFinite(Number(queuePositionRaw))
+      ? Number(queuePositionRaw)
+      : null;
+  const queueTotal =
+    queueTotalRaw != null && Number.isFinite(Number(queueTotalRaw)) ? Number(queueTotalRaw) : null;
+  const showQueueInfo = !isTicketClosed && queuePosition != null && queuePosition > 0;
+  const selectedHistoryTicket =
+    selectedHistoryId && ticket?.id && selectedHistoryId === ticket.id
+      ? { ...ticket, lastMessage: lastActiveMessage }
+      : history.find((item) => item.id === selectedHistoryId) || null;
+
+  useEffect(() => {
+    if (!ticket?.id) return;
+    setHistory((prev) => {
+      if (!Array.isArray(prev)) return prev;
+      const idx = prev.findIndex((item) => item.id === ticket.id);
+      if (idx === -1) return prev;
+      const updated = prev.slice();
+      const lastMessage = messages[messages.length - 1] || null;
+      const currentItem = { ...updated[idx], ...ticket };
+      if (lastMessage) {
+        currentItem.lastMessage = { ...(currentItem.lastMessage || {}), ...lastMessage };
+      }
+      currentItem.queuePosition = ticket.queuePosition ?? currentItem.queuePosition ?? null;
+      currentItem.queueTotal = ticket.queueTotal ?? currentItem.queueTotal ?? null;
+      updated[idx] = currentItem;
+      return updated;
+    });
+  }, [messages, ticket]);
+
+  useEffect(() => {
+    if (!selectedHistoryId) {
+      setHistoryMessages([]);
+      setHistoryMessagesError(null);
+      return;
+    }
+    if (needsLogin || !authToken) return;
+    if (selectedHistoryId === ticket?.id) {
+      setHistoryMessages(messages);
+      setHistoryMessagesError(null);
+      setHistoryMessagesLoading(false);
+      return;
+    }
+    let ignore = false;
+    setHistoryMessagesLoading(true);
+    setHistoryMessagesError(null);
+    setHistoryMessages([]);
+    async function loadMessages() {
+      try {
+        const res = await apiFetch(`/api/support/tickets/${selectedHistoryId}/messages?limit=200`);
+        if (!res.ok) throw new Error('FAILED');
+        const data = await res.json();
+        if (ignore) return;
+        setHistoryMessages(normalizeMessages(data.messages || []));
+      } catch (err) {
+        console.error('load support ticket history messages error', err);
+        if (!ignore) setHistoryMessagesError('Не удалось загрузить переписку.');
+      } finally {
+        if (!ignore) setHistoryMessagesLoading(false);
+      }
+    }
+    loadMessages();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedHistoryId, ticket?.id, needsLogin, authToken]);
+
+  useEffect(() => {
+    if (selectedHistoryId === ticket?.id) {
+      setHistoryMessages(messages);
+    }
+  }, [messages, selectedHistoryId, ticket?.id]);
+
+  function handleSelectHistoryTicket(id) {
+    setSelectedHistoryId(id);
+  }
+
+  function handleRefreshHistory() {
+    setHistoryReloadKey((key) => key + 1);
+  }
 
   function resetClosedState() {
     const socket = socketRef.current;
@@ -399,26 +607,21 @@ export default function SupportChatWidget() {
         <span className={`status ${connected ? 'online' : 'offline'}`}>{connected ? 'online' : 'offline'}</span>
       </button>
       {isOpen && (
-        <div className="support-panel">
-          <div className="support-header">
-            <div>
-              <strong>Команда сопровождения</strong>
-              {assignedName && !isTicketClosed ? (
-                <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
-              ) : (
-                <p>Ответим на вопросы, поможем с документами и торгами.</p>
-              )}
-            </div>
-          </div>
-          <div className="support-body" ref={listRef}>
-            {showClosedBanner && (
-              <div className="ticket-closed">
-                <div className="ticket-closed__title">ТИКЕТ ЗАКРЫТ</div>
-                {closedInfo?.assignedName && (
-                  <div className="ticket-closed__text">Специалист {closedInfo.assignedName} завершил обращение.</div>
+        <div className="support-layout">
+          <div className="support-panel">
+            <div className="support-header">
+              <div>
+                <strong>Команда сопровождения</strong>
+                {assignedName && !isTicketClosed ? (
+                  <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
+                ) : (
+                  <p>Ответим на вопросы, поможем с документами и торгами.</p>
                 )}
-                {closedInfo?.closedAt && (
-                  <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
+               {showQueueInfo && (
+                  <p className="queue-info">
+                    Ваша позиция в очереди: {queuePosition}
+                    {queueTotal && queueTotal > 0 ? ` из ${queueTotal}` : ''}
+                  </p>
                 )}
                 <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
                 <button type="button" onClick={resetClosedState} className="ticket-closed__action">
@@ -426,58 +629,170 @@ export default function SupportChatWidget() {
                 </button>
               </div>
             )}
-            {loading && <p className="muted">Загружаем историю...</p>}
-            {needsLogin && <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>}
-            {!loading && !needsLogin && messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
-            ))}
-            {!loading && messages.length === 0 && !needsLogin && !showClosedBanner && (
-              <p className="muted">Опишите свой вопрос — специалист подключится в течение нескольких минут.</p>
-            )}
-            {otherTyping.length > 0 && !showClosedBanner && (
-              <div className="typing">
-                {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
+            </div>
+            <div className="support-body" ref={listRef}>
+              {showClosedBanner && (
+                <div className="ticket-closed">
+                  <div className="ticket-closed__title">ТИКЕТ ЗАКРЫТ</div>
+                  {closedInfo?.assignedName && (
+                    <div className="ticket-closed__text">Специалист {closedInfo.assignedName} завершил обращение.</div>
+                  )}
+                  {closedInfo?.closedAt && (
+                    <div className="ticket-closed__text">Закрыт в {formatTime(closedInfo.closedAt)}</div>
+                  )}
+                  <div className="ticket-closed__text">Если вопрос остался актуален — создайте новое обращение.</div>
+                  <button type="button" onClick={resetClosedState} className="ticket-closed__action">
+                    Начать новый тикет
+                  </button>
+                </div>
+              )}
+              {loading && <p className="muted">Загружаем историю...</p>}
+              {needsLogin && <p className="muted">Авторизуйтесь, чтобы написать в поддержку.</p>}
+              {!loading && !needsLogin && messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} isOwn={msg.senderRole !== 'support'} />
+              ))}
+              {!loading && messages.length === 0 && !needsLogin && !showClosedBanner && (
+                <p className="muted">Опишите свой вопрос — специалист подключится в течение нескольких минут.</p>
+              )}
+              {otherTyping.length > 0 && !showClosedBanner && (
+                <div className="typing">
+                  {otherTyping.map((t) => t.name || 'Специалист').join(', ')} печатает...
+                </div>
+              )}
+            </div>
+            <div className="support-composer">
+              <textarea
+                placeholder={
+                  needsLogin
+                    ? 'Необходимо авторизоваться'
+                    : isTicketClosed
+                    ? 'Диалог завершён — создайте новый тикет'
+                    : 'Напишите сообщение...'
+                }
+                value={composer}
+                onChange={handleInputChange}
+                disabled={!canCompose || sending || uploading}
+                rows={2}
+              />
+              <div className="composer-actions">
+                <label className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}>
+                  📎
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    disabled={uploading || !hasTicket || !canCompose}
+                  />
+                </label>
+                <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
+                  Отправить
+                </button>
               </div>
-            )}
+              {error && <div className="error">{error}</div>}
+            </div>
           </div>
-          <div className="support-composer">
-            <textarea
-              placeholder={
-                needsLogin
-                  ? 'Необходимо авторизоваться'
-                  : isTicketClosed
-                  ? 'Диалог завершён — создайте новый тикет'
-                  : 'Напишите сообщение...'
-              }
-              value={composer}
-              onChange={handleInputChange}
-              disabled={!canCompose || sending || uploading}
-              rows={2}
-            />
-            <div className="composer-actions">
-              <label
-                className={`attach ${uploading || !hasTicket || !canCompose ? 'disabled' : ''}`}
+          <aside className="support-history">
+            <div className="history-header">
+              <strong>История обращений (30 дней)</strong>
+              <button
+                type="button"
+                className="history-refresh"
+                onClick={handleRefreshHistory}
+                disabled={historyLoading || needsLogin}
               >
-                📎
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  disabled={uploading || !hasTicket || !canCompose}
-                />
-              </label>
-              <button onClick={sendMessage} disabled={!composer.trim() || sending || !canCompose}>
-                Отправить
+                Обновить
               </button>
             </div>
-            {error && <div className="error">{error}</div>}
-          </div>
+            {needsLogin ? (
+              <p className="muted">Авторизуйтесь, чтобы увидеть историю обращений.</p>
+            ) : (
+              <div className="history-content">
+                {historyError && <p className="error">{historyError}</p>}
+                <div className="history-list-wrapper">
+                  {historyLoading && history.length === 0 ? (
+                    <p className="muted">Загружаем историю...</p>
+                  ) : (
+                    <ul className="history-list">
+                      {history.map((item) => {
+                        const isActive = selectedHistoryId === item.id;
+                        const itemQueuePos =
+                          item.queuePosition != null && Number(item.queuePosition) > 0
+                            ? Number(item.queuePosition)
+                            : null;
+                        const itemQueueTotal =
+                          item.queueTotal != null && Number(item.queueTotal) > 0
+                            ? Number(item.queueTotal)
+                            : null;
+                        const timestamp =
+                          item.lastMessage?.createdAt || item.updatedAt || item.lastMessageAt || item.createdAt;
+                        const specialist = item.assigned ? formatDisplayName(item.assigned) : null;
+                        return (
+                          <li key={item.id} className={`history-item ${isActive ? 'active' : ''}`}>
+                            <button type="button" onClick={() => handleSelectHistoryTicket(item.id)}>
+                              <div className="history-item__row">
+                                <span className={`history-status status-${item.status || 'unknown'}`}>
+                                  {formatStatusLabel(item.status)}
+                                </span>
+                                <span className="history-time">{formatDateTime(timestamp)}</span>
+                              </div>
+                              <div className="history-subject">
+                                {specialist ? `Специалист: ${specialist}` : 'Ожидает назначения'}
+                              </div>
+                              <div className="history-preview-text">{formatMessagePreview(item.lastMessage)}</div>
+                              {item.status === 'open' && itemQueuePos && (
+                                <div className="history-queue">
+                                  В очереди: {itemQueuePos}
+                                  {itemQueueTotal ? ` из ${itemQueueTotal}` : ''}
+                                </div>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                      {!historyLoading && history.length === 0 && (
+                        <li className="history-info">Нет обращений за последние 30 дней.</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+                <div className="history-preview">
+                  <div className="history-preview__header">
+                    <strong>Переписка</strong>
+                    {selectedHistoryTicket && (
+                      <span className="history-preview__meta">
+                        {formatStatusLabel(selectedHistoryTicket.status)}
+                        {selectedHistoryTicket.assigned
+                          ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}`
+                          : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="history-preview__body">
+                    {historyMessagesLoading && <p className="muted">Загружаем переписку...</p>}
+                    {historyMessagesError && <p className="error">{historyMessagesError}</p>}
+                    {!historyMessagesLoading && !historyMessagesError && historyMessages.length === 0 && (
+                      <p className="muted">Нет сообщений для выбранного тикета.</p>
+                    )}
+                    {!historyMessagesLoading &&
+                      !historyMessagesError &&
+                      historyMessages.map((msg) => (
+                        <MessageBubble
+                          key={`${selectedHistoryId || 'history'}-${msg.id}`}
+                          message={msg}
+                          isOwn={msg.senderRole !== 'support'}
+                        />
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
       )}
       <style jsx>{`
         .support-chat {
           position: sticky;
           top: 20px;
-          max-width: 420px;
+          max-width: 960px;
           margin: 0 auto;
         }
         .support-toggle {
@@ -519,14 +834,19 @@ export default function SupportChatWidget() {
         .status.offline {
           color: ${palette.muted};
         }
-        .support-panel {
+        .support-layout {
           margin-top: 12px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 300px;
+          gap: 16px;
+        }
+        .support-panel 
           background: ${palette.surface};
           border: 1px solid ${palette.border};
           border-radius: 20px;
           display: flex;
           flex-direction: column;
-          height: 540px;
+          height: 560px;
           box-shadow: var(--shadow-md);
         }
         .support-header {
@@ -542,6 +862,12 @@ export default function SupportChatWidget() {
           margin: 0;
           font-size: 13px;
           color: ${palette.muted};
+        }
+        .queue-info {
+          margin-top: 6px;
+          font-size: 13px;
+          color: var(--accent-700, ${palette.primary});
+          font-weight: 600;
         }
         .support-body {
           flex: 1;
@@ -655,12 +981,154 @@ export default function SupportChatWidget() {
           font-size: 12px;
           color: var(--danger-600, #d1434b);
         }
+        .support-history {
+          background: ${palette.surface};
+          border: 1px solid ${palette.border};
+          border-radius: 20px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          height: 560px;
+          box-shadow: var(--shadow-md);
+        }
+        .history-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .history-header strong {
+          font-size: 16px;
+        }
+        .history-refresh {
+          border: 1px solid ${palette.border};
+          border-radius: 10px;
+          background: ${palette.surfaceAlt};
+          color: ${palette.text};
+          padding: 4px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .history-refresh:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .history-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .history-list-wrapper {
+          flex: 1;
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+        .history-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 8px;
+        }
+        .history-item button {
+          width: 100%;
+          text-align: left;
+          border: 1px solid ${palette.border};
+          border-radius: 14px;
+          background: ${palette.surfaceAlt};
+          padding: 10px 12px;
+          display: grid;
+          gap: 6px;
+          cursor: pointer;
+        }
+        .history-item.active button {
+          border-color: ${palette.primary};
+          box-shadow: 0 0 0 2px rgba(42, 101, 247, 0.12);
+        }
+        .history-item__row {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 12px;
+          color: ${palette.muted};
+        }
+        .history-status {
+          font-weight: 600;
+        }
+        .history-time {
+          font-size: 11px;
+          color: ${palette.muted};
+        }
+        .history-subject {
+          font-size: 12px;
+          color: ${palette.text};
+        }
+        .history-preview-text {
+          font-size: 12px;
+          color: ${palette.muted};
+        }
+        .history-queue {
+          font-size: 11px;
+          color: ${palette.primary};
+          font-weight: 600;
+        }
+        .history-info {
+          font-size: 12px;
+          color: ${palette.muted};
+          padding: 8px;
+          text-align: center;
+        }
+        .history-preview {
+          border-top: 1px solid ${palette.border};
+          padding-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .history-preview__header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          color: ${palette.muted};
+        }
+        .history-preview__meta {
+          font-size: 12px;
+          color: ${palette.muted};
+        }
+        .history-preview__body {
+          max-height: 220px;
+          overflow-y: auto;
+          padding-right: 4px;
+          display: grid;
+          gap: 6px;
+        }
+        @media (max-width: 1024px) {
+          .support-layout {
+            grid-template-columns: 1fr;
+          }
+          .support-history {
+            height: auto;
+          }
+          .support-panel,
+          .support-history {
+            min-height: 0;
+          }
+          .history-preview__body {
+            max-height: none;
+          }
+        }
         @media (max-width: 768px) {
           .support-chat {
             width: 100%;
           }
           .support-panel {
-            height: 420px;
+            height: auto;
+          }
+          .support-body {
+            max-height: 320px;
           }
         }
       `}</style>
