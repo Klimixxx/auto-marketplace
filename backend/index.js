@@ -24,7 +24,7 @@ import { loadAutotekaSettings } from './services/autotekaSettings.js';
 import supportRouter from './routes/support.js';
 import adminSupportRouter from './routes/adminSupport.js';
 import { setSocketInstance } from './services/socket.js';
-import { canAccessTicket, formatDisplayName } from './services/support.js';
+import { canAccessTicket, createUserNotification, formatDisplayName } from './services/support.js';
 import {
   RUSSIAN_REGIONS,
   getRegionNameByCode,
@@ -500,6 +500,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
     );
 
     let u = await query('SELECT id, phone, role, user_code, name, email, is_blocked FROM users WHERE phone=$1', [phone]);
+    let createdNewUser = false;
     if (!u.rows[0]) {
       // пытаемся вставить с уникальным user_code
       let userRow = null;
@@ -528,9 +529,21 @@ app.post('/api/auth/verify-code', async (req, res) => {
         userRow = fallback.rows[0];
       }
       u = { rows: [userRow] };
+      createdNewUser = true;
     }
 
     const user = u.rows[0];
+    if (createdNewUser && user?.id) {
+      try {
+        await createUserNotification(
+          user.id,
+          'Добро пожаловать в AuctionAfto',
+          'Вы успешно зарегистрировались в личном кабинете. Исследуйте каталог и оставайтесь на связи — важные события появятся здесь.'
+        );
+      } catch (err) {
+        console.warn('welcome notification error:', err?.message || err);
+      }
+    }
     if (user?.is_blocked) {
       return res.status(403).json({
         ok: false,
@@ -1734,7 +1747,26 @@ app.post('/api/me/balance-add', auth, async (req, res) => {
       [userId, amount]
     );
     await client.query('COMMIT');
-    return res.json({ ok: true, balance: rows[0].balance });
+    
+    const newBalance = rows[0].balance;
+    try {
+      const formatter = new Intl.NumberFormat('ru-RU', {
+        style: 'currency',
+        currency: 'RUB',
+        maximumFractionDigits: 0,
+      });
+      const amountText = formatter.format(amount);
+      const balanceText = formatter.format(newBalance ?? 0);
+      await createUserNotification(
+        userId,
+        'Баланс пополнен',
+        `Баланс пополнен на ${amountText}. Текущий баланс: ${balanceText}.`
+      );
+    } catch (err) {
+      console.warn('balance topup notification error:', err?.message || err);
+    }
+
+    return res.json({ ok: true, balance: newBalance });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('balance-add error:', e);
@@ -1927,10 +1959,26 @@ app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req
     const { rows } = await query(`
       UPDATE users SET balance_frozen = $2, updated_at = now()
        WHERE user_code = $1
-      RETURNING user_code, balance_frozen
+      RETURNING id, user_code, balance_frozen
     `, [code, freeze]);
     if (!rows.length) return res.status(404).json({ error: 'not found' });
-    res.json({ ok: true, user: rows[0] });
+    
+    const updated = rows[0];
+    if (updated?.id) {
+      try {
+        await createUserNotification(
+          updated.id,
+          freeze ? 'Баланс заморожен' : 'Баланс разморожен',
+          freeze
+            ? 'Ваш баланс временно заморожен администратором. Свяжитесь с поддержкой, если нужна дополнительная информация.'
+            : 'Баланс снова доступен для операций. Спасибо за ожидание!'
+        );
+      } catch (err) {
+        console.warn('freeze notification error:', err?.message || err);
+      }
+    }
+
+    res.json({ ok: true, user: { user_code: updated.user_code, balance_frozen: updated.balance_frozen } });
   } catch (e) {
     console.error('admin freeze error:', e);
     res.status(500).json({ error: 'failed' });
@@ -2011,14 +2059,66 @@ app.get('/api/notifications/unread-count', auth, async (req, res) => {
   }
 });
 
+app.get('/api/notifications/:id', auth, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id || '').trim(), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: 'invalid id' });
+    }
+
+    const { rows } = await query(
+      `SELECT id, title, body, created_at, read_at
+         FROM user_notifications
+        WHERE id = $1 AND user_id::text = $2
+        LIMIT 1`,
+      [id, req.user.sub]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+
+    const notification = { ...rows[0] };
+    if (!notification.read_at) {
+      try {
+        const { rows: markRows } = await query(
+          `UPDATE user_notifications
+              SET read_at = now()
+            WHERE id = $1 AND user_id::text = $2 AND read_at IS NULL
+            RETURNING read_at`,
+          [id, req.user.sub]
+        );
+        if (markRows[0]?.read_at) {
+          notification.read_at = markRows[0].read_at;
+        }
+      } catch (markErr) {
+        console.warn('mark single notification error:', markErr?.message || markErr);
+      }
+    }
+
+    res.json({ notification });
+  } catch (e) {
+    console.error('get notification error:', e);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 app.post('/api/notifications/mark-read', auth, async (req, res) => {
   try {
-    await query(
-      `UPDATE user_notifications
-          SET read_at = now()
-        WHERE user_id::text = $1 AND read_at IS NULL`,
-      [req.user.sub]
-    );
+    const rawId = req.body?.id ?? req.body?.notification_id ?? req.body?.notificationId;
+    const parsedId = rawId != null ? Number.parseInt(String(rawId).trim(), 10) : NaN;
+    if (Number.isFinite(parsedId) && parsedId > 0) {
+      await query(
+        `UPDATE user_notifications
+            SET read_at = now()
+          WHERE user_id::text = $1 AND id = $2 AND read_at IS NULL`,
+        [req.user.sub, parsedId]
+      );
+    } else {
+      await query(
+        `UPDATE user_notifications
+            SET read_at = now()
+          WHERE user_id::text = $1 AND read_at IS NULL`,
+        [req.user.sub]
+      );
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error('mark read error:', e);
