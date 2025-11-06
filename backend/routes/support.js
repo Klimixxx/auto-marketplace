@@ -11,6 +11,7 @@ import {
   canAccessTicket,
   saveUploadedFile,
   fetchTicketById,
+  listRecentTicketsForUser,
 } from '../services/support.js';
 
 const router = express.Router();
@@ -41,6 +42,21 @@ router.get('/tickets/open', async (req, res) => {
     res.json({ ticket, messages });
   } catch (error) {
     console.error('support get open ticket error:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
+});
+
+router.get('/tickets/history', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    const days = Number.parseInt(req.query.days, 10);
+    const limit = Number.parseInt(req.query.limit, 10);
+    const tickets = await listRecentTicketsForUser(userId, { days, limit });
+    res.json({ tickets });
+  } catch (error) {
+    console.error('support tickets history error:', error);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
   }
 });

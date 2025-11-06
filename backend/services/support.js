@@ -31,6 +31,8 @@ function ensureAgentId(agentId) {
   return agentId;
 }
 
+const QUEUE_NOTICE_TEXT = 'Специалист подключится в течение 10 минут';
+
 function mapTicketRow(row) {
   if (!row) return null;
   return {
@@ -61,6 +63,9 @@ function mapTicketRow(row) {
           email: row.assigned_email,
         }
       : null,
+    // могут проставляться attachTicketMeta
+    queuePosition: row.queue_position != null ? toNumber(row.queue_position, null) : null,
+    queueTotal: row.queue_total != null ? toNumber(row.queue_total, null) : null,
   };
 }
 
@@ -119,9 +124,57 @@ const TICKET_SELECT = `
   LEFT JOIN users au ON au.id = t.assigned_id
 `;
 
+async function computeQueueStats(ticket) {
+  if (!ticket || ticket.status !== 'open') {
+    return { total: ticket?.queueTotal || 0, position: null };
+  }
+
+  const createdAt = ticket.createdAt || ticket.created_at || null;
+  const createdValue = createdAt ? new Date(createdAt).toISOString() : null;
+
+  const { rows } = await query(
+    `SELECT
+        count(*) FILTER (WHERE status = 'open')::int AS total,
+        count(*) FILTER (
+          WHERE status = 'open'
+            AND (created_at < $2::timestamptz OR (created_at = $2::timestamptz AND id <= $1))
+        )::int AS position
+       FROM support_tickets`,
+    [ticket.id, createdValue]
+  );
+
+  const stats = rows[0] || { total: 0, position: 0 };
+  const total = toNumber(stats.total, 0);
+  const position = toNumber(stats.position, null);
+  return {
+    total,
+    position: position && position > 0 ? position : total > 0 ? 1 : null,
+  };
+}
+
+async function attachTicketMeta(ticket) {
+  if (!ticket) return ticket;
+  if (ticket.status === 'open') {
+    try {
+      const stats = await computeQueueStats(ticket);
+      ticket.queueTotal = stats.total;
+      ticket.queuePosition = stats.position;
+    } catch (error) {
+      console.warn('compute queue stats error', error);
+      ticket.queueTotal = ticket.queueTotal ?? null;
+      ticket.queuePosition = ticket.queuePosition ?? null;
+    }
+  } else {
+    ticket.queueTotal = ticket.queueTotal ?? (ticket.status ? 0 : null);
+    ticket.queuePosition = null;
+  }
+  return ticket;
+}
+
 export async function fetchTicketById(ticketId) {
   const { rows } = await query(`${TICKET_SELECT} WHERE t.id = $1`, [ticketId]);
-  return mapTicketRow(rows[0]);
+  const ticket = mapTicketRow(rows[0]);
+  return attachTicketMeta(ticket);
 }
 
 async function findLatestActiveTicketRow(clientId) {
@@ -144,13 +197,14 @@ async function findLatestActiveTicketRow(clientId) {
 
 export async function findActiveTicketForUser(clientId) {
   const row = await findLatestActiveTicketRow(clientId);
-  return mapTicketRow(row);
+  const ticket = mapTicketRow(row);
+  return attachTicketMeta(ticket);
 }
 
 export async function ensureActiveTicketForUser(clientId) {
   const existing = await findLatestActiveTicketRow(clientId);
   if (existing) {
-    return mapTicketRow(existing);
+    return attachTicketMeta(mapTicketRow(existing));
   }
 
   const inserted = await query(
@@ -295,6 +349,16 @@ async function insertSystemMessage(ticketId, text, { emitSnapshot = false } = {}
   return message;
 }
 
+async function ensureQueueNotice(ticketId) {
+  if (!ticketId) return null;
+  const { rows } = await query(
+    `SELECT 1 FROM support_messages WHERE ticket_id = $1 AND is_system = true AND content = $2 LIMIT 1`,
+    [ticketId, QUEUE_NOTICE_TEXT]
+  );
+  if (rows.length > 0) return null;
+  return insertSystemMessage(ticketId, QUEUE_NOTICE_TEXT, { emitSnapshot: false });
+}
+
 async function createUserNotification(userId, title, body) {
   if (!userId || !isUUID(userId)) return;
   const trimmedTitle = String(title || '').trim();
@@ -311,9 +375,16 @@ async function createUserNotification(userId, title, body) {
   }
 }
 
+function formatDisplayNameInternal(user) {
+  if (!user) return '';
+  if (user.name && user.name.trim()) return user.name.trim();
+  if (user.userCode) return `ID ${user.userCode}`;
+  return user.phone || '';
+}
+
 async function handleTicketAssigned(ticket) {
   if (!ticket?.id) return ticket;
-  const assigneeName = formatDisplayName(ticket.assigned) || 'Специалист поддержки';
+  const assigneeName = formatDisplayNameInternal(ticket.assigned) || 'Специалист поддержки';
   const systemText = `${assigneeName} подключился к вашему обращению.`;
   await insertSystemMessage(ticket.id, systemText, { emitSnapshot: false });
   if (ticket.client?.id) {
@@ -329,7 +400,7 @@ async function handleTicketAssigned(ticket) {
 
 async function handleTicketClosed(ticket) {
   if (!ticket?.id) return ticket;
-  const assigneeName = formatDisplayName(ticket.assigned);
+  const assigneeName = formatDisplayNameInternal(ticket.assigned);
   const systemText = assigneeName
     ? `${assigneeName} закрыл тикет. Если останутся вопросы, создайте новое обращение.`
     : 'Тикет закрыт. Если останутся вопросы, создайте новое обращение.';
@@ -348,7 +419,7 @@ async function handleTicketClosed(ticket) {
 }
 
 export async function addMessage(ticketId, { senderId, senderRole, content, contentType, fileMeta }) {
-  if (senderId && (!isUUID(senderId))) {
+  if (senderId && !isUUID(senderId)) {
     const err = new Error('INVALID_SENDER_ID');
     err.statusCode = 401;
     throw err;
@@ -368,7 +439,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
 
   const assignmentJustAdded = normalizedRole === 'support' && !participants.assigned_id;
 
-  // === АВТО-НАЗНАЧЕНИЕ ДЛЯ САППОРТА ===
+  // Авто-назначение для саппорта
   if (normalizedRole === 'support') {
     if (participants.status === 'closed') {
       const err = new Error('TICKET_CLOSED');
@@ -376,7 +447,6 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
       throw err;
     }
 
-    // если тикет никому не назначен — назначаем на отправителя и переводим в assigned
     if (!participants.assigned_id) {
       await query(
         `UPDATE support_tickets
@@ -389,7 +459,6 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
       participants.assigned_id = senderId;
       participants.status = 'assigned';
     } else if (participants.assigned_id !== senderId) {
-      // если уже назначен другому — запрещаем отвечать
       const err = new Error('NOT_ASSIGNED');
       err.statusCode = 403;
       throw err;
@@ -429,7 +498,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   );
   const messageId = insertedRows[0]?.id;
 
-  // статус тикета после сообщения
+  // Статус тикета после сообщения
   let statusTransition = participants.status;
   if (normalizedRole === 'client' && participants.status === 'closed') {
     statusTransition = participants.assigned_id ? 'assigned' : 'open';
@@ -447,6 +516,7 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
   await query(updateQuery, [ticketId, normalizedRole, statusTransition]);
 
   const message = messageId ? await fetchMessageById(messageId) : null;
+
   const io = getSocket();
   if (io && message) {
     io.to(`support:ticket:${ticketId}`).emit('support:message', message);
@@ -458,6 +528,24 @@ export async function addMessage(ticketId, { senderId, senderRole, content, cont
     const currentTicket = await fetchTicketById(ticketId);
     snapshotTicket = await handleTicketAssigned(currentTicket);
     snapshotReason = 'assigned';
+  }
+
+  if (normalizedRole === 'client' && !participants.assigned_id) {
+    await ensureQueueNotice(ticketId);
+  }
+
+  if (normalizedRole === 'support' && participants.client_id) {
+    const previewSource =
+      typeof content === 'string' && content.trim()
+        ? content.trim()
+        : fileMeta?.name
+        ? `Специалист отправил файл «${fileMeta.name}»`
+        : 'Специалист отправил сообщение';
+    await createUserNotification(
+      participants.client_id,
+      'Новое сообщение от поддержки',
+      previewSource.slice(0, 240)
+    );
   }
 
   await emitTicketSnapshot(ticketId, {
@@ -611,7 +699,7 @@ export async function closeTicket(ticketId, agentId) {
   return ticket;
 }
 
-// ← ОСТАВЛЕН ТОЛЬКО ОДИН ВАРИАНТ
+// Один корректный вариант проверки доступа
 export async function canAccessTicket(ticketId, viewer) {
   const participants = await getTicketParticipants(ticketId);
   if (!participants) return false;
@@ -647,13 +735,71 @@ export async function loadAdminCounters(agentId) {
 }
 
 export function formatDisplayName(user) {
-  if (!user) return '';
-  if (user.name && user.name.trim()) return user.name.trim();
-  if (user.userCode) return `ID ${user.userCode}`;
-  return user.phone || '';
+  return formatDisplayNameInternal(user);
 }
 
 export function resolveUploadsRoot() {
   ensureDirSync(uploadsRoot);
   return uploadsRoot;
+}
+
+function mapTicketHistoryRow(row) {
+  const base = mapTicketRow(row);
+  base.lastMessage = row.last_message_id
+    ? {
+        id: row.last_message_id,
+        content: row.last_message_content,
+        contentType: row.last_message_type,
+        createdAt: row.last_message_created_at,
+        isSystem: !!row.last_message_is_system,
+        file: row.last_message_file_url
+          ? {
+              url: row.last_message_file_url,
+              name: row.last_message_file_name,
+            }
+          : null,
+      }
+    : null;
+  return base;
+}
+
+export async function listRecentTicketsForUser(clientId, { days = 30, limit = 30 } = {}) {
+  if (typeof clientId !== 'string' || !isUUID(clientId)) {
+    const err = new Error('INVALID_USER_ID');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const rangeDays = Math.min(Math.max(Number(days) || 30, 1), 90);
+  const cappedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+
+  const { rows } = await query(
+    `${TICKET_SELECT}
+      LEFT JOIN LATERAL (
+        SELECT
+          m.id AS last_message_id,
+          m.content AS last_message_content,
+          m.content_type AS last_message_type,
+          m.created_at AS last_message_created_at,
+          m.is_system AS last_message_is_system,
+          m.file_name AS last_message_file_name,
+          m.file_url AS last_message_file_url
+        FROM support_messages m
+        WHERE m.ticket_id = t.id
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) lm ON true
+     WHERE t.client_id = $1::uuid
+       AND t.created_at >= now() - ($2::int || ' days')::interval
+     ORDER BY t.created_at DESC
+     LIMIT $3`,
+    [clientId, rangeDays, cappedLimit]
+  );
+
+  const mapped = [];
+  for (const row of rows) {
+    const ticket = mapTicketHistoryRow(row);
+    mapped.push(await attachTicketMeta(ticket));
+  }
+  return mapped;
 }
