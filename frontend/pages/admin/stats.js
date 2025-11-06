@@ -22,16 +22,50 @@ export default function AdminStats() {
       .then(r => r.json()).then(setStats).catch(()=>{});
   }, [me]);
 
-  const users = stats?.users ?? 0;
+  const userStats = stats?.usersStats || {};
+  const listingStats = stats?.listingsStats || {};
+  const financeStats = stats?.finance || {};
+  const balanceTopups = financeStats.balanceTopups || {};
+  const totalUsers = userStats.total ?? stats?.users ?? 0;
 
   return (
     <AdminLayout me={me} title="Статистика">
       {!stats && <div>Загрузка…</div>}
       {stats && (
         <>
-          <div style={{ display:'flex', gap:20, marginBottom:12 }}>
-            <Stat title="Пользователей" value={users.toLocaleString('ru-RU')} />
-          </div>
+          <section style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
+            <h2 style={sectionTitle}>Пользователи</h2>
+            <div style={cardRow}>
+              <Stat title="Кол-во пользователей" value={totalUsers} />
+              <Stat title="Новых за 30 дней" value={userStats.new30Days ?? 0} />
+              <Stat title="Активных за 30 дней" value={userStats.active30Days ?? 0} />
+              <Stat title="С положительным балансом" value={userStats.positiveBalance ?? 0} />
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
+            <h2 style={sectionTitle}>Объявления</h2>
+            <div style={cardRow}>
+              <Stat title="Кол-во публичных предложений" value={listingStats.publicOffers ?? 0} />
+              <Stat title="Кол-во открытых аукционов" value={listingStats.openAuctions ?? 0} />
+              <Stat title="Кол-во объявлений" value={listingStats.totalListings ?? stats?.listings?.published ?? 0} />
+              <Stat title="Кол-во объявлений со статусом «Торги завершены»" value={listingStats.finished ?? 0} />
+              <Stat title="Общая стоимость объявлений" value={listingStats.totalValue ?? 0} isCurrency />
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
+            <h2 style={sectionTitle}>Финансы</h2>
+            <div style={cardRow}>
+              <Stat title="Кол-во заявок торги" value={financeStats.tradeOrders ?? 0} />
+              <Stat title="Кол-во заявок автотеки" value={financeStats.autotekaOrders ?? 0} />
+              <Stat title="Кол-во заявок осмотров" value={financeStats.inspectionOrders ?? stats?.inspections?.total ?? 0} />
+              <Stat title="Пополнения за месяц" value={balanceTopups.month ?? 0} isCurrency />
+              <Stat title="Пополнения за полгода" value={balanceTopups.halfYear ?? 0} isCurrency />
+              <Stat title="Пополнения за год" value={balanceTopups.year ?? 0} isCurrency />
+            </div>
+          </section>
+
           <VisitsChart data={stats.visits || []} />
         </>
       )}
@@ -39,7 +73,8 @@ export default function AdminStats() {
   );
 }
 
-function Stat({ title, value }) {
+function Stat({ title, value, isCurrency = false }) {
+  const displayValue = formatStatValue(value, isCurrency);
   return (
     <div style={{
       background:'rgba(255,255,255,0.03)',
@@ -47,10 +82,38 @@ function Stat({ title, value }) {
       borderRadius:12, padding:'12px 14px', minWidth:220
     }}>
       <div style={{ fontSize:12, opacity:.8 }}>{title}</div>
-      <div style={{ fontSize:24, fontWeight:800 }}>{value}</div>
+      <div style={{ fontSize:24, fontWeight:800 }}>{displayValue}</div>
     </div>
   );
 }
+
+function formatStatValue(value, isCurrency) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (isCurrency) {
+    const amount = Number.isFinite(numeric) ? numeric : 0;
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  }
+  if (Number.isFinite(numeric)) {
+    return numeric.toLocaleString('ru-RU');
+  }
+  return String(value ?? '0');
+}
+
+const sectionTitle = {
+  margin: 0,
+  fontSize: 20,
+  fontWeight: 700,
+};
+
+const cardRow = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 20,
+};
 
 function VisitsChart({ data }) {
   if (!data || !data.length) return null;
@@ -72,4 +135,5 @@ function VisitsChart({ data }) {
     </svg>
   );
 }
+
 

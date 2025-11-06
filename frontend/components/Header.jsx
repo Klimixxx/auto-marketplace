@@ -1,7 +1,6 @@
 // frontend/components/Header.jsx
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
-import Router from "next/router";
 
 const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "");
@@ -276,11 +275,18 @@ export default function Header({ user }) {
       if (document.visibilityState === "visible") fetchUnread();
     };
     document.addEventListener("visibilitychange", onVisible);
+    const onManualRefresh = () => fetchUnread();
+    if (typeof window !== "undefined") {
+      window.addEventListener("notifications-refresh", onManualRefresh);
+    }
     const id = setInterval(fetchUnread, 60000);
     return () => {
       aborted = true;
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("notifications-refresh", onManualRefresh);
+      }
     };
   }, []);
 
@@ -389,34 +395,6 @@ export default function Header({ user }) {
     };
   }, [authed]);
 
-  // при заходе в /notifications обнуляем и помечаем прочитанными
-  useEffect(() => {
-    const onRoute = async (url) => {
-      if (!url.startsWith("/notifications")) return;
-      setNotif(0);
-      try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const headers = {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: "Bearer " + token } : {}),
-        };
-        const opts = { method: "POST", credentials: "include", headers };
-        const markPaths = [
-          "/api/notifications/mark-all-read",
-          "/api/notifications/mark_read_all",
-          "/api/notifications/read-all",
-        ];
-        for (const p of markPaths) {
-          await fetch(join(p), opts).catch(() => {});
-        }
-      } catch {}
-    };
-    Router.events.on("routeChangeComplete", onRoute);
-    return () => Router.events.off("routeChangeComplete", onRoute);
-  }, []);
-
   function logout() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
@@ -433,6 +411,10 @@ export default function Header({ user }) {
     currency: "RUB",
     maximumFractionDigits: 0,
   });
+  const notificationsLabel =
+    notif > 0
+      ? `Уведомления (непрочитано: ${notif})`
+      : "Уведомления";
 
   const [q, setQ] = useState("");
   const submit = (e) => {
@@ -555,7 +537,7 @@ export default function Header({ user }) {
             )}
 
             <IconButton
-              ariaLabel="Уведомления"
+              ariaLabel={notificationsLabel}
               onClick={() => router.push("/notifications")}
               badge={notif}
             >
@@ -799,7 +781,7 @@ export default function Header({ user }) {
 
 /* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
-  const badgeText = badge > 99 ? "99+" : String(badge || "");
+  const hasUnread = Number(badge) > 0;
   const handleMouseEnter = (event) => {
     event.currentTarget.style.background = "rgba(255,255,255,0.15)";
     event.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
@@ -812,6 +794,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
   return (
     <button
       aria-label={ariaLabel}
+      title={ariaLabel}
       onClick={onClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -831,28 +814,21 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
       }}
     >
       {children}
-      {badge > 0 && (
+      {hasUnread && (
         <span
+          aria-hidden="true"
           style={{
             position: "absolute",
-            top: -6,
-            right: -6,
-            minWidth: 18,
-            height: 18,
-            padding: "0 5px",
+            top: -3,
+            right: -3,
+            width: 12,
+            height: 12,
+            borderRadius: "50%",
             background: "#FF4D4F",
-            color: "#fff",
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 800,
-            display: "grid",
-            placeItems: "center",
-            border: "2px solid #000000",
-            lineHeight: "18px",
+            border: "2px solid #1f1f1f",
+            boxShadow: "0 0 0 2px rgba(0,0,0,0.25)",
           }}
-        >
-          {badgeText}
-        </span>
+        />
       )}
     </button>
   );
@@ -952,6 +928,7 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
 

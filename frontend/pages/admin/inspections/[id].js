@@ -1,5 +1,5 @@
 // pages/admin/inspections/[id].js
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import AdminLayout from '../../../components/AdminLayout';
 import { resolveApiUrl } from '../../../lib/api';
@@ -20,6 +20,12 @@ export default function AdminInspectionDetail() {
   const [uploading, setUploading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState(null);
+
+  const notifyHref = useMemo(() => {
+    if (!item?.user_code) return '/admin/notify';
+    const params = new URLSearchParams({ user_code: item.user_code });
+    return `/admin/notify?${params.toString()}`;
+  }, [item?.user_code]);
 
   // Проверка авторизации и роли
   useEffect(() => {
@@ -166,7 +172,7 @@ export default function AdminInspectionDetail() {
       {error && <div style={{ color: '#ef4444' }}>{error}</div>}
 
       {item && !error && (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'grid', gap: 24 }}>
           {item.admin_unread && (
             <div
               style={{
@@ -182,32 +188,35 @@ export default function AdminInspectionDetail() {
             </div>
           )}
 
-          <div>
-            <div>
-              <b>Пользователь:</b> {item.user_name || item.user_phone}
-            </div>
-            <div>
-              <b>Подписка:</b> {item.subscription_status}
-            </div>
-            <div>
-              <b>Объявление: </b>
-              <a
-                href={`/trades/${item.listing_id}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {item.listing_title || item.listing_id}
-              </a>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <b>Текущий статус:</b> {item.status}
-            </div>
-          </div>
+          <section style={card}>
+            <h2 style={sectionTitle}>Информация о пользователе</h2>
+            <InfoRow label="Имя" value={item.user_name || 'Не указано'} />
+            <InfoRow label="ID аккаунта" value={item.user_code || '—'} />
+            <InfoRow label="Номер" value={item.user_phone || '—'} />
+            <InfoRow label="Почта" value={item.user_email || '—'} />
+            <InfoRow label="Подписка" value={item.subscription_status || '—'} />
+          </section>
 
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 600 }}>
-              Управление статусами:
-            </div>
+          <section style={card}>
+            <h2 style={sectionTitle}>Заявка</h2>
+            <InfoRow
+              label="Объявление"
+              value={(
+                <a
+                  href={`/trades/${item.listing_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {item.listing_title || item.listing_id}
+                </a>
+              )}
+            />
+            <InfoRow label="Дата подачи заявки" value={formatDateTime(item.created_at)} />
+            <InfoRow label="Текущий статус" value={item.status || '—'} />
+          </section>
+
+          <section style={card}>
+            <h2 style={sectionTitle}>Управление статусами</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {STATUS_FLOW.map((st) => {
                 const isActive = item.status === st;
@@ -233,18 +242,19 @@ export default function AdminInspectionDetail() {
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          <div>
-            <div>
-              <b>Отчёт (PDF):</b>{' '}
+          <section style={card}>
+            <h2 style={sectionTitle}>Отчёт</h2>
+            <div style={{ marginBottom: 12 }}>
+              <strong>PDF:</strong>{' '}
               {item.report_pdf_url ? (
                 <a
                   href={resolveApiUrl(item.report_pdf_url)}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Открыть
+                  Открыть отчёт
                 </a>
               ) : (
                 <span>не загружен</span>
@@ -256,9 +266,53 @@ export default function AdminInspectionDetail() {
               onChange={uploadPdf}
               disabled={uploading}
             />
-          </div>
+          </section>
+
+          <section style={card}>
+            <h2 style={sectionTitle}>Отправить пользователю уведомление</h2>
+            <p style={{ margin: '0 0 12px', color: 'var(--text-muted)' }}>
+              Перейдите к форме уведомлений, чтобы быстро связаться с пользователем по этому осмотру.
+            </p>
+            <a className="button" href={notifyHref}>
+              Открыть форму уведомления
+            </a>
+          </section>
         </div>
       )}
     </AdminLayout>
   );
 }
+
+const card = {
+  padding: '16px',
+  borderRadius: 12,
+  border: '1px solid var(--line)',
+  background: 'var(--surface-1)',
+  display: 'grid',
+  gap: 8,
+};
+
+const sectionTitle = {
+  margin: 0,
+  fontSize: 18,
+  fontWeight: 700,
+};
+
+function InfoRow({ label, value }) {
+  return (
+    <div style={{ display: 'grid', gap: 4 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        {label}
+      </span>
+      <span style={{ fontWeight: 600 }}>{value ?? '—'}</span>
+    </div>
+  );
+}
+
+function formatDateTime(input) {
+  if (!input) return '—';
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('ru-RU');
+}
+

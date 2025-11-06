@@ -359,7 +359,7 @@ async function ensureQueueNotice(ticketId) {
   return insertSystemMessage(ticketId, QUEUE_NOTICE_TEXT, { emitSnapshot: false });
 }
 
-async function createUserNotification(userId, title, body) {
+export async function createUserNotification(userId, title, body) {
   if (!userId || !isUUID(userId)) return;
   const trimmedTitle = String(title || '').trim();
   const trimmedBody = String(body || '').trim();

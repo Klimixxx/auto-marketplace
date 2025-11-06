@@ -89,7 +89,8 @@ router.get('/', async (req, res) => {
 
     const sql = `
       SELECT i.*, ${adminUnreadCondition('i')} AS admin_unread,
-             u.name  AS user_name, u.phone AS user_phone, u.subscription_status,
+             u.name  AS user_name, u.phone AS user_phone, u.email AS user_email,
+             u.user_code AS user_code, u.subscription_status,
              l.title AS listing_title
         FROM inspections i
         JOIN users u ON u.id = i.user_id
@@ -115,7 +116,8 @@ router.get('/:id', async (req, res) => {
 
     const q = await query(
       `SELECT i.*, ${adminUnreadCondition('i')} AS admin_unread,
-              u.name  AS user_name, u.phone AS user_phone, u.subscription_status,
+              u.name  AS user_name, u.phone AS user_phone, u.email AS user_email,
+              u.user_code AS user_code, u.subscription_status,
               l.title AS listing_title
          FROM inspections i
          JOIN users u ON u.id = i.user_id

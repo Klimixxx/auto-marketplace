@@ -192,7 +192,7 @@ export default function AdminLayout({ me, title, children }) {
     { href: '/admin', label: 'Дэшборд', icon: <IconHome /> },
     { href: '/admin/listings', label: 'Объявления', icon: <IconCards /> },
     { href: '/admin/trade-orders', label: 'Торги', icon: <IconCheck />, badge: tradeOrdersUnread },
-    { href: '/admin/trade-pricing', label: 'Тарифы торгов', icon: <IconCoins /> },
+    { href: '/admin/trade-pricing', label: 'Тарифы', icon: <IconCoins /> },
     { href: '/admin/support', label: 'Поддержка', icon: <IconChat />, badge: supportBadge },
     { href: '/admin/inspections', label: 'Осмотры', icon: <IconCheck />, badge: inspectionsUnread },
     { href: '/admin/autoteka-orders', label: 'Автотека', icon: <IconDoc />, badge: autotekaUnread },
@@ -456,5 +456,6 @@ function IconChat({ size = 18, color = 'currentColor' }) {
     </svg>
   );
 }
+
 
 

@@ -7,6 +7,7 @@ export default function AdminNotify() {
   const [userCode, setUserCode] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [sendToAll, setSendToAll] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -21,7 +22,10 @@ export default function AdminNotify() {
         // автоподстановка из query
         const params = new URLSearchParams(location.search);
         const code = params.get('user_code') || '';
-        if (code) setUserCode(code);
+        if (code) {
+          setUserCode(code);
+          setSendToAll(false);
+        }
       })
       .catch(() => location.href = '/');
   }, []);
@@ -30,18 +34,28 @@ export default function AdminNotify() {
     e.preventDefault();
     setErr(''); setMsg('');
     try {
-      if (!/^\d{6}$/.test(userCode)) throw new Error('Укажите ID (6 цифр)');
       if (!title.trim() || !body.trim()) throw new Error('Введите заголовок и описание');
+      if (!sendToAll && !/^\d{6}$/.test(userCode)) throw new Error('Укажите ID (6 цифр)');
       const token = localStorage.getItem('token');
+      const payload = {
+        title: title.trim(),
+        body: body.trim(),
+      };
+      if (sendToAll) {
+        payload.send_all = true;
+      } else {
+        payload.user_code = userCode.trim();
+      }
       const r = await fetch(`${API}/api/admin/notify`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token },
-        body: JSON.stringify({ user_code: userCode.trim(), title: title.trim(), body: body.trim() })
+        body: JSON.stringify(payload)
       });
       const d = await r.json();
       if (!r.ok || d.ok === false) throw new Error(d.error || 'Не удалось отправить');
-      setMsg('Уведомление отправлено');
+      setMsg(sendToAll ? 'Уведомление отправлено всем пользователям' : 'Уведомление отправлено');
       setTitle(''); setBody('');
+      if (!sendToAll) setUserCode('');
     } catch (e) { setErr(e.message); }
   }
 
@@ -50,9 +64,29 @@ export default function AdminNotify() {
       <form onSubmit={send} style={{ display:'grid', gap:12 }}>
         <div>
           <div style={{ fontSize:12, color:'var(--muted)' }}>ID пользователя (6 цифр)</div>
-          <input className="input" value={userCode}
-                 onChange={e=>setUserCode(e.target.value.replace(/\D/g,''))} maxLength={6} style={{ width:220 }} />
+          <input
+            className="input"
+            value={userCode}
+            onChange={e=>setUserCode(e.target.value.replace(/\D/g,''))}
+            maxLength={6}
+            style={{ width:220 }}
+            disabled={sendToAll}
+          />
         </div>
+
+        <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:14 }}>
+          <input
+            type="checkbox"
+            checked={sendToAll}
+            onChange={(e) => {
+              setSendToAll(e.target.checked);
+              if (e.target.checked) {
+                setUserCode('');
+              }
+            }}
+          />
+          Отправить уведомление всем пользователям
+        </label>
 
         <div>
           <div style={{ fontSize:12, color:'var(--muted)' }}>Заголовок</div>
@@ -67,8 +101,9 @@ export default function AdminNotify() {
         {err && <div style={{ color:'salmon' }}>{err}</div>}
         {msg && <div style={{ color:'lightgreen' }}>{msg}</div>}
 
-        <div>
+        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
           <button className="button">Отправить</button>
+          {sendToAll && <span style={{ fontSize:12, color:'var(--muted)' }}>Уведомление получат все пользователи</span>}
         </div>
       </form>
     </AdminLayout>
