@@ -915,18 +915,6 @@ export default function ListingPage({ item }) {
     },
   ];
 
-  if (item?.source_url) {
-    actionButtons.push({
-      key: "source",
-      label: "Перейти к источнику",
-      href: item.source_url,
-      className: "button button-outline",
-      disabled: isTradeFinished,
-      title: isTradeFinished
-        ? "Торги завершены, переход к источнику недоступен"
-        : undefined,
-    });
-  }
   return (
     <div className="container detail-page">
       <div className="back-link">
@@ -1525,6 +1513,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
