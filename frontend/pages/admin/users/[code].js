@@ -60,6 +60,7 @@ export default function AdminUserCard() {
 
   const u = data?.user;
   const sessions = data?.sessions || [];
+  const stats = data?.stats || null;
 
   const fmtRUB = (n) => new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB' }).format(n ?? 0);
 
@@ -76,17 +77,39 @@ export default function AdminUserCard() {
           </div>
 
           {/* Информация о пользователе */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 14,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            }}
+          >
             <Info label="Имя" value={u.name || '—'} />
             <Info label="Телефон" value={u.phone || '—'} />
             <Info label="Почта" value={u.email || '—'} />
             <Info label="Дата регистрации" value={new Date(u.created_at).toLocaleString('ru-RU')} />
-            <Info label="Статус подписки" value={u.subscription_status || 'free'} />
             <Info label="Роль" value={u.role || 'user'} />
             <Info label="Заблокирован" value={u.is_blocked ? 'Да' : 'Нет'} />
             <Info label="Баланс заморожен" value={u.balance_frozen ? 'Да' : 'Нет'} />
             <Info label="Баланс" value={fmtRUB(u.balance)} />
           </div>
+
+          {stats && (
+            <div>
+              <h3 style={{ margin: '8px 0' }}>Статистика покупок</h3>
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 12,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                }}
+              >
+                <Stat label="Осмотры" value={stats.inspections} />
+                <Stat label="Автотеки" value={stats.autoteka} />
+                <Stat label="Участий в торгах" value={stats.tradeOrders} />
+              </div>
+            </div>
+          )}
 
           {/* Кнопки управления статусами */}
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
@@ -138,3 +161,26 @@ function Info({ label, value }) {
     </div>
   );
 }
+
+function Stat({ label, value }) {
+  const numeric = Number(value);
+  const display = Number.isFinite(numeric) ? numeric.toLocaleString('ru-RU') : '0';
+  return (
+    <div
+      style={{
+        padding: '12px 14px',
+        borderRadius: 12,
+        border: '1px solid rgba(148, 163, 184, 0.35)',
+        background: 'rgba(241, 245, 249, 0.6)',
+        display: 'grid',
+        gap: 6,
+      }}
+    >
+      <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 700 }}>{display}</div>
+    </div>
+  );
+}
+
