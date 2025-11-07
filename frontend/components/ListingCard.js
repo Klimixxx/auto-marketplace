@@ -544,7 +544,6 @@ export default function ListingCard({
   onFav,
   fav,
   detailHref,
-  sourceHref,
   favoriteContext,
   variant = "default",
 }) {
@@ -1195,24 +1194,7 @@ const articleHoverStyle = {
             ) : null}
           </div>
 
-          {sourceHref && !isCompact ? (
-            <a
-              href={sourceHref}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                marginTop: "auto",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#1d4ed8",
-                textDecoration: "none",
-              }}
-            >
-              Перейти к источнику →
-            </a>
-          ) : null}
-        </div>
+          </div>
         <style jsx>{baseStyles}</style>
       </article>
     );
@@ -1601,6 +1583,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
