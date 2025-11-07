@@ -52,13 +52,23 @@ router.get('/unread-count', async (_req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { status } = req.query || {};
+    const { status, exclude_status: excludeStatus, limit: limitRaw } = req.query || {};
     const params = [];
     const where = [];
 
     if (typeof status === 'string' && status.trim()) {
       params.push(status.trim());
       where.push(`o.status = $${params.length}::trade_order_status`);
+    } else if (typeof excludeStatus === 'string' && excludeStatus.trim()) {
+      params.push(excludeStatus.trim());
+      where.push(`o.status <> $${params.length}::trade_order_status`);
+    }
+
+    const parsedLimit = Number(limitRaw);
+    const hasLimit = Number.isFinite(parsedLimit) && parsedLimit > 0;
+    if (hasLimit) {
+      const normalizedLimit = Math.min(parsedLimit, 500);
+      params.push(normalizedLimit);
     }
 
     const sql = `
@@ -70,6 +80,7 @@ router.get('/', async (req, res) => {
         JOIN listings l ON l.id = o.listing_id
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
         ORDER BY o.created_at DESC
+        ${hasLimit ? `LIMIT $${params.length}` : ''}
     `;
     const q = await query(sql, params);
     res.json({ items: q.rows });
@@ -89,7 +100,9 @@ router.get('/:id', async (req, res) => {
     const q = await query(
       `SELECT o.*, ${adminUnreadCondition('o')} AS admin_unread,
               u.name AS user_name, u.phone AS user_phone, u.subscription_status,
-              l.title AS listing_title
+              u.email AS user_email, u.user_code AS user_code,
+              l.title AS listing_title, l.source_url AS listing_source_url,
+              l.details AS listing_details, l.source_id AS listing_source_id
          FROM trade_orders o
          JOIN users u ON u.id = o.user_id
          JOIN listings l ON l.id = o.listing_id
