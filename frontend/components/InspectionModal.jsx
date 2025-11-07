@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 const INSPECTION_ENDPOINT = API_BASE ? `${API_BASE}/api/inspections` : '/api/inspections';
+const INSPECTION_PRICE_ENDPOINT = API_BASE
+  ? `${API_BASE}/api/inspections/price`
+  : '/api/inspections/price';
+const DEFAULT_INSPECTION_PRICE = 12000;
+const RUB = new Intl.NumberFormat('ru-RU');
 const MAX_LISTING_ID_LENGTH = 160;
 
 function normalizeListingId(value) {
@@ -44,6 +49,8 @@ function normalizeListingId(value) {
 export default function InspectionModal({ listingId, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [price, setPrice] = useState(DEFAULT_INSPECTION_PRICE);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -51,6 +58,40 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = overflow; };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let ignore = false;
+
+    async function loadPrice() {
+      try {
+        setPriceLoading(true);
+        const res = await fetch(INSPECTION_PRICE_ENDPOINT);
+        if (!res.ok) throw new Error('status ' + res.status);
+        const data = await res.json();
+        const value = Number(data?.price);
+        if (!ignore && Number.isFinite(value)) {
+          setPrice(value);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setPrice(DEFAULT_INSPECTION_PRICE);
+        }
+      } finally {
+        if (!ignore) setPriceLoading(false);
+      }
+    }
+
+    loadPrice();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isOpen]);
+
+  const safePrice = Number.isFinite(price) ? price : DEFAULT_INSPECTION_PRICE;
+  const formattedPrice = RUB.format(safePrice);
+  const proPrice = RUB.format(Math.round(safePrice / 2));
 
   if (!isOpen) return null;
 
@@ -129,8 +170,8 @@ export default function InspectionModal({ listingId, isOpen, onClose }) {
         </div>
 
         <div style={{marginTop:12}}>
-          <b>Стоимость услуги:</b> 12 000 ₽
-          <div style={{color:'#A0A6B0'}}>С подпиской <b>PRO</b> действует <b>50%</b> скидка на любой осмотр</div>
+          <b>Стоимость услуги:</b> {priceLoading ? '—' : `${formattedPrice} ₽`}
+          <div style={{color:'#A0A6B0'}}>С подпиской <b>PRO</b> действует <b>50%</b> скидка — {priceLoading ? '—' : <b>{proPrice} ₽</b>}</div>
         </div>
 
         <div style={{marginTop:12}}>
@@ -252,4 +293,5 @@ const S = {
     transition: 'background 0.2s ease, box-shadow 0.2s ease',
   }
 };
+
 
