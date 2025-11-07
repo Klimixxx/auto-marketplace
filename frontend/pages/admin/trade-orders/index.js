@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminLayout from '../../../components/AdminLayout';
 import { resolveApiUrl } from '../../../lib/api';
 
 export default function AdminTradeOrdersList() {
   const [me, setMe] = useState(null);
-  const [items, setItems] = useState([]);
+  const [inProgressItems, setInProgressItems] = useState([]);
+  const [completedItems, setCompletedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statuses, setStatuses] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     (async () => {
@@ -34,45 +33,38 @@ export default function AdminTradeOrdersList() {
     if (!me) return;
     let ignore = false;
 
-    async function loadStatuses() {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const res = await fetch(resolveApiUrl('/api/admin/trade-orders/statuses'), {
-          headers: { Authorization: 'Bearer ' + token },
-        });
-        if (!res.ok) throw new Error('status ' + res.status);
-        const data = await res.json();
-        if (!ignore) setStatuses(Array.isArray(data?.statuses) ? data.statuses : []);
-      } catch (err) {
-        console.error('Failed to load trade order statuses', err);
-        if (!ignore) setStatuses([]);
-      }
-    }
-
-    loadStatuses();
-    return () => { ignore = true; };
-  }, [me]);
-
-  useEffect(() => {
-    if (!me) return;
-    let ignore = false;
-
     async function loadOrders() {
       try {
         setLoading(true);
         setError(null);
         const token = localStorage.getItem('token');
         if (!token) { location.href = '/login?next=/admin/trade-orders'; return; }
-        const params = new URLSearchParams();
-        if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
-        const url = resolveApiUrl(`/api/admin/trade-orders${params.toString() ? `?${params}` : ''}`);
-        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-        if (res.status === 403) { alert('Нет доступа'); location.href = '/'; return; }
-        if (!res.ok) throw new Error('status ' + res.status);
-        const data = await res.json();
+        const headers = { Authorization: 'Bearer ' + token };
+        const inProgressUrl = resolveApiUrl(`/api/admin/trade-orders?exclude_status=${encodeURIComponent('Торги завершены')}`);
+        const completedUrl = resolveApiUrl(`/api/admin/trade-orders?status=${encodeURIComponent('Торги завершены')}&limit=100`);
+
+        const [inProgressRes, completedRes] = await Promise.all([
+          fetch(inProgressUrl, { headers }),
+          fetch(completedUrl, { headers }),
+        ]);
+
+        if (inProgressRes.status === 403 || completedRes.status === 403) {
+          alert('Нет доступа');
+          location.href = '/';
+          return;
+        }
+
+        if (!inProgressRes.ok) throw new Error('status ' + inProgressRes.status);
+        if (!completedRes.ok) throw new Error('status ' + completedRes.status);
+
+        const [inProgressData, completedData] = await Promise.all([
+          inProgressRes.json(),
+          completedRes.json(),
+        ]);
+
         if (ignore) return;
-        setItems(Array.isArray(data?.items) ? data.items : []);
+        setInProgressItems(Array.isArray(inProgressData?.items) ? inProgressData.items : []);
+        setCompletedItems(Array.isArray(completedData?.items) ? completedData.items : []);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('admin-trade-orders-refresh'));
         }
@@ -80,7 +72,8 @@ export default function AdminTradeOrdersList() {
         console.error('Failed to load admin trade orders', err);
         if (!ignore) {
           setError('Не удалось загрузить заявки на торги. Попробуйте позже.');
-          setItems([]);
+          setInProgressItems([]);
+          setCompletedItems([]);
         }
       } finally {
         if (!ignore) setLoading(false);
@@ -89,84 +82,79 @@ export default function AdminTradeOrdersList() {
 
     loadOrders();
     return () => { ignore = true; };
-  }, [me, statusFilter]);
-
-  const options = useMemo(() => {
-    const base = new Set(['all']);
-    statuses.forEach((st) => { if (st) base.add(st); });
-    items.forEach((item) => { if (item?.status) base.add(item.status); });
-    return Array.from(base);
-  }, [statuses, items]);
+  }, [me]);
 
   return (
     <AdminLayout me={me} title="Сопровождение торгов">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <label style={{ fontWeight: 600 }} htmlFor="statusFilter">Фильтр по статусу:</label>
-        <select
-          id="statusFilter"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--line)', minWidth: 220 }}
-        >
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt === 'all' ? 'Все статусы' : opt}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {loading && <div>Загрузка…</div>}
       {!loading && error && <div style={{ color: '#ef4444' }}>{error}</div>}
 
-      {!loading && !error && items.length === 0 && (
-        <div>Заявки на торги не найдены.</div>
-      )}
+      {!loading && !error && (
+        <div style={{ display: 'grid', gap: 32 }}>
+          <section>
+            <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>В работе</h2>
+            {inProgressItems.length === 0 ? (
+              <div>Нет заявок в работе.</div>
+            ) : (
+              <OrdersTable items={inProgressItems} />
+            )}
+          </section>
 
-      {!loading && !error && items.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={th}></th>
-                <th style={th}>Дата</th>
-                <th style={th}>Пользователь</th>
-                <th style={th}>Подписка</th>
-                <th style={th}>Объявление</th>
-                <th style={th}>Статус</th>
-                <th style={th}>Сумма</th>
-                <th style={th}>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => {
-                const unread = Boolean(it?.admin_unread);
-                return (
-                  <tr key={it.id} style={unread ? rowUnread : undefined}>
-                    <td style={td}>
-                      {unread ? <span style={dot} title="Новый">●</span> : null}
-                    </td>
-                    <td style={td}>{new Date(it.created_at).toLocaleString('ru-RU')}</td>
-                    <td style={td}>{it.user_name || it.user_phone}</td>
-                    <td style={td}>{it.subscription_status}</td>
-                    <td style={td}>
-                      <a href={`/trades/${it.listing_id}`} target="_blank" rel="noreferrer">
-                        {it.listing_title || it.listing_id}
-                      </a>
-                    </td>
-                    <td style={td}>{it.status}</td>
-                    <td style={td}>{formatCurrency(it.final_amount)}</td>
-                    <td style={td}>
-                      <a href={`/admin/trade-orders/${it.id}`} style={unread ? linkUnread : undefined}>перейти в заявку</a>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <section>
+            <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>Завершены</h2>
+            {completedItems.length === 0 ? (
+              <div>Нет завершённых заявок.</div>
+            ) : (
+              <OrdersTable items={completedItems} />
+            )}
+          </section>
         </div>
       )}
     </AdminLayout>
+  );
+}
+
+function OrdersTable({ items }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}></th>
+            <th style={th}>Дата</th>
+            <th style={th}>Пользователь</th>
+            <th style={th}>Объявление</th>
+            <th style={th}>Статус</th>
+            <th style={th}>Сумма</th>
+            <th style={th}>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => {
+            const unread = Boolean(it?.admin_unread);
+            return (
+              <tr key={it.id} style={unread ? rowUnread : undefined}>
+                <td style={td}>
+                  {unread ? <span style={dot} title="Новый">●</span> : null}
+                </td>
+                <td style={td}>{new Date(it.created_at).toLocaleString('ru-RU')}</td>
+                <td style={td}>{it.user_name || it.user_phone}</td>
+                <td style={td}>
+                  <a href={`/trades/${it.listing_id}`} target="_blank" rel="noreferrer">
+                    {it.listing_title || it.listing_id}
+                  </a>
+                </td>
+                <td style={td}>{it.status}</td>
+                <td style={td}>{formatCurrency(it.final_amount)}</td>
+                <td style={td}>
+                  <a href={`/admin/trade-orders/${it.id}`} style={unread ? linkUnread : undefined}>перейти в заявку</a>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -182,3 +170,4 @@ const td = { borderBottom: '1px solid #f3f3f3', padding: '8px', verticalAlign: '
 const rowUnread = { background: 'rgba(239,68,68,0.08)' };
 const dot = { color: '#ef4444', fontSize: 18, lineHeight: 1 };
 const linkUnread = { fontWeight: 700 };
+
