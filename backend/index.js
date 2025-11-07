@@ -1937,7 +1937,7 @@ app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
         FROM user_sessions
        WHERE user_id::text = $1
        ORDER BY created_at DESC
-       LIMIT 30
+       LIMIT 10
     `, [String(user.id)]);
 
     const userIdText = String(user.id);
