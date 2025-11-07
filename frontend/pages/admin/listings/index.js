@@ -550,6 +550,16 @@ export default function AdminParserTradesPage() {
   return (
     <div className="container">
       <div className="admin-page">
+        <div style={{ marginBottom: 12 }}>
+          <Link
+            href="/admin"
+            className="link"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <span aria-hidden="true">←</span>
+            <span>Админ-панель</span>
+          </Link>
+        </div>
         <div className="admin-page__header">
           <h1 className="admin-page__title">{pageTitle}</h1>
           <p className="admin-page__subtitle">
@@ -777,6 +787,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
