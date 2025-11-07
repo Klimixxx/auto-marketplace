@@ -2423,14 +2423,6 @@ export default function AdminParserTradeCard() {
     <div className="container" style={{ gap: 16 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
         <Link
-          href="/admin"
-          className="link"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-        >
-          <span aria-hidden="true">←</span>
-          <span>Админ-панель</span>
-        </Link>
-        <Link
           href={backLinkHref}
           className="link"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -3566,6 +3558,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
