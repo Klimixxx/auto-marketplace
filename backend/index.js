@@ -16,11 +16,13 @@ import adminInspectionsRouter from './routes/adminInspections.js';
 import autotekaRouter from './routes/autoteka.js';
 import adminAutotekaRouter from './routes/adminAutoteka.js';
 import adminAutotekaSettingsRouter from './routes/adminAutotekaSettings.js';
+import adminInspectionSettingsRouter from './routes/adminInspectionSettings.js';
 import tradeOrdersRouter from './routes/tradeOrders.js';
 import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
 import { loadAutotekaSettings } from './services/autotekaSettings.js';
+import { loadInspectionSettings } from './services/inspectionSettings.js';
 import supportRouter from './routes/support.js';
 import adminSupportRouter from './routes/adminSupport.js';
 import { setSocketInstance } from './services/socket.js';
@@ -1480,6 +1482,15 @@ app.patch('/api/me', auth, async (req, res) => {
 });
 
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
+app.get('/api/inspections/price', async (_req, res) => {
+  try {
+    const settings = await loadInspectionSettings();
+    res.json({ price: settings?.price ?? 0 });
+  } catch (error) {
+    console.error('inspection price meta error:', error);
+    res.status(500).json({ error: 'SERVER_ERROR' });
+  }
+});
 app.get('/api/autoteka/price', async (_req, res) => {
   try {
     const settings = await loadAutotekaSettings();
@@ -1496,6 +1507,7 @@ app.use('/api/trade-orders', auth, tradeOrdersRouter);
 app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
 app.use('/api/admin/autoteka-orders', auth, requireAdmin, adminAutotekaRouter);
 app.use('/api/admin/autoteka-settings', auth, requireAdmin, adminAutotekaSettingsRouter);
+app.use('/api/admin/inspection-settings', auth, requireAdmin, adminInspectionSettingsRouter);
 app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
 app.use('/api/admin/trade-pricing', auth, requireAdmin, adminTradePricingRouter);
 app.use('/api/support', auth, supportRouter);
@@ -1928,7 +1940,26 @@ app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
        LIMIT 30
     `, [String(user.id)]);
 
-    res.json({ user, sessions });
+    const userIdText = String(user.id);
+    const [
+      { rows: [{ count: inspectionsCount = 0 }] },
+      { rows: [{ count: autotekaCount = 0 }] },
+      { rows: [{ count: tradeOrdersCount = 0 }] },
+    ] = await Promise.all([
+      query('SELECT COUNT(*)::int AS count FROM inspections WHERE user_id::text = $1', [userIdText]),
+      query('SELECT COUNT(*)::int AS count FROM autoteka_orders WHERE user_id::text = $1', [userIdText]),
+      query('SELECT COUNT(*)::int AS count FROM trade_orders WHERE user_id::text = $1', [userIdText]),
+    ]);
+
+    res.json({
+      user,
+      sessions,
+      stats: {
+        inspections: inspectionsCount ?? 0,
+        autoteka: autotekaCount ?? 0,
+        tradeOrders: tradeOrdersCount ?? 0,
+      },
+    });
   } catch (e) {
     console.error('admin user card error:', e);
     res.status(500).json({ error: 'failed' });
