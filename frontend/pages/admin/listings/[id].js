@@ -2421,8 +2421,23 @@ export default function AdminParserTradeCard() {
 
   return (
     <div className="container" style={{ gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Link href={backLinkHref} className="link">← Список</Link>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+        <Link
+          href="/admin"
+          className="link"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          <span aria-hidden="true">←</span>
+          <span>Админ-панель</span>
+        </Link>
+        <Link
+          href={backLinkHref}
+          className="link"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          <span aria-hidden="true">←</span>
+          <span>Список</span>
+        </Link>
         <h1 style={{ margin: 0, fontSize: 20, lineHeight: 1.3 }}>
           Редактирование лота <span className="muted">#{id}</span>
         </h1>
@@ -3551,6 +3566,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
