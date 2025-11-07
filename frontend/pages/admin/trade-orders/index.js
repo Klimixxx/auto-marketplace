@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../../../components/AdminLayout';
 import { resolveApiUrl } from '../../../lib/api';
 
@@ -84,28 +84,65 @@ export default function AdminTradeOrdersList() {
     return () => { ignore = true; };
   }, [me]);
 
+  const tabs = useMemo(
+    () => [
+      {
+        key: 'in-progress',
+        label: `В работе (${inProgressItems.length})`,
+        description: null,
+        emptyText: 'Нет заявок в работе.',
+        list: inProgressItems,
+      },
+      {
+        key: 'completed',
+        label: `Завершены (${completedItems.length})`,
+        description: 'Отображаются последние 100 заявок со статусом «Торги завершены».',
+        emptyText: 'Нет завершённых заявок.',
+        list: completedItems,
+      },
+    ],
+    [inProgressItems, completedItems],
+  );
+
+  const [activeTab, setActiveTab] = useState('in-progress');
+
+  const currentTab = useMemo(
+    () => tabs.find((tab) => tab.key === activeTab) || tabs[0],
+    [tabs, activeTab],
+  );
+
   return (
     <AdminLayout me={me} title="Сопровождение торгов">
       {loading && <div>Загрузка…</div>}
       {!loading && error && <div style={{ color: '#ef4444' }}>{error}</div>}
 
       {!loading && !error && (
-        <div style={{ display: 'grid', gap: 32 }}>
-          <section>
-            <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>В работе</h2>
-            {inProgressItems.length === 0 ? (
-              <div>Нет заявок в работе.</div>
-            ) : (
-              <OrdersTable items={inProgressItems} />
-            )}
-          </section>
+        <div style={{ display: 'grid', gap: 24 }}>
+          <div style={tabsContainer}>
+            {tabs.map((tab) => {
+              const isActive = currentTab && tab.key === currentTab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  style={isActive ? tabButtonActive : tabButton}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
           <section>
-            <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>Завершены</h2>
-            {completedItems.length === 0 ? (
-              <div>Нет завершённых заявок.</div>
+            <h2 style={sectionTitle}>{currentTab?.key === 'in-progress' ? 'В работе' : 'Завершены'}</h2>
+            {currentTab?.description ? (
+              <p style={sectionDescription}>{currentTab.description}</p>
+            ) : null}
+            {(currentTab?.list?.length ?? 0) > 0 ? (
+              <OrdersTable items={currentTab.list} />
             ) : (
-              <OrdersTable items={completedItems} />
+              <div style={emptyState}>{currentTab?.emptyText || 'Нет данных.'}</div>
             )}
           </section>
         </div>
@@ -170,4 +207,27 @@ const td = { borderBottom: '1px solid #f3f3f3', padding: '8px', verticalAlign: '
 const rowUnread = { background: 'rgba(239,68,68,0.08)' };
 const dot = { color: '#ef4444', fontSize: 18, lineHeight: 1 };
 const linkUnread = { fontWeight: 700 };
+const sectionTitle = { margin: '0 0 8px', fontSize: 20, fontWeight: 700 };
+const sectionDescription = { margin: '0 0 16px', color: 'var(--text-muted)' };
+const emptyState = { padding: '12px 0', color: 'var(--text-muted)' };
+const tabsContainer = {
+  display: 'flex',
+  gap: 8,
+  borderBottom: '1px solid #eee',
+  flexWrap: 'wrap',
+};
+const tabButton = {
+  border: 'none',
+  background: 'transparent',
+  padding: '8px 12px',
+  fontSize: 14,
+  cursor: 'pointer',
+  borderBottom: '2px solid transparent',
+};
+const tabButtonActive = {
+  ...tabButton,
+  borderBottomColor: '#ef4444',
+  color: '#ef4444',
+  fontWeight: 600,
+};
 
