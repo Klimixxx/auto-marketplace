@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import AdminLayout from '../../../components/AdminLayout';
 import { resolveApiUrl } from '../../../lib/api';
+import { resolveFedresursUrl, resolveTradePlatformUrl } from '../../../lib/listingLinks';
 
 const STATUS_FLOW = [
   'Оплачен/Ожидание модерации',
@@ -13,8 +14,42 @@ const STATUS_FLOW = [
 function formatCurrency(value) {
   if (value == null) return '—';
   const num = Number(value);
-  if (!Number.isFinite(num)) return String(value);
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(num);
+  if (!Number.isFinite(num)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('ru-RU');
+}
+
+function parseDepositPercent(serviceTier) {
+  if (!serviceTier) return null;
+  const match = String(serviceTier).match(/([0-9]+(?:[.,][0-9]+)?)\s*%/);
+  if (!match) return null;
+  const percent = Number(match[1].replace(',', '.'));
+  return Number.isFinite(percent) ? percent : null;
+}
+
+function calculateDepositAmount(finalAmount, depositPercent, discountPercent) {
+  const finalNumber = Number(finalAmount);
+  if (!Number.isFinite(finalNumber) || finalNumber <= 0) return null;
+  const deposit = Number(depositPercent);
+  if (!Number.isFinite(deposit) || deposit <= 0) return null;
+  const discount = Number(discountPercent);
+  const discountRatio = Number.isFinite(discount) ? Math.min(1, Math.max(0, discount / 100)) : 0;
+  const depositRatio = deposit / 100;
+  const factor = 1 + depositRatio * (1 - discountRatio);
+  if (!Number.isFinite(factor) || factor <= 0) return null;
+  const raw = finalNumber / factor;
+  if (!Number.isFinite(raw)) return null;
+  return Math.round(raw);
 }
 
 export default function AdminTradeOrderDetail() {
@@ -25,6 +60,24 @@ export default function AdminTradeOrderDetail() {
   const [item, setItem] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState(null);
+
+  const listingInfo = useMemo(() => {
+    if (!item) return null;
+    return {
+      details: item.listing_details || null,
+      source_url: item.listing_source_url || null,
+      sourceUrl: item.listing_source_url || null,
+      fedresurs_id: item.listing_source_id || null,
+    };
+  }, [item]);
+
+  const fedresursUrl = useMemo(() => resolveFedresursUrl(listingInfo), [listingInfo]);
+  const tradePlatformUrl = useMemo(() => resolveTradePlatformUrl(listingInfo), [listingInfo]);
+  const depositPercent = useMemo(() => parseDepositPercent(item?.service_tier), [item?.service_tier]);
+  const depositAmount = useMemo(
+    () => calculateDepositAmount(item?.final_amount, depositPercent, item?.discount_percent),
+    [item?.final_amount, depositPercent, item?.discount_percent]
+  );
 
   useEffect(() => {
     (async () => {
@@ -129,7 +182,7 @@ export default function AdminTradeOrderDetail() {
       {error && <div style={{ color: '#ef4444' }}>{error}</div>}
 
       {item && !error && (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'grid', gap: 20 }}>
           {item.admin_unread && (
             <div
               style={{
@@ -145,34 +198,70 @@ export default function AdminTradeOrderDetail() {
             </div>
           )}
 
-          <div>
-            <div>
-              <b>Пользователь:</b> {item.user_name || item.user_phone}
-            </div>
-            <div>
-              <b>Подписка:</b> {item.subscription_status || '—'}
-            </div>
-            <div>
-              <b>Объявление: </b>
-              <a href={`/trades/${item.listing_id}`} target="_blank" rel="noreferrer">
-                {item.listing_title || item.listing_id}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {item.user_code && (
+              <a className="button" href={`/admin/notify?user_code=${item.user_code}`}>
+                Отправить уведомление
+              </a>
+            )}
+          </div>
+
+          <Section title="Информация о пользователе">
+            <InfoGrid>
+              <InfoRow label="Имя" value={item.user_name || '—'} />
+              <InfoRow label="ID аккаунта" value={item.user_code || '—'} />
+              <InfoRow label="Телефон" value={item.user_phone || '—'} />
+              <InfoRow label="Почта" value={item.user_email || '—'} />
+            </InfoGrid>
+          </Section>
+
+          <Section title="Заявка">
+            <InfoGrid>
+              <InfoRow
+                label="Объявление"
+                value={
+                  <a href={`/trades/${item.listing_id}`} target="_blank" rel="noreferrer">
+                    {item.listing_title || item.listing_id}
+                  </a>
+                }
+              />
+              <InfoRow label="Дата подачи заявки" value={formatDate(item.created_at)} />
+              <InfoRow label="Текущий статус" value={item.status || '—'} />
+              <InfoRow
+                label="Указанная стоимость"
+                value={item.lot_price_estimate != null ? formatCurrency(item.lot_price_estimate) : '—'}
+              />
+              <InfoRow label="Сумма задатка" value={depositAmount != null ? formatCurrency(depositAmount) : '—'} />
+              <InfoRow label="Тариф" value={item.service_tier || '—'} />
+              <InfoRow label="Скидка, %" value={item.discount_percent != null ? item.discount_percent : '—'} />
+              <InfoRow label="Итого к оплате" value={formatCurrency(item.final_amount)} />
+            </InfoGrid>
+          </Section>
+
+          <Section title="Внешние ссылки">
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <a
+                className="button outline"
+                href={fedresursUrl || '#'}
+                target="_blank"
+                rel="noreferrer"
+                style={{ pointerEvents: fedresursUrl ? 'auto' : 'none', opacity: fedresursUrl ? 1 : 0.5 }}
+              >
+                Перейти на Федресурс
+              </a>
+              <a
+                className="button outline"
+                href={tradePlatformUrl || '#'}
+                target="_blank"
+                rel="noreferrer"
+                style={{ pointerEvents: tradePlatformUrl ? 'auto' : 'none', opacity: tradePlatformUrl ? 1 : 0.5 }}
+              >
+                Перейти на ТП
               </a>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <b>Текущий статус:</b> {item.status}
-            </div>
-          </div>
+          </Section>
 
-          <div>
-            <div><b>Тариф:</b> {item.service_tier || '—'}</div>
-            <div><b>Базовая стоимость:</b> {formatCurrency(item.base_price)}</div>
-            <div><b>Скидка, %:</b> {item.discount_percent != null ? item.discount_percent : '—'}</div>
-            <div><b>Итого к оплате:</b> {formatCurrency(item.final_amount)}</div>
-            <div><b>Оценка стоимости лота:</b> {item.lot_price_estimate != null ? formatCurrency(item.lot_price_estimate) : '—'}</div>
-          </div>
-
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 600 }}>Управление статусами:</div>
+          <Section title="Управление статусами">
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {STATUS_FLOW.map((st) => {
                 const isActive = item.status === st;
@@ -195,13 +284,51 @@ export default function AdminTradeOrderDetail() {
                 );
               })}
             </div>
-          </div>
+          </Section>
 
           <div style={{ color: '#64748b', fontSize: 13 }}>
-            Последнее обновление: {new Date(item.updated_at).toLocaleString('ru-RU')}
+            Последнее обновление: {formatDate(item.updated_at)}
           </div>
         </div>
       )}
     </AdminLayout>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <section>
+      <h2 style={{ margin: '0 0 12px', fontSize: 20 }}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function InfoGrid({ children }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: 12,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  let display = value;
+  if (display === null || display === undefined || display === '') {
+    display = '—';
+  }
+  return (
+    <div style={{ display: 'grid', gap: 4 }}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}
+      </div>
+      <div style={{ fontWeight: 600 }}>{display}</div>
+    </div>
   );
 }
