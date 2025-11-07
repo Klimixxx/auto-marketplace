@@ -98,51 +98,46 @@ export default function AdminUsers() {
       {!loading && list.length === 0 && <div>Пользователи не найдены.</div>}
 
       {!loading && list.length > 0 && (
-        <div>
-          {/* заголовки колонок */}
-          <div style={{
-            display:'grid',
-            gridTemplateColumns:'240px 90px 160px 220px 170px 160px 140px 120px',
-            gap:12,
-            padding:'10px 0',
-            borderTop:'1px solid var(--line)',
-            borderBottom:'1px solid var(--line)',
-            fontSize:12,
-            opacity:.8
-          }}>
+        <div className="table">
+          <div className="table-header">
             <div>Имя</div>
             <div>ID</div>
             <div>Номер</div>
             <div>Почта</div>
             <div>Дата регистрации</div>
-            <div>Статус подписки</div>
             <div>Баланс</div>
             <div></div>
           </div>
 
-          {/* строки */}
           {list.map(u => (
-            <div key={u.user_code}
-              style={{
-                display:'grid',
-                gridTemplateColumns:'240px 90px 160px 220px 170px 160px 140px 120px',
-                gap:12, padding:'10px 0',
-                borderBottom:'1px solid var(--line)'
-              }}>
-              <div><b>{u.name || 'Без имени'}</b></div>
-              <div>{u.user_code}</div>
-              <div>{u.phone || '—'}</div>
-              <div>{u.email || '—'}</div>
-              <div style={{ fontSize:12, opacity:.8 }}>
-                {new Date(u.created_at).toLocaleDateString('ru-RU')}
+            <div key={u.user_code} className="table-row">
+              <div className="cell">
+                <span className="cell-label">Имя</span>
+                <b>{u.name || 'Без имени'}</b>
               </div>
-              <div style={{ fontSize:12 }}>
-                {u.subscription_status || 'free'}
+              <div className="cell">
+                <span className="cell-label">ID</span>
+                <span>{u.user_code}</span>
               </div>
-              <div style={{ fontSize:12 }}>
-                {formatBalance(u.balance)}
+              <div className="cell">
+                <span className="cell-label">Номер</span>
+                <span>{u.phone || '—'}</span>
               </div>
-              <div>
+              <div className="cell">
+                <span className="cell-label">Почта</span>
+                <span>{u.email || '—'}</span>
+              </div>
+              <div className="cell">
+                <span className="cell-label">Дата регистрации</span>
+                <span style={{ fontSize:12, opacity:.8 }}>
+                  {new Date(u.created_at).toLocaleDateString('ru-RU')}
+                </span>
+              </div>
+              <div className="cell">
+                <span className="cell-label">Баланс</span>
+                <span style={{ fontSize:12 }}>{formatBalance(u.balance)}</span>
+              </div>
+              <div className="cell actions">
                 <a className="button" href={`/admin/users/${u.user_code}`}>Профиль</a>
               </div>
             </div>
@@ -155,6 +150,93 @@ export default function AdminUsers() {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .table {
+          display: grid;
+          gap: 0;
+        }
+
+        .table-header,
+        .table-row {
+          display: grid;
+          grid-template-columns:
+            minmax(180px, 1.4fr)
+            minmax(90px, 0.6fr)
+            minmax(150px, 1fr)
+            minmax(200px, 1.2fr)
+            minmax(160px, 1fr)
+            minmax(140px, 0.9fr)
+            minmax(120px, 0.8fr);
+          gap: 12px;
+          align-items: center;
+        }
+
+        .table-header {
+          padding: 12px 0;
+          border-top: 1px solid var(--line);
+          border-bottom: 1px solid var(--line);
+          font-size: 12px;
+          color: var(--text-muted);
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+        }
+
+        .table-row {
+          padding: 14px 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .cell {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          font-size: 14px;
+        }
+
+        .cell-label {
+          display: none;
+          font-size: 12px;
+          color: var(--text-muted);
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .actions {
+          align-items: center;
+          justify-content: flex-end;
+        }
+
+        @media (max-width: 1100px) {
+          .table-header {
+            display: none;
+          }
+
+          .table-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            padding: 16px 0;
+          }
+
+          .cell-label {
+            display: block;
+          }
+
+          .actions {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .table-row {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </AdminLayout>
   );
 }
+
