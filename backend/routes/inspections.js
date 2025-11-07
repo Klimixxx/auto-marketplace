@@ -1,9 +1,13 @@
 // backend/routes/inspections.js
 import express from 'express';
 import { pool, query } from '../db.js';
+import {
+  DEFAULT_INSPECTION_PRICE,
+  loadInspectionSettings,
+  normalizeInspectionPrice,
+} from '../services/inspectionSettings.js';
 
 const router = express.Router();
-const BASE_PRICE = 12000;
 const INITIAL_STATUS = 'Оплачен/Ожидание модерации';
 
 function userUnreadCondition(alias = 'i') {
@@ -139,8 +143,12 @@ router.post('/', async (req, res) => {
 
     const subscriptionStatus = String(user.subscription_status || 'free').trim().toLowerCase() || 'free';
     const isPro = subscriptionStatus === 'pro';
+
+    const settings = await loadInspectionSettings(client);
+    const basePrice = normalizeInspectionPrice(settings?.price, DEFAULT_INSPECTION_PRICE);
+    
     const discountPercent = isPro ? 50 : 0;
-    const finalAmount = Math.round((BASE_PRICE * (100 - discountPercent)) / 100);
+    const finalAmount = Math.round((basePrice * (100 - discountPercent)) / 100);
 
     const currentBalance = parseMoneyLike(user.balance);
     if (!Number.isFinite(currentBalance) || currentBalance < finalAmount) {
@@ -166,7 +174,7 @@ router.post('/', async (req, res) => {
         String(userId),
         String(listingDbId),
         INITIAL_STATUS,
-        BASE_PRICE,
+        basePrice,
         discountPercent,
         finalAmount,
       ]
