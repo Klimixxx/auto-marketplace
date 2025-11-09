@@ -122,6 +122,22 @@ function pickPrimaryRegionCode(value) {
   return text === 'undefined' ? '' : text;
 }
 
+function extractRegionCodes(value) {
+  const result = [];
+  const seen = new Set();
+  const list = Array.isArray(value) ? value : value == null ? [] : [value];
+  list
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .forEach((entry) => {
+      if (entry == null) return;
+      const text = typeof entry === 'string' ? entry.trim() : String(entry);
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      result.push(text);
+    });
+  return result;
+}
+
 function formatNumber(value) {
   if (value == null) return DASH;
   const numeric = Number(value);
@@ -383,12 +399,42 @@ export default function AdminParserTradesPage() {
       }
 
       const searchTerm = resolveSearchTerm(filters.q || '');
-      const primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
-      if (!primaryRegionCode) {
-        alert('Выберите регион перед запуском парсинга.');
+      let selectedRegions = extractRegionCodes(filters.region_code);
+      if (!selectedRegions.length && filters.region) {
+        selectedRegions = extractRegionCodes(filters.region);
+      }
+      if (!selectedRegions.length) {
+        alert('Выберите хотя бы один регион перед запуском парсинга.');
         return;
       }
+      const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
       const offsetToUse = reset ? 0 : nextOffset;
+
+      const payload = {
+        search: searchTerm,
+        limit: PARSER_PAGE_SIZE,
+        reset: Boolean(reset),
+        region_codes: selectedRegions,
+      };
+
+      if (selectedRegions.length === 1) {
+        payload.region_code = selectedRegions[0];
+      }
+
+      if (!reset) {
+        const offsetsMap = {};
+        if (primaryRegionCode && Number.isFinite(Number(offsetToUse))) {
+          offsetsMap[primaryRegionCode] = Number(offsetToUse);
+        }
+        if (Object.keys(offsetsMap).length) {
+          payload.offset_map = offsetsMap;
+        }
+        if (selectedRegions.length === 1 && Number.isFinite(Number(offsetToUse))) {
+          payload.offset = Number(offsetToUse);
+        }
+      } else if (selectedRegions.length === 1) {
+        payload.offset = 0;
+      }
 
       setIngesting(true);
       try {
@@ -399,20 +445,41 @@ export default function AdminParserTradesPage() {
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
-          body: JSON.stringify({
-            search: searchTerm,
-            limit: PARSER_PAGE_SIZE,
-            offset: offsetToUse,
-            region_code: primaryRegionCode,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
           throw new Error((data && data.error) || 'Не удалось запустить парсер');
         }
+        const regionsResult = Array.isArray(data.regions) ? data.regions : [];
+        const targetRegion = regionsResult.find((entry) => entry.region_code === primaryRegionCode)
+          || regionsResult[0]
+          || null;
 
-        if (data.progress) {
+        if (targetRegion && targetRegion.ok && targetRegion.progress) {
+          applyProgress(targetRegion.progress);
+        } else if (data.progress) {
           applyProgress(data.progress);
+        } else if (targetRegion && targetRegion.progress) {
+          applyProgress(targetRegion.progress);
+        }
+
+        if (regionsResult.length) {
+          const summaryLines = regionsResult.map((entry) => {
+            const label = entry.region || entry.region_code || 'Регион';
+            if (!entry.ok) {
+              const message = entry.error?.message || data.error || 'Ошибка парсинга';
+              return `⚠️ ${label}: ${message}`;
+            }
+            const receivedCount = Number.isFinite(Number(entry.received)) ? Number(entry.received) : 0;
+            const upsertedCount = Number.isFinite(Number(entry.upserted)) ? Number(entry.upserted) : 0;
+            const nextValue = Number.isFinite(Number(entry.next_offset))
+              ? Number(entry.next_offset)
+              : entry.next_offset ?? '—';
+            return `• ${label}: получено ${receivedCount}, сохранено ${upsertedCount}, следующий offset ${nextValue}`;
+          });
+          const header = data.ok === false ? 'Парсер завершён с ошибками:' : 'Парсер завершён:';
+          alert(`${header}\n${summaryLines.join('\n')}`);
         } else {
           const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
           const receivedCount = Number.isFinite(Number(data.received)) ? Number(data.received) : 0;
@@ -433,14 +500,16 @@ export default function AdminParserTradesPage() {
             updated_at: new Date().toISOString(),
           };
           applyProgress(fallbackProgress);
+          alert(
+            `Получено: ${receivedCount}, сохранено/обновлено: ${upsertedCount}. `
+              + `Текущий offset: ${baseOffset}, следующий: ${Number(data.next_offset) || nextOffset}.`,
+          );
         }
 
-        alert(
-          `Получено: ${Number(data.received) || 0}, сохранено/обновлено: ${Number(data.upserted) || 0}. ` +
-            `Текущий offset: ${Number(data.offset) || offsetToUse}, следующий: ${Number(data.next_offset) || nextOffset}.`,
-        );
         await loadPage(1);
-        await fetchProgress(searchTerm, primaryRegionCode);
+        if (primaryRegionCode) {
+          await fetchProgress(searchTerm, primaryRegionCode);
+        }
       } catch (error) {
         console.error('ingest error:', error);
         alert(`Ошибка: ${error.message || 'ingest failed'}`);
@@ -787,6 +856,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
