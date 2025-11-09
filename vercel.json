@@ -1,0 +1,13 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://mysite-black-ten.vercel.app https://studio-landing-sable.vercel.app"
+        }
+      ]
+    }
+  ]
+}
