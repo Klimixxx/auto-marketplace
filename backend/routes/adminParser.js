@@ -678,9 +678,27 @@ router.get('/parser-trades', async (req, res) => {
       filters.push(`(title ilike $${params.length} or region ilike $${params.length} or brand ilike $${params.length} or model ilike $${params.length} or vin ilike $${params.length})`);
     }
 
-    const normalizedRegionCode = normalizeRegionCode(regionCodeParam);
-    if (normalizedRegionCode) {
-      params.push(normalizedRegionCode);
+    const regionCodeValues = Array.isArray(regionCodeParam)
+      ? regionCodeParam
+      : regionCodeParam !== undefined && regionCodeParam !== null
+        ? [regionCodeParam]
+        : [];
+    const normalizedRegionCodes = regionCodeValues
+      .map((value) => normalizeRegionCode(value))
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+      .map((value) => String(value).trim());
+    const uniqueRegionCodes = [...new Set(normalizedRegionCodes)];
+
+    if (uniqueRegionCodes.length === 1) {
+      params.push(uniqueRegionCodes[0]);
+      filters.push(`region_code = $${params.length}`);
+    } else if (uniqueRegionCodes.length > 1) {
+      const placeholders = [];
+      uniqueRegionCodes.forEach((code) => {
+        params.push(code);
+        placeholders.push(`$${params.length}`);
+      });
+      filters.push(`region_code IN (${placeholders.join(', ')})`);
       filters.push(`region_code = $${params.length}`);
     } else if (region) {
       const regionTrimmed = String(region).trim();
