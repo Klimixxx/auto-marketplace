@@ -699,7 +699,6 @@ router.get('/parser-trades', async (req, res) => {
         placeholders.push(`$${params.length}`);
       });
       filters.push(`region_code IN (${placeholders.join(', ')})`);
-      filters.push(`region_code = $${params.length}`);
     } else if (region) {
       const regionTrimmed = String(region).trim();
       if (regionTrimmed) {
