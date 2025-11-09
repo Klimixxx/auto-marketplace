@@ -298,6 +298,84 @@ function resolveSearchKey(value, regionCode) {
   return `${base}::region:all`;
 }
 
+function toArray(input) {
+  if (Array.isArray(input)) return input;
+  if (input === undefined || input === null) return [];
+  return [input];
+}
+
+function parseRegionCodeList(raw) {
+  const list = [];
+  const seen = new Set();
+  toArray(raw)
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .forEach((value) => {
+      if (value === undefined || value === null) return;
+      const text = typeof value === 'string' ? value.trim() : String(value);
+      const normalized = normalizeRegionCode(text);
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        list.push(normalized);
+      }
+    });
+  return list;
+}
+
+function parseOffsetMap(raw) {
+  const result = new Map();
+  if (!raw || typeof raw !== 'object') {
+    return result;
+  }
+  Object.entries(raw).forEach(([key, value]) => {
+    const normalizedKey = normalizeRegionCode(key);
+    const numeric = toFinite(value);
+    if (!normalizedKey || numeric === undefined || numeric < 0) return;
+    result.set(normalizedKey, numeric);
+  });
+  return result;
+}
+
+async function fetchStoredNextOffset(searchKey) {
+  const { rows } = await query(
+    `select next_offset
+       from parser_ingest_progress
+      where search_key = $1`,
+    [searchKey],
+  );
+  if (!rows?.length) return undefined;
+  const value = rows[0]?.next_offset;
+  const numeric = toFinite(value);
+  if (numeric === undefined || numeric < 0) return undefined;
+  return numeric;
+}
+
+async function resolveOffsetForRegion({ searchKey, reset, offsetOverride, globalOffset }) {
+  if (reset) {
+    return DEFAULT_OFFSET;
+  }
+
+  if (offsetOverride !== undefined) {
+    const numeric = toFinite(offsetOverride);
+    if (numeric !== undefined && numeric >= 0) {
+      return numeric;
+    }
+  }
+
+  if (globalOffset !== undefined) {
+    const numeric = toFinite(globalOffset);
+    if (numeric !== undefined && numeric >= 0) {
+      return numeric;
+    }
+  }
+
+  const stored = await fetchStoredNextOffset(searchKey);
+  if (stored !== undefined) {
+    return stored;
+  }
+
+  return DEFAULT_OFFSET;
+}
+
 
 async function upsertParserTrade(item) {
   const fedresurs = item?.fedresurs_data || {};
@@ -325,8 +403,159 @@ async function upsertParserTrade(item) {
     lot.region_code = region_code;
     if (!lot.region && regionName) {
       lot.region = regionName;
+  }
+}
+
+async function ingestRegionRequest({
+  searchTerm,
+  regionCode,
+  startDate,
+  endDate,
+  limit,
+  offset,
+  parserBaseUrl,
+}) {
+  const searchKey = resolveSearchKey(searchTerm, regionCode);
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+  const safeOffset = Number.isFinite(offset) && offset >= 0 ? Number(offset) : DEFAULT_OFFSET;
+
+  const baseUrl = parserBaseUrl || process.env.PARSER_BASE_URL || PARSER_FALLBACK_BASE;
+  const url = new URL('/parse-fedresurs-trades', baseUrl);
+  url.searchParams.set('search_string', searchTerm);
+  if (startDate) url.searchParams.set('start_date', String(startDate));
+  if (endDate) url.searchParams.set('end_date', String(endDate));
+  url.searchParams.set('limit', String(safeLimit));
+  url.searchParams.set('offset', String(safeOffset));
+  url.searchParams.set('region_code', String(regionCode));
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || data == null) {
+    return {
+      ok: false,
+      region_code: regionCode,
+      region: getRegionNameByCode(regionCode) || null,
+      search_key: searchKey,
+      search_term: searchTerm,
+      error: {
+        message: 'parser failed',
+        status: response.status,
+        sample: data,
+      },
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = normalizeParserResponse(data);
+  } catch (error) {
+    console.error('normalize parser payload failed:', error?.message);
+    return {
+      ok: false,
+      region_code: regionCode,
+      region: getRegionNameByCode(regionCode) || null,
+      search_key: searchKey,
+      search_term: searchTerm,
+      error: {
+        message: error?.message || 'normalize failed',
+        status: response.status,
+        sample: data,
+      },
+    };
+  }
+
+  const { items, meta } = parsed;
+
+  let upserted = 0;
+  for (const item of items) {
+    try {
+      await upsertParserTrade(item);
+      upserted += 1;
+    } catch (error) {
+      console.error('UPSERT parser_trades error:', error?.message);
     }
   }
+
+  const baseOffset = Number.isFinite(meta?.offset) ? Number(meta.offset) : safeOffset;
+  const limitUsed = Number.isFinite(meta?.limit) ? Number(meta.limit) : safeLimit;
+  const receivedCount = Array.isArray(items) ? items.length : 0;
+  const totalFound = Number.isFinite(meta?.total_found) ? Number(meta.total_found) : null;
+  const nextOffset = baseOffset + receivedCount;
+  const hasMore = typeof meta?.has_more === 'boolean'
+    ? meta.has_more
+    : totalFound == null
+      ? null
+      : nextOffset < totalFound;
+
+  await query(
+    `insert into parser_ingest_progress
+       (search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     on conflict (search_key) do update set
+       search_term   = excluded.search_term,
+       region_code   = excluded.region_code,
+       next_offset   = excluded.next_offset,
+       last_offset   = excluded.last_offset,
+       last_received = excluded.last_received,
+       last_upserted = excluded.last_upserted,
+       last_limit    = excluded.last_limit,
+       total_found   = excluded.total_found,
+       has_more      = excluded.has_more`,
+    [
+      searchKey,
+      searchTerm,
+      regionCode,
+      nextOffset,
+      baseOffset,
+      receivedCount,
+      upserted,
+      limitUsed,
+      totalFound,
+      hasMore,
+    ],
+  );
+
+  const { rows: [progress] = [] } = await query(
+    `select search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
+       from parser_ingest_progress
+      where search_key = $1`,
+    [searchKey],
+  );
+
+  return {
+    ok: true,
+    region_code: regionCode,
+    region: getRegionNameByCode(regionCode) || null,
+    search_key: searchKey,
+    search_term: searchTerm,
+    received: receivedCount,
+    upserted,
+    limit: limitUsed,
+    offset: baseOffset,
+    next_offset: nextOffset,
+    total_found: totalFound,
+    has_more: hasMore,
+    parser_meta: meta,
+    progress: progress || {
+      search_key: searchKey,
+      search_term: searchTerm,
+      region_code: regionCode,
+      next_offset: nextOffset,
+      last_offset: baseOffset,
+      last_received: receivedCount,
+      last_upserted: upserted,
+      last_limit: limitUsed,
+      total_found: totalFound,
+      has_more: hasMore,
+      updated_at: new Date().toISOString(),
+    },
+  };
+}
 
   const fedresursId = parsed.fedresurs_id || fedresurs.guid || fedresurs.number || parsed.bidding_number || null;
   const biddingNumber = parsed.bidding_number || null;
@@ -616,121 +845,116 @@ router.post('/actions/ingest', async (req, res) => {
       start_date,
       end_date,
       limit = DEFAULT_LIMIT,
-      offset = DEFAULT_OFFSET,
-      region_code: regionCodeRaw,
+      offset,
+      region_code,
+      region_codes,
+      offset_map,
+      offsets,
+      reset = false,
     } = req.body || {};
 
-    const regionCode = normalizeRegionCode(regionCodeRaw);
-    if (!regionCode) {
+    const regionInputs = [
+      parseJsonArray(region_codes, 'region_codes'),
+      parseJsonArray(region_code, 'region_code'),
+      region_codes,
+      region_code,
+    ];
+    const regionList = parseRegionCodeList(regionInputs);
+
+    if (!regionList.length) {
       return res.status(400).json({ error: 'region_code is required' });
     }
 
     const searchTerm = resolveSearchTerm(search);
-    const searchKey = resolveSearchKey(search, regionCode);
+    const limitNum = toFinite(limit);
+    const safeLimit = limitNum !== undefined && limitNum > 0 ? Math.min(limitNum, MAX_LIMIT) : DEFAULT_LIMIT;
 
-    const limitNum = Number(limit);
-    const offsetNum = Number(offset);
-    const safeLimit = Number.isFinite(limitNum) && limitNum > 0
-      ? Math.min(limitNum, MAX_LIMIT)
-      : DEFAULT_LIMIT;
-    const safeOffset = Number.isFinite(offsetNum) && offsetNum >= 0 ? offsetNum : DEFAULT_OFFSET;
+    const offsetOverridesInput =
+      parseJsonObject(offset_map, 'offset_map')
+      || parseJsonObject(offsets, 'offsets')
+      || offset_map
+      || offsets;
+    const offsetOverrides = parseOffsetMap(offsetOverridesInput);
 
-    const baseUrl = process.env.PARSER_BASE_URL || PARSER_FALLBACK_BASE;
-    const url = new URL('/parse-fedresurs-trades', baseUrl);
-    url.searchParams.set('search_string', searchTerm);
-    if (start_date) url.searchParams.set('start_date', String(start_date));
-    if (end_date) url.searchParams.set('end_date', String(end_date));
-    url.searchParams.set('limit', String(safeLimit));
-    url.searchParams.set('offset', String(safeOffset));
-    url.searchParams.set('region_code', String(regionCode));
+    const globalOffset = toFinite(offset);
+    const resetFlag = Boolean(reset);
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
-    });
-    const data = await response.json().catch(() => null);
+    const regions = [];
+    let totalReceived = 0;
+    let totalUpserted = 0;
 
-    if (!response.ok || data == null) {
-      return res.status(502).json({ error: 'parser failed', status: response.status, sample: data });
-    }
+    for (const regionCodeValue of regionList) {
+      const searchKey = resolveSearchKey(searchTerm, regionCodeValue);
+      const override = offsetOverrides.has(regionCodeValue)
+        ? offsetOverrides.get(regionCodeValue)
+        : undefined;
+      const offsetToUse = await resolveOffsetForRegion({
+        searchKey,
+        reset: resetFlag,
+        offsetOverride: override,
+        globalOffset: regionList.length === 1 ? globalOffset : undefined,
+      });
 
-    let parsed;
-    try {
-      parsed = normalizeParserResponse(data);
-    } catch (error) {
-      console.error('normalize parser payload failed:', error?.message);
-      return res.status(502).json({ error: 'parser failed', status: response.status, reason: error?.message, sample: data });
-    }
+    const result = await ingestRegionRequest({
+        searchTerm,
+        regionCode: regionCodeValue,
+        startDate: start_date,
+        endDate: end_date,
+        limit: safeLimit,
+        offset: offsetToUse,
+        parserBaseUrl: process.env.PARSER_BASE_URL,
+      });
 
-    const { items, meta } = parsed;
+    const receivedCount = Number.isFinite(Number(result?.received)) ? Number(result.received) : 0;
+      const upsertedCount = Number.isFinite(Number(result?.upserted)) ? Number(result.upserted) : 0;
 
-    let upserted = 0;
-    for (const item of items) {
-      try {
-        await upsertParserTrade(item);
-        upserted += 1;
-      } catch (error) {
-        console.error('UPSERT parser_trades error:', error?.message);
+    if (result.ok) {
+        totalReceived += receivedCount;
+        totalUpserted += upsertedCount;
       }
     }
 
-    const baseOffset = Number.isFinite(meta?.offset) ? Number(meta.offset) : safeOffset;
-    const limitUsed = Number.isFinite(meta?.limit) ? Number(meta.limit) : safeLimit;
-    const receivedCount = Array.isArray(items) ? items.length : 0;
-    const totalFound = Number.isFinite(meta?.total_found) ? Number(meta.total_found) : null;
-    const nextOffset = baseOffset + receivedCount;
-    const hasMore = typeof meta?.has_more === 'boolean'
-      ? meta.has_more
-      : totalFound == null
-        ? null
-        : nextOffset < totalFound;
+    regions.push({
+        ...result,
+        offset_requested: offsetToUse,
+      });
 
-    await query(
-      `insert into parser_ingest_progress
-         (search_key, search_term, region_code, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       on conflict (search_key) do update set
-         search_term   = excluded.search_term,
-         region_code   = excluded.region_code,
-         next_offset   = excluded.next_offset,
-         last_offset   = excluded.last_offset,
-         last_received = excluded.last_received,
-         last_upserted = excluded.last_upserted,
-         last_limit    = excluded.last_limit,
-         total_found   = excluded.total_found,
-         has_more      = excluded.has_more`,
-      [
-        searchKey,
-        searchTerm,
-        regionCode,
-        nextOffset,
-        baseOffset,
-        receivedCount,
-        upserted,
-        limitUsed,
-        totalFound,
-        hasMore,
-      ],
-    );
+    const errors = regions.filter((entry) => !entry.ok).map((entry) => ({
+      region_code: entry.region_code,
+      region: entry.region,
+      message: entry.error?.message || 'parser failed',
+      status: entry.error?.status ?? null,
+    }));
 
-    const { rows: [progress] } = await query(
-      `select search_key, search_term, next_offset, last_offset, last_received, last_upserted, last_limit, total_found, has_more, updated_at
-         from parser_ingest_progress
-        where search_key = $1`,
-      [searchKey],
-    );
+    const responsePayload = {
+      ok: errors.length === 0,
+      total_regions: regionList.length,
+      total_received: totalReceived,
+      total_upserted: totalUpserted,
+      regions,
+    };
 
-    return res.json({
-      ok: true,
-      received: receivedCount,
-      upserted,
-      limit: limitUsed,
-      offset: baseOffset,
-      parser_meta: meta,
-      next_offset: nextOffset,
-      progress: progress || null,
-    });
+    if (errors.length) {
+      responsePayload.errors = errors;
+    }
+
+    if (regions.length === 1) {
+      const [regionResult] = regions;
+      return res.json({
+        ...responsePayload,
+        received: regionResult.received,
+        upserted: regionResult.upserted,
+        limit: regionResult.limit,
+        offset: regionResult.offset,
+        parser_meta: regionResult.parser_meta,
+        next_offset: regionResult.next_offset,
+        progress: regionResult.progress,
+        region_code: regionResult.region_code,
+        region: regionResult.region,
+      });
+    }
+
+    return res.json(responsePayload);
   } catch (error) {
     console.error('ingest call error:', error);
     res.status(500).json({ error: 'failed' });
