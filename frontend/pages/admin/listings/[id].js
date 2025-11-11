@@ -2014,6 +2014,29 @@ export default function AdminParserTradeCard() {
   const descriptionPreview = useMemo(() => (form?.description || '').trim(), [form?.description]);
 
   const tradeType = useMemo(() => {
+    const meta =
+      (item?.raw_payload?.fedresurs_data && typeof item.raw_payload.fedresurs_data === 'object'
+        ? item.raw_payload.fedresurs_data
+        : null)
+      || (item?.fedresurs_meta && typeof item.fedresurs_meta === 'object' ? item.fedresurs_meta : null)
+      || null;
+
+    if (meta) {
+      const metaCandidates = [
+        meta.type,
+        meta.trade_type,
+        meta.tradeType,
+        meta.procedure_type,
+        meta.procedureType,
+      ];
+      for (const candidate of metaCandidates) {
+        if (candidate != null && candidate !== '') {
+          const text = String(candidate).trim();
+          if (text) return text;
+        }
+      }
+    }
+
     const row = lotFields.find((entry) => entry.key === 'trade_type');
     if (row?.value != null && row.value !== '') {
       return String(row.value).trim();
@@ -2026,7 +2049,7 @@ export default function AdminParserTradeCard() {
       return String(preservedValue).trim();
     }
     return '';
-  }, [lotFields, lotPreserved]);
+  }, [item, lotFields, lotPreserved]);
 
   const normalizedTradeType = useMemo(() => {
     const candidates = [
@@ -2037,10 +2060,21 @@ export default function AdminParserTradeCard() {
       item?.tradeType,
       item?.lot_details?.trade_type,
       item?.lot_details?.tradeType,
+      item?.raw_payload?.fedresurs_data?.type,
+      item?.raw_payload?.fedresurs_data?.trade_type,
+      item?.raw_payload?.fedresurs_data?.tradeType,
+      item?.raw_payload?.fedresurs_data?.procedure_type,
+      item?.raw_payload?.fedresurs_data?.procedureType,
+      item?.fedresurs_meta?.type,
+      item?.fedresurs_meta?.trade_type,
+      item?.fedresurs_meta?.tradeType,
+      item?.fedresurs_meta?.procedure_type,
+      item?.fedresurs_meta?.procedureType,
     ];
     for (const candidate of candidates) {
       const normalized = normalizeTradeTypeCode(candidate);
       if (normalized) return normalized;
+    }
     }
     return null;
   }, [item, lotPreserved, tradeType]);
@@ -3493,6 +3527,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
