@@ -2075,7 +2075,7 @@ export default function AdminParserTradeCard() {
       const normalized = normalizeTradeTypeCode(candidate);
       if (normalized) return normalized;
     }
-    }
+    
     return null;
   }, [item, lotPreserved, tradeType]);
   const tradeTypeLabel = useMemo(() => {
@@ -3526,6 +3526,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
