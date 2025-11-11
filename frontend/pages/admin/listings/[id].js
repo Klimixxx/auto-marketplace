@@ -6,7 +6,11 @@ import {
   makeKeyValueEntries,
   translateValueByKey,
 } from '../../../lib/lotFormatting';
-import { normalizeTradeTypeCode } from '../../../lib/tradeTypes';
+import {
+  normalizeTradeTypeCode,
+  TRADE_TYPE_LABELS,
+  formatTradeTypeLabel,
+} from '../../../lib/tradeTypes';
 import { RUSSIAN_REGIONS, normalizeRegionCode, getRegionNameByCode } from '../../../../shared/regions.js'
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
@@ -2041,6 +2045,14 @@ export default function AdminParserTradeCard() {
     return null;
   }, [item, lotPreserved, tradeType]);
 
+  const tradeTypeLabel = useMemo(() => {
+    const normalizedLabel = normalizedTradeType ? TRADE_TYPE_LABELS[normalizedTradeType] : null;
+    if (normalizedLabel) return normalizedLabel;
+    const formatted = formatTradeTypeLabel(tradeType);
+    if (formatted) return formatted;
+    return tradeType || null;
+  }, [normalizedTradeType, tradeType]);
+
   const isOpenAuction = normalizedTradeType === 'open_auction';
   const isPublicOffer = normalizedTradeType === 'public_offer';
   const isAuction = isOpenAuction || normalizedTradeType === 'auction';
@@ -2449,6 +2461,14 @@ export default function AdminParserTradeCard() {
             <h3 style={{ margin: 0 }}>Сведения по лоту</h3>
           </div>
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="muted">Тип торгов</span>
+            <div style={{ fontWeight: 600 }}>{tradeTypeLabel || 'Не указан'}</div>
+            {tradeTypeLabel && tradeType && tradeTypeLabel !== tradeType ? (
+              <div className="muted" style={{ fontSize: 12 }}>Исходное значение: {tradeType}</div>
+            ) : null}
+          </div>
+
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">Заголовок</span>
             <input className="input" value={form.title} onChange={updateFormField('title')} />
@@ -2548,91 +2568,6 @@ export default function AdminParserTradeCard() {
               placeholder="Текст описания для публикации"
             />
           </label>
-        </section>
-
-        <section style={{ display: 'grid', gap: 12, paddingTop: 8 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h3 style={{ margin: 0 }}>Характеристики автомобиля</h3>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Укажите технические параметры и дополнительные поля.
-            </p>
-          </div>
-          {lotFields.length > 0 ? (
-            <div
-              style={{
-                display: 'grid',
-                gap: 12,
-                gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))',
-              }}
-            >
-              {lotFields.map((row, index) => {
-                const fieldLabel = row?.label || translateValueByKey(row?.key) || row?.key || 'Поле';
-                const rawValue = row?.value != null ? String(row.value) : '';
-                const isTextarea =
-                  row?.type === 'textarea'
-                  || rawValue.length > 160
-                  || rawValue.includes('\n');
-                const rowsCount = rawValue.length > 200 ? 6 : rawValue.length > 160 ? 4 : 2;
-                let control = null;
-                if (row?.type === 'select' && Array.isArray(row.options)) {
-                  control = (
-                    <select
-                      className="input"
-                      value={row.value ?? ''}
-                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
-                    >
-                      {row.options.map((option) => (
-                        <option key={option.value ?? option.label} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                } else if (isTextarea) {
-                  control = (
-                    <textarea
-                      className="textarea"
-                      rows={rowsCount}
-                      value={row.value || ''}
-                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
-                      placeholder={row.placeholder || ''}
-                    />
-                  );
-                } else {
-                  control = (
-                    <input
-                      className="input"
-                      value={row.value || ''}
-                      onChange={(e) => updateLotFieldValue(index, e.target.value)}
-                      placeholder={row.placeholder || ''}
-                      inputMode={row.numeric ? 'decimal' : undefined}
-                    />
-                  );
-                }
-
-                return (
-                  <div
-                    key={`${row.key || 'field'}-${index}`}
-                    className="panel"
-                    style={{ padding: 12, display: 'grid', gap: 10 }}
-                  >
-                    <div style={{ display: 'grid', gap: 4 }}>
-                      <div style={{ fontWeight: 600 }} title={row.key || undefined}>
-                        {fieldLabel}
-                      </div>
-                      <div className="muted" style={{ fontSize: 12 }}>Код: {row.key}</div>
-                    </div>
-                    <label style={{ display: 'grid', gap: 4 }}>
-                      <span className="muted" style={{ fontSize: 12 }}>Значение</span>
-                      {control}
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="muted" style={{ fontSize: 13 }}>Поля ещё не добавлены.</div>
-          )}
         </section>
 
         <section style={{ display: 'grid', gap: 12 }}>
@@ -3558,6 +3493,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
