@@ -1,11 +1,109 @@
 import { useEffect, useMemo, useState } from 'react';
 import { computeTradeOrderPrice, DEFAULT_DEPOSIT_PERCENT } from '../lib/tradePricing';
+import { normalizeTradeTypeCode } from '../lib/tradeTypes';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '');
 const TRADE_ORDER_ENDPOINT = API_BASE ? `${API_BASE}/api/trade-orders` : '/api/trade-orders';
 const PROFILE_ENDPOINT = API_BASE ? `${API_BASE}/api/me` : '/api/me';
 const TRADE_PRICING_ENDPOINT = API_BASE ? `${API_BASE}/api/trade-pricing` : '/api/trade-pricing';
 const MAX_LISTING_ID_LENGTH = 160;
+const PRICE_KEYS = new Set([
+  'current_price',
+  'currentPrice',
+  'start_price',
+  'startPrice',
+  'min_price',
+  'minPrice',
+  'max_price',
+  'maxPrice',
+  'price',
+  'amount',
+  'lot_price',
+  'lotPrice',
+]);
+
+function parseMoneyInput(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const cleaned = String(value)
+    .trim()
+    .replace(/[\s\u00a0]/g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.+-]/g, '');
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatMoneyInput(value) {
+  const parsed = parseMoneyInput(value);
+  if (parsed == null) return '';
+  try {
+    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Math.round(parsed));
+  } catch {
+    return String(Math.round(parsed));
+  }
+}
+
+function collectPriceValues(source, out) {
+  if (!source) return;
+  if (Array.isArray(source)) {
+    source.forEach((item) => collectPriceValues(item, out));
+    return;
+  }
+  if (typeof source !== 'object') return;
+
+  for (const [key, value] of Object.entries(source)) {
+    if (PRICE_KEYS.has(key)) {
+      out.push(value);
+    }
+    if (value && typeof value === 'object') {
+      collectPriceValues(value, out);
+    }
+  }
+}
+
+function resolveListingTradeType(listing) {
+  if (!listing || typeof listing !== 'object') return null;
+  const candidates = [
+    listing.trade_type_resolved,
+    listing.trade_type,
+    listing.tradeType,
+    listing.type,
+    listing.trade_type_label,
+    listing.tradeTypeLabel,
+    listing.details?.trade_type,
+    listing.details?.procedure_type,
+    listing.details?.lot_details?.trade_type,
+    listing.details?.lot_details?.procedure_type,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeTradeTypeCode(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function computePriceFloor(listing) {
+  if (!listing || typeof listing !== 'object') return null;
+  const candidates = [];
+
+  for (const key of PRICE_KEYS) {
+    if (listing[key] !== undefined) {
+      candidates.push(listing[key]);
+    }
+  }
+
+  collectPriceValues(listing.details, candidates);
+
+  const parsed = candidates
+    .map((value) => parseMoneyInput(value))
+    .filter((value) => value != null && Number.isFinite(value) && value > 0);
+
+  if (!parsed.length) return null;
+  return Math.max(...parsed);
+}
 
 function normalizeListingId(value) {
   if (value == null) return null;
@@ -52,12 +150,17 @@ function fmtCurrency(value) {
 export default function TradeOrderModal({ listingId, listing, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [fieldErr, setFieldErr] = useState('');
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [pricingConfig, setPricingConfig] = useState({
     depositPercent: DEFAULT_DEPOSIT_PERCENT,
     proDiscountPercent: 30,
     loaded: false,
   });
+  const [step, setStep] = useState('overview');
+  const [auctionBidLimit, setAuctionBidLimit] = useState('');
+  const [publicOfferPrice, setPublicOfferPrice] = useState('');
+  const [priceNotes, setPriceNotes] = useState('');
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -127,6 +230,16 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
 
   const { depositPercent, proDiscountPercent } = pricingConfig;
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep('overview');
+    setAuctionBidLimit('');
+    setPublicOfferPrice('');
+    setPriceNotes('');
+    setFieldErr('');
+    setErr('');
+  }, [isOpen, listingId]);
+
   const pricing = useMemo(() => {
     return computeTradeOrderPrice(listing || {}, {
       subscriptionStatus: subscriptionStatus || 'free',
@@ -135,11 +248,23 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
     });
   }, [listing, subscriptionStatus, proDiscountPercent, depositPercent]);
 
+  const normalizedTradeType = useMemo(() => resolveListingTradeType(listing), [listing]);
+  const requiresPricePreferences = normalizedTradeType === 'open_auction' || normalizedTradeType === 'public_offer';
+  const priceFloor = useMemo(() => computePriceFloor(listing), [listing]);
+
   if (!isOpen) return null;
 
   async function order() {
+    if (step === 'overview' && requiresPricePreferences) {
+      setFieldErr('');
+      setErr('');
+      setStep('preferences');
+      return;
+    }
+
     setLoading(true);
     setErr('');
+    setFieldErr('');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
@@ -155,10 +280,53 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
         return;
       }
 
+      const payload = { listingId: normalizedId };
+
+      const auctionValue = parseMoneyInput(auctionBidLimit);
+      const offerValue = parseMoneyInput(publicOfferPrice);
+      const trimmedNotes = priceNotes && typeof priceNotes === 'string' ? priceNotes.trim() : '';
+
+      if (normalizedTradeType === 'open_auction') {
+        if (auctionValue == null || !Number.isFinite(auctionValue) || auctionValue <= 0) {
+          setFieldErr('Укажите максимальную цену, до которой готовы торговаться.');
+          return;
+        }
+        if (priceFloor != null && auctionValue < priceFloor) {
+          setFieldErr('Максимальная цена не может быть ниже текущей цены лота.');
+          return;
+        }
+        payload.auctionBidLimit = Math.round(auctionValue);
+      } else if (normalizedTradeType === 'public_offer') {
+        if (offerValue == null || !Number.isFinite(offerValue) || offerValue <= 0) {
+          setFieldErr('Укажите цену, по которой готовы купить лот.');
+          return;
+        }
+        if (priceFloor != null && offerValue < priceFloor) {
+          setFieldErr('Цена предложения не может быть ниже установленной организатором.');
+          return;
+        }
+        payload.publicOfferPrice = Math.round(offerValue);
+      } else {
+        if (auctionValue != null && Number.isFinite(auctionValue) && auctionValue > 0) {
+          payload.auctionBidLimit = Math.round(auctionValue);
+        }
+        if (offerValue != null && Number.isFinite(offerValue) && offerValue > 0) {
+          payload.publicOfferPrice = Math.round(offerValue);
+        }
+      }
+
+      if (normalizedTradeType) {
+        payload.tradeType = normalizedTradeType;
+      }
+
+      if (trimmedNotes) {
+        payload.priceNotes = trimmedNotes;
+      }
+
       const res = await fetch(TRADE_ORDER_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ listingId: normalizedId }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -224,76 +392,220 @@ export default function TradeOrderModal({ listingId, listing, isOpen, onClose })
           </button>
         </div>
 
-        <div style={{ marginTop: 12, lineHeight: 1.6 }}>
-          <p style={{ margin: '0 0 8px' }}>
-            Мы полностью возьмём на себя участие в торгах: подготовим документы, подадим заявки и будем сопровождать вас до
-            завершения сделки.
-          </p>
-          {tierLabel ? (
-            <p style={{ margin: '0 0 4px' }}>
-              <strong>Условия оплаты:</strong> {tierLabel}
-              {estimatedPrice ? ` (оценочная стоимость лота ${fmtCurrency(estimatedPrice)})` : ''}
-            </p>
-          ) : null}
-          {hasDeposit ? (
-            <>
-              <p style={{ margin: '0 0 4px' }}>
-                <strong>Задаток:</strong> {fmtCurrency(depositAmount)}
+        {step === 'overview' ? (
+          <>
+            <div style={{ marginTop: 12, lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 8px' }}>
+                Мы полностью возьмём на себя участие в торгах: подготовим документы, подадим заявки и будем сопровождать вас до
+                завершения сделки.
               </p>
-              <p style={{ margin: '0 0 4px' }}>
-                <strong>Комиссия сервиса ({depositPercentValue}%):</strong> {fmtCurrency(serviceFeeBeforeDiscount)}
-                {discountPercent
-                  ? ` (для вас ${fmtCurrency(serviceFeeAfterDiscount)} с учётом скидки ${discountPercent}% PRO)`
-                  : ''}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Итог к списанию:</strong> {fmtCurrency(finalAmount)}
-              </p>
-            </>
-          ) : (
-            <p style={{ margin: '0 0 4px', color: 'var(--warning)', fontWeight: 600 }}>
-              Не удалось определить сумму задатка для этого лота. Итоговая стоимость может отличаться.
-            </p>
-          )}
-          <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>
-            Подписка <b>PRO</b> даёт скидку {(proDiscountPercent ?? 30)}% на нашу комиссию сопровождения торгов.
-          </div>
-        </div>
+              {tierLabel ? (
+                <p style={{ margin: '0 0 4px' }}>
+                  <strong>Условия оплаты:</strong> {tierLabel}
+                  {estimatedPrice ? ` (оценочная стоимость лота ${fmtCurrency(estimatedPrice)})` : ''}
+                </p>
+              ) : null}
+              {hasDeposit ? (
+                <>
+                  <p style={{ margin: '0 0 4px' }}>
+                    <strong>Задаток:</strong> {fmtCurrency(depositAmount)}
+                  </p>
+                  <p style={{ margin: '0 0 4px' }}>
+                    <strong>Комиссия сервиса ({depositPercentValue}%):</strong> {fmtCurrency(serviceFeeBeforeDiscount)}
+                    {discountPercent
+                      ? ` (для вас ${fmtCurrency(serviceFeeAfterDiscount)} с учётом скидки ${discountPercent}% PRO)`
+                      : ''}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Итог к списанию:</strong> {fmtCurrency(finalAmount)}
+                  </p>
+                </>
+              ) : (
+                <p style={{ margin: '0 0 4px', color: 'var(--warning)', fontWeight: 600 }}>
+                  Не удалось определить сумму задатка для этого лота. Итоговая стоимость может отличаться.
+                </p>
+              )}
+              <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>
+                Подписка <b>PRO</b> даёт скидку {(proDiscountPercent ?? 30)}% на нашу комиссию сопровождения торгов.
+              </div>
+            </div>
 
-        <div style={{ marginTop: 16 }}>
-          <b>Что входит в услугу:</b>
-          <ul style={{ marginTop: 6, marginBottom: 0 }}>
-            <li>анализ и проверка документов по лоту;</li>
-            <li>подготовка заявки и подача в нужный срок;</li>
-            <li>сопровождение участия в торгах в режиме реального времени;</li>
-            <li>консультация по дальнейшим шагам после победы;</li>
-            <li>контроль возврата задатков и подписания документов.</li>
-          </ul>
-        </div>
+            <div style={{ marginTop: 16 }}>
+              <b>Что входит в услугу:</b>
+              <ul style={{ marginTop: 6, marginBottom: 0 }}>
+                <li>анализ и проверка документов по лоту;</li>
+                <li>подготовка заявки и подача в нужный срок;</li>
+                <li>сопровождение участия в торгах в режиме реального времени;</li>
+                <li>консультация по дальнейшим шагам после победы;</li>
+                <li>контроль возврата задатков и подписания документов.</li>
+              </ul>
+            </div>
 
-        {err && <div style={{ color: 'var(--danger)', marginTop: 10, fontWeight: 600 }}>{err}</div>}
+            {err && <div style={{ color: 'var(--danger)', marginTop: 10, fontWeight: 600 }}>{err}</div>}
 
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button
-            onClick={order}
-            disabled={loading}
-            style={S.primary}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = 'var(--accent-hover)';
-              event.currentTarget.style.boxShadow = '0 16px 36px rgba(42,101,247,0.32)';
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = 'var(--accent)';
-              event.currentTarget.style.boxShadow = '0 14px 32px rgba(42,101,247,0.28)';
-            }}
-          >
-            {loading ? 'Оформляем…' : 'Заказать сопровождение'}
-          </button>
-        </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={order}
+                disabled={loading}
+                style={S.primary}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = 'var(--accent-hover)';
+                  event.currentTarget.style.boxShadow = '0 16px 36px rgba(42,101,247,0.32)';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = 'var(--accent)';
+                  event.currentTarget.style.boxShadow = '0 14px 32px rgba(42,101,247,0.28)';
+                }}
+              >
+                {loading ? 'Оформляем…' : requiresPricePreferences ? 'Продолжить' : 'Заказать сопровождение'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginTop: 12, lineHeight: 1.6, display: 'grid', gap: 16 }}>
+              {normalizedTradeType === 'open_auction' ? (
+                <div>
+                  <p style={{ margin: '0 0 8px' }}>
+                    Укажите верхнюю границу цены, до которой готовы торговаться в открытом аукционе. Мы не будем превышать это значение
+                    без вашего согласования.
+                  </p>
+                  <label style={S.label}>
+                    До какой цены вы готовы торговаться?
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      autoFocus
+                      value={auctionBidLimit}
+                      onChange={(event) => setAuctionBidLimit(event.target.value)}
+                      onBlur={() => setAuctionBidLimit((prev) => (prev ? formatMoneyInput(prev) : prev))}
+                      placeholder="Например, 3 500 000"
+                      style={S.input}
+                    />
+                  </label>
+                  {priceFloor != null ? (
+                    <div style={S.hint}>
+                      Не ниже {fmtCurrency(Math.round(priceFloor))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : normalizedTradeType === 'public_offer' ? (
+                <div>
+                  <p style={{ margin: '0 0 8px' }}>
+                    Укажите цену, по которой вы готовы заключить сделку на публичных торгах. Мы подадим предложение именно на эту сумму.
+                  </p>
+                  <label style={S.label}>
+                    Укажите вашу цену (не ниже указанной организатором)
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      autoFocus
+                      value={publicOfferPrice}
+                      onChange={(event) => setPublicOfferPrice(event.target.value)}
+                      onBlur={() => setPublicOfferPrice((prev) => (prev ? formatMoneyInput(prev) : prev))}
+                      placeholder="Например, 2 850 000"
+                      style={S.input}
+                    />
+                  </label>
+                  {priceFloor != null ? (
+                    <div style={S.hint}>
+                      Не ниже {fmtCurrency(Math.round(priceFloor))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div>
+                  <p style={{ margin: '0 0 8px' }}>
+                    Уточните ваши ожидания по цене. Мы учтём пожелания при сопровождении заявки и подтвердим детали с вами.
+                  </p>
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <label style={S.label}>
+                      Максимальная цена
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={auctionBidLimit}
+                        onChange={(event) => setAuctionBidLimit(event.target.value)}
+                        onBlur={() => setAuctionBidLimit((prev) => (prev ? formatMoneyInput(prev) : prev))}
+                        placeholder="Если есть ограничение"
+                        style={S.input}
+                      />
+                    </label>
+                    <label style={S.label}>
+                      Предпочтительная цена
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={publicOfferPrice}
+                        onChange={(event) => setPublicOfferPrice(event.target.value)}
+                        onBlur={() => setPublicOfferPrice((prev) => (prev ? formatMoneyInput(prev) : prev))}
+                        placeholder="Если хотите предложить свою цену"
+                        style={S.input}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <label style={S.label}>
+                Дополнительные комментарии
+                <textarea
+                  value={priceNotes}
+                  onChange={(event) => setPriceNotes(event.target.value)}
+                  placeholder="Например: готовы повысить ставку после осмотра"
+                  rows={3}
+                  style={S.textarea}
+                />
+              </label>
+            </div>
+
+            {fieldErr && <div style={{ color: 'var(--danger)', marginTop: 10, fontWeight: 600 }}>{fieldErr}</div>}
+            {err && <div style={{ color: 'var(--danger)', marginTop: fieldErr ? 4 : 10, fontWeight: 600 }}>{err}</div>}
+
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (loading) return;
+                  setStep('overview');
+                  setFieldErr('');
+                }}
+                disabled={loading}
+                style={S.secondary}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.borderColor = 'rgba(42,101,247,0.4)';
+                  event.currentTarget.style.color = 'var(--accent)';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.borderColor = 'rgba(148,163,184,0.4)';
+                  event.currentTarget.style.color = 'var(--text-muted)';
+                }}
+              >
+                Назад
+              </button>
+              <button
+                onClick={order}
+                disabled={loading}
+                style={S.primary}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = 'var(--accent-hover)';
+                  event.currentTarget.style.boxShadow = '0 16px 36px rgba(42,101,247,0.32)';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = 'var(--accent)';
+                  event.currentTarget.style.boxShadow = '0 14px 32px rgba(42,101,247,0.28)';
+                }}
+              >
+                {loading ? 'Оформляем…' : 'Отправить заявку'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
+
 
 const S = {
   backdrop: {
@@ -348,4 +660,44 @@ const S = {
     boxShadow: '0 14px 32px rgba(42,101,247,0.28)',
     transition: 'background 0.2s ease, box-shadow 0.2s ease',
   },
+  secondary: {
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    border: '1px solid rgba(148,163,184,0.4)',
+    borderRadius: 14,
+    padding: '12px 20px',
+    cursor: 'pointer',
+    fontWeight: 600,
+    transition: 'color 0.2s ease, border-color 0.2s ease',
+  },
+  label: {
+    display: 'grid',
+    gap: 6,
+    fontWeight: 600,
+    color: 'var(--text-strong)',
+  },
+  input: {
+    borderRadius: 12,
+    border: '1px solid rgba(148,163,184,0.35)',
+    padding: '10px 14px',
+    fontSize: 16,
+    outline: 'none',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+  },
+  textarea: {
+    borderRadius: 12,
+    border: '1px solid rgba(148,163,184,0.35)',
+    padding: '10px 14px',
+    fontSize: 16,
+    outline: 'none',
+    minHeight: 80,
+    resize: 'vertical',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+  },
+  hint: {
+    marginTop: 6,
+    color: 'var(--text-muted)',
+    fontSize: 14,
+  },
 };
+
