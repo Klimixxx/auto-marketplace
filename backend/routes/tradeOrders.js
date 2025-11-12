@@ -55,6 +55,50 @@ const LOT_PRICE_DETAIL_KEYS_SET = new Set(LOT_PRICE_DETAIL_KEYS);
 const DEPOSIT_DETAIL_KEYS_SET = new Set(DEPOSIT_DETAIL_KEYS);
 
 const MAX_LISTING_ID_LENGTH = 160;
+const MAX_PRICE_VALUE = 10_000_000_000;
+
+function cleanText(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function normalizeTradeTypeCode(value) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
+  if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
+  if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) return 'public_offer';
+  if (
+    lower === 'auction'
+    || lower.includes('аукцион')
+    || lower.includes('auction')
+    || lower.includes('торг')
+    || lower.includes('bidding')
+  ) return 'open_auction';
+  return lower;
+}
+
+function resolveListingTradeType(listing, fallback) {
+  const candidates = [
+    listing?.trade_type_resolved,
+    listing?.trade_type,
+    listing?.type,
+    listing?.trade_type_label,
+    listing?.details?.trade_type,
+    listing?.details?.procedure_type,
+    listing?.details?.lot_details?.trade_type,
+    listing?.details?.lot_details?.procedure_type,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeTradeTypeCode(candidate);
+    if (normalized) return normalized;
+  }
+
+  return normalizeTradeTypeCode(fallback);
+}
 
 function normalizeListingId(value) {
   if (value == null) return null;
@@ -157,6 +201,27 @@ function resolveLotPrice(listing) {
   return findNumeric(candidates);
 }
 
+function computeListingPriceFloor(listing) {
+  if (!listing) return null;
+  const candidates = [];
+
+  for (const field of LOT_PRICE_FIELDS) {
+    if (listing[field] !== undefined) {
+      candidates.push(listing[field]);
+    }
+  }
+
+  const detailCandidates = collectDetailCandidates(listing.details, LOT_PRICE_DETAIL_KEYS_SET);
+  candidates.push(...detailCandidates);
+
+  const parsed = candidates
+    .map((value) => parseMoneyLike(value))
+    .filter((value) => value != null && Number.isFinite(value) && value > 0);
+
+  if (!parsed.length) return null;
+  return Math.max(...parsed);
+}
+
 function resolveDeposit(listing) {
   if (!listing || typeof listing !== 'object') return null;
 
@@ -246,7 +311,9 @@ router.post('/', async (req, res) => {
   const userId = req.user?.sub;
   if (!userId) return res.status(401).json({ error: 'No user' });
 
-  const rawId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
+  const body = req.body || {};
+
+  const rawId = body?.listingId ?? body?.listing_id ?? req.query?.listingId;
   const listingId = normalizeListingId(rawId);
   if (!listingId) return res.status(400).json({ error: 'listingId required' });
 
@@ -255,10 +322,11 @@ router.post('/', async (req, res) => {
 
   try {
     const listingQuery = await query(
-      `SELECT id, title, start_price, current_price, min_price, max_price, details
-         FROM listings
-        WHERE id::text = $1 OR source_id = $1
-        LIMIT 1`,
+      `SELECT id, title, start_price, current_price, min_price, max_price,
+              trade_type, trade_type_resolved, details
+          FROM listings
+         WHERE id::text = $1 OR source_id = $1
+         LIMIT 1`,
       [listingId]
     );
     const listing = listingQuery.rows[0];
@@ -267,6 +335,15 @@ router.post('/', async (req, res) => {
     client = await pool.connect();
     await client.query('BEGIN');
     transactionStarted = true;
+
+    async function abort(status, payload) {
+      try {
+        await client.query('ROLLBACK');
+      } finally {
+        transactionStarted = false;
+      }
+      return res.status(status).json(payload);
+    }
 
     const userQuery = await client.query(
       `SELECT id, balance, subscription_status, balance_frozen
@@ -293,6 +370,57 @@ router.post('/', async (req, res) => {
     const pricingSettings = await loadTradePricingSettings(client);
     const pricing = computePricing(listing, user.subscription_status, pricingSettings);
 
+    const requestTradeType = normalizeTradeTypeCode(body?.tradeType ?? body?.trade_type);
+    const listingTradeType = resolveListingTradeType(listing, requestTradeType);
+
+    const priceFloor = computeListingPriceFloor(listing);
+
+    let auctionBidLimit = parseMoneyLike(body?.auctionBidLimit ?? body?.auction_bid_limit);
+    let publicOfferPrice = parseMoneyLike(body?.publicOfferPrice ?? body?.public_offer_price);
+    let priceNotesRaw = cleanText(body?.priceNotes ?? body?.price_notes);
+
+    if (auctionBidLimit != null && Number.isFinite(auctionBidLimit)) {
+      auctionBidLimit = Math.round(auctionBidLimit);
+    } else {
+      auctionBidLimit = null;
+    }
+
+    if (publicOfferPrice != null && Number.isFinite(publicOfferPrice)) {
+      publicOfferPrice = Math.round(publicOfferPrice);
+    } else {
+      publicOfferPrice = null;
+    }
+
+    if (priceNotesRaw && priceNotesRaw.length > 2000) {
+      priceNotesRaw = priceNotesRaw.slice(0, 2000);
+    }
+
+    if (auctionBidLimit != null && auctionBidLimit > MAX_PRICE_VALUE) {
+      return abort(400, { error: 'AUCTION_LIMIT_TOO_HIGH', message: 'Слишком большая сумма лимита по торгам' });
+    }
+
+    if (publicOfferPrice != null && publicOfferPrice > MAX_PRICE_VALUE) {
+      return abort(400, { error: 'OFFER_PRICE_TOO_HIGH', message: 'Слишком большая сумма предложения' });
+    }
+
+    if (listingTradeType === 'open_auction') {
+      if (auctionBidLimit == null || !Number.isFinite(auctionBidLimit) || auctionBidLimit <= 0) {
+        return abort(400, { error: 'AUCTION_LIMIT_REQUIRED', message: 'Укажите максимальную цену для участия в торгах' });
+      }
+      if (priceFloor != null && auctionBidLimit < priceFloor) {
+        return abort(400, { error: 'AUCTION_LIMIT_TOO_LOW', message: 'Максимальная цена не может быть ниже текущей цены лота' });
+      }
+    }
+
+    if (listingTradeType === 'public_offer') {
+      if (publicOfferPrice == null || !Number.isFinite(publicOfferPrice) || publicOfferPrice <= 0) {
+        return abort(400, { error: 'PUBLIC_OFFER_PRICE_REQUIRED', message: 'Укажите цену для публичного предложения' });
+      }
+      if (priceFloor != null && publicOfferPrice < priceFloor) {
+        return abort(400, { error: 'PUBLIC_OFFER_PRICE_TOO_LOW', message: 'Цена предложения не может быть ниже установленной организатором' });
+      }
+    }
+
     const currentBalanceRaw = user.balance;
     const currentBalance = parseMoneyLike(currentBalanceRaw);
     if (currentBalance == null || !Number.isFinite(currentBalance) || currentBalance < pricing.finalAmount) {
@@ -312,8 +440,9 @@ router.post('/', async (req, res) => {
 
     const inserted = await client.query(
       `INSERT INTO trade_orders (
-         user_id, listing_id, status, base_price, discount_percent, final_amount, service_tier, lot_price_estimate, user_last_viewed_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+         user_id, listing_id, status, base_price, discount_percent, final_amount, service_tier, lot_price_estimate,
+         auction_bid_limit, public_offer_price, price_notes, user_last_viewed_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
        RETURNING *`,
       [
         String(userId),
@@ -324,6 +453,9 @@ router.post('/', async (req, res) => {
         pricing.finalAmount,
         pricing.tierLabel,
         pricing.lotPriceEstimate,
+        auctionBidLimit != null ? auctionBidLimit : null,
+        publicOfferPrice != null ? publicOfferPrice : null,
+        priceNotesRaw || null,
       ]
     );
 
