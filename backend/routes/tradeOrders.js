@@ -323,7 +323,7 @@ router.post('/', async (req, res) => {
   try {
     const listingQuery = await query(
       `SELECT id, title, start_price, current_price, min_price, max_price,
-              trade_type, trade_type_resolved, details
+              trade_type, trade_type AS trade_type_resolved, details
           FROM listings
          WHERE id::text = $1 OR source_id = $1
          LIMIT 1`,
