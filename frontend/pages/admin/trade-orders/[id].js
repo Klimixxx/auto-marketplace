@@ -238,6 +238,23 @@ export default function AdminTradeOrderDetail() {
             </InfoGrid>
           </Section>
 
+          <Section title="Предпочтения клиента по цене">
+            <InfoGrid>
+              <InfoRow
+                label="Лимит по ставке"
+                value={formatCurrency(item.auction_bid_limit)}
+              />
+              <InfoRow
+                label="Цена публичного предложения"
+                value={formatCurrency(item.public_offer_price)}
+              />
+              <InfoRow
+                label="Комментарий клиента"
+                value={item.price_notes ? <span style={{ whiteSpace: 'pre-wrap' }}>{item.price_notes}</span> : '—'}
+              />
+            </InfoGrid>
+          </Section>
+
           <Section title="Внешние ссылки">
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <a
@@ -332,3 +349,4 @@ function InfoRow({ label, value }) {
     </div>
   );
 }
+
