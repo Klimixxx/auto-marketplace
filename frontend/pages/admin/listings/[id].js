@@ -469,15 +469,9 @@ const LOT_FIELD_PRESETS = [
 
 const CONTACT_FIELDS = [
   { key: 'organizer_name', label: 'Организатор' },
-  { key: 'organizer_inn', label: 'ИНН организатора' },
-  { key: 'organizer_ogrn', label: 'ОГРН организатора' },
-  { key: 'organizer_ogrnip', label: 'ОГРНИП организатора' },
-  { key: 'organizer_type', label: 'Тип организатора' },
-  { key: 'manager', label: 'Менеджер' },
   { key: 'contact_name', label: 'Контактное лицо' },
   { key: 'phone', label: 'Телефон' },
   { key: 'email', label: 'Email' },
-  { key: 'website', label: 'Сайт' },
   { key: 'address', label: 'Адрес' },
   { key: 'inspection_procedure', label: 'Порядок осмотра', type: 'textarea' },
   { key: 'inspection_time', label: 'Время осмотра' },
@@ -503,29 +497,12 @@ const CONTACT_ALIASES = {
   full_name: 'organizer_name',
   fullname: 'organizer_name',
   fullName: 'organizer_name',
-  inn: 'organizer_inn',
-  inn_number: 'organizer_inn',
-  innNumber: 'organizer_inn',
-  ogrn: 'organizer_ogrn',
-  ogrn_number: 'organizer_ogrn',
-  ogrnNumber: 'organizer_ogrn',
-  ogrnip: 'organizer_ogrnip',
-  ogrn_ip: 'organizer_ogrnip',
-  ogrnipNumber: 'organizer_ogrnip',
-  type: 'organizer_type',
-  organizer_type: 'organizer_type',
-  organizerType: 'organizer_type',
   tel: 'phone',
   telephone: 'phone',
   phone_number: 'phone',
   contact: 'contact_name',
   contact_person: 'contact_name',
-  manager_name: 'manager',
-  representative: 'manager',
   mail: 'email',
-  site: 'website',
-  url: 'website',
-  website_url: 'website',
 };
 
 const ADMIN_SECTION_FORBIDDEN_KEYS = [
@@ -550,6 +527,15 @@ const ADMIN_SECTION_FORBIDDEN_KEYS = [
   'publicationDate',
   'arbitration_court',
   'arbitrationCourt',
+  'organizer_inn',
+  'organizer_ogrn',
+  'organizer_ogrnip',
+  'organizer_type',
+  'manager',
+  'website',
+  'debtor_ogrn',
+  'debtor_ogrnip',
+  'debtor_manager',
 ];
 
 const ADMIN_SECTION_FORBIDDEN_KEY_SET = new Set(
@@ -567,13 +553,10 @@ const DEBTOR_FIELDS = [
   { key: 'debtor_name', label: 'Должник' },
   { key: 'debtor_type', label: 'Тип должника' },
   { key: 'debtor_inn', label: 'ИНН должника' },
-  { key: 'debtor_ogrn', label: 'ОГРН должника' },
-  { key: 'debtor_ogrnip', label: 'ОГРНИП должника' },
   { key: 'debtor_snils', label: 'СНИЛС должника' },
   { key: 'debtor_address', label: 'Адрес должника' },
   { key: 'debtor_phone', label: 'Телефон должника' },
   { key: 'debtor_email', label: 'Email должника' },
-  { key: 'debtor_manager', label: 'Представитель должника' },
 ];
 
 const DEBTOR_ALIASES = {
@@ -598,12 +581,6 @@ const DEBTOR_ALIASES = {
   inn: 'debtor_inn',
   inn_number: 'debtor_inn',
   innNumber: 'debtor_inn',
-  ogrn: 'debtor_ogrn',
-  ogrn_number: 'debtor_ogrn',
-  ogrnNumber: 'debtor_ogrn',
-  ogrnip: 'debtor_ogrnip',
-  ogrn_ip: 'debtor_ogrnip',
-  ogrnipNumber: 'debtor_ogrnip',
   snils: 'debtor_snils',
   snils_number: 'debtor_snils',
   snilsNumber: 'debtor_snils',
@@ -618,10 +595,6 @@ const DEBTOR_ALIASES = {
   mail: 'debtor_email',
   email_address: 'debtor_email',
   emailAddress: 'debtor_email',
-  representative: 'debtor_manager',
-  representative_name: 'debtor_manager',
-  representativeName: 'debtor_manager',
-  manager: 'debtor_manager',
 };
 
 function toFormString(value) {
@@ -2463,6 +2436,12 @@ export default function AdminParserTradeCard() {
     : 'Опубликовать';
 
   const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing;
+  const sectionCardStyle = {
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 12,
+    padding: 12,
+  };
 
   return (
     <div className="container" style={{ gap: 16 }}>
@@ -2489,7 +2468,7 @@ export default function AdminParserTradeCard() {
       {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
 
       <form onSubmit={onSubmit} className="panel" style={{ display: 'grid', gap: 12 }}>
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div>
             <h3 style={{ margin: 0 }}>Сведения по лоту</h3>
           </div>
@@ -2509,10 +2488,6 @@ export default function AdminParserTradeCard() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Категория</span>
-              <input className="input" value={form.category} onChange={updateFormField('category')} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Код региона</span>
               <select className="input" value={form.region_code || ''} onChange={handleRegionCodeChange}>
                 <option value="">Не выбран</option>
@@ -2520,10 +2495,6 @@ export default function AdminParserTradeCard() {
                   <option key={region.code} value={region.code}>{region.name}</option>
                 ))}
               </select>
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Название региона</span>
-              <input className="input" value={form.region} onChange={updateFormField('region')} placeholder="Например, Краснодарский край" />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Марка</span>
@@ -2541,18 +2512,6 @@ export default function AdminParserTradeCard() {
               <span className="muted">VIN</span>
               <input className="input" value={form.vin} onChange={updateFormField('vin')} />
             </label>
-            {shouldUseStartPrice ? (
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span className="muted">Стартовая цена</span>
-                <input
-                  className="input"
-                  value={form.start_price}
-                  onChange={updateFormField('start_price')}
-                  placeholder="Например, 1500000"
-                  inputMode="numeric"
-                />
-              </label>
-            ) : null}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Кол-во заявок</span>
               <input
@@ -2603,7 +2562,7 @@ export default function AdminParserTradeCard() {
           </label>
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h3 style={{ margin: 0 }}>Контакты организатора</h3>
@@ -2681,7 +2640,7 @@ export default function AdminParserTradeCard() {
           ) : null}
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h3 style={{ margin: 0 }}>Данные должника</h3>
@@ -2749,7 +2708,7 @@ export default function AdminParserTradeCard() {
           ) : null}
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Фотографии</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
@@ -2873,7 +2832,7 @@ export default function AdminParserTradeCard() {
           </div>
         </section>
 
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h3 style={{ margin: 0 }}>Документы</h3>
@@ -2977,7 +2936,7 @@ export default function AdminParserTradeCard() {
         </section>
 
         {!isOpenAuction ? (
-          <section style={{ display: 'grid', gap: 12 }}>
+          <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>История изменений цены</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
@@ -3043,157 +3002,7 @@ export default function AdminParserTradeCard() {
         </section>
         ) : null}
 
-        {isPublicOffer ? (
-          <section style={{ display: 'grid', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <h3 style={{ margin: 0 }}>Цена публичного предложения</h3>
-              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                Выберите формат цены: фиксированная стартовая или график снижения.
-              </p>
-            </div>
-            <div className="panel" style={{ display: 'grid', gap: 12 }}>
-              <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="public-offer-price-mode"
-                  value="start_price"
-                  checked={publicOfferPriceMode === 'start_price'}
-                  onChange={() => setPublicOfferPriceMode('start_price')}
-                  style={{ marginTop: 4 }}
-                />
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ fontWeight: 600 }}>Стартовая цена</div>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Показывать только стартовую цену без расписания снижения.
-                  </div>
-                </div>
-              </label>
-              <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="public-offer-price-mode"
-                  value="period_price"
-                  checked={publicOfferPriceMode === 'period_price'}
-                  onChange={() => setPublicOfferPriceMode('period_price')}
-                  style={{ marginTop: 4 }}
-                />
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ fontWeight: 600 }}>График снижения цены</div>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Укажите периоды с датами и ценами. Они будут показаны покупателям по порядку.
-                  </div>
-                </div>
-              </label>
-            </div>
-            {shouldIncludePeriods ? (
-              <>
-                {publicOfferPeriods.length === 0 ? (
-                  <div className="muted" style={{ fontSize: 13 }}>Периоды пока не добавлены.</div>
-                ) : (
-                  <div style={{ display: 'grid', gap: 12 }}>
-                    {publicOfferPeriods.map((period, index) => (
-                      <div key={period.id || index} className="panel" style={{ padding: 12, display: 'grid', gap: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                          <div className="muted" style={{ fontWeight: 600 }}>Период {index + 1}</div>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className="button outline"
-                              onClick={() => movePeriodEntry(index, -1)}
-                              disabled={index === 0}
-                              style={{ padding: '6px 10px' }}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              className="button outline"
-                              onClick={() => movePeriodEntry(index, 1)}
-                              disabled={index === publicOfferPeriods.length - 1}
-                              style={{ padding: '6px 10px' }}
-                            >
-                              ↓
-                            </button>
-                            <button type="button" className="button outline" onClick={() => removePeriodEntry(index)}>
-                              Удалить
-                            </button>
-                          </div>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span className="muted">Дата начала</span>
-                            <input
-                              className="input"
-                              type="datetime-local"
-                              value={period.date_start || ''}
-                              onChange={(e) => updatePeriodEntry(index, { date_start: e.target.value })}
-                            />
-                          </label>
-                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span className="muted">Дата окончания</span>
-                            <input
-                              className="input"
-                              type="datetime-local"
-                              value={period.date_end || ''}
-                              onChange={(e) => updatePeriodEntry(index, { date_end: e.target.value })}
-                            />
-                          </label>
-                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span className="muted">Цена, руб.</span>
-                            <input
-                              className="input"
-                              value={period.price || ''}
-                              onChange={(e) => updatePeriodEntry(index, { price: e.target.value })}
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span className="muted">Минимальная цена</span>
-                            <input
-                              className="input"
-                              value={period.min_price || ''}
-                              onChange={(e) => updatePeriodEntry(index, { min_price: e.target.value })}
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span className="muted">Задаток, руб.</span>
-                            <input
-                              className="input"
-                              value={period.deposit || ''}
-                              onChange={(e) => updatePeriodEntry(index, { deposit: e.target.value })}
-                              inputMode="numeric"
-                            />
-                          </label>
-                        </div>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <span className="muted">Комментарий / примечание</span>
-                          <textarea
-                            className="textarea"
-                            rows={period.comment && period.comment.length > 160 ? 4 : 2}
-                            value={period.comment || ''}
-                            onChange={(e) => updatePeriodEntry(index, { comment: e.target.value })}
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div>
-                  <button type="button" className="button outline" onClick={addPeriodEntry}>
-                    Добавить период
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="muted" style={{ fontSize: 13 }}>
-                Используется только стартовая цена. При необходимости переключитесь на режим «График снижения цены».
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        <section style={{ display: 'grid', gap: 12 }}>
+        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Цены для открытого аукциона</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
@@ -3526,6 +3335,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
