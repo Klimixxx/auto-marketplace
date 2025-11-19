@@ -330,12 +330,14 @@ export default function FilterBar({
   initial,
   favoritesCount = 0,
   showFavoritesLink = true,
+  showCityFilter = true,
 }) {
   const [q, setQ] = useState(initial?.q || '');
   const [regionCodes, setRegionCodes] = useState(
     () => normalizeRegionCodes(initial?.region_code ?? initial?.region)
   );
   const [cities, setCities] = useState(() => {
+    if (!showCityFilter) return [];
     const val = initial?.city || initial?.cities;
     if (!val) return [];
     return Array.isArray(val) ? val : [val].filter(Boolean);
@@ -421,30 +423,35 @@ export default function FilterBar({
   useEffect(() => {
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
-    
-    const cityVal = initial?.city || initial?.cities;
-    setCities(cityVal ? (Array.isArray(cityVal) ? cityVal : [cityVal].filter(Boolean)) : []);
-    
+
+    if (showCityFilter) {
+      const cityVal = initial?.city || initial?.cities;
+      setCities(cityVal ? (Array.isArray(cityVal) ? cityVal : [cityVal].filter(Boolean)) : []);
+    } else {
+      setCities([]);
+    }
+
     const brandVal = initial?.brand || initial?.brands;
     setBrands(brandVal ? (Array.isArray(brandVal) ? brandVal : [brandVal].filter(Boolean)) : []);
     
     setTradeType(normalizeTradeTypeCode(initial?.trade_type) || '');
     setMinPrice(initial?.minPrice || '');
     setMaxPrice(initial?.maxPrice || '');
-  }, [initial]);
+  }, [initial, showCityFilter]);
 
   // submit/reset
   function submit(e) {
     e.preventDefault();
-    onSearch({
+    const payload = {
       q,
       region_code: validRegionCodes,
-      city: cities.filter(Boolean),
       brand: brands.filter(Boolean),
       trade_type: tradeType,
       minPrice,
       maxPrice,
-    });
+    };
+    if (showCityFilter) payload.city = cities.filter(Boolean);
+    onSearch(payload);
   }
 
   function resetFilters() {
@@ -455,15 +462,16 @@ export default function FilterBar({
     setTradeType('');
     setMinPrice('');
     setMaxPrice('');
-    onSearch({
+    const payload = {
       q: '',
       region_code: [],
-      cities: [],
-      brands: [],
+      brand: [],
       trade_type: '',
       minPrice: '',
       maxPrice: '',
-    });
+    };
+    if (showCityFilter) payload.city = [];
+    onSearch(payload);
   }
 
   return (
@@ -497,16 +505,18 @@ export default function FilterBar({
         </div>
 
         {/* Город */}
-        <div className="field col-span-6 md:col-span-3 lg:col-span-2">
-          <span className="label">Город</span>
-          <MultiSelectDropdown
-            label="Город"
-            options={meta.cities || []}
-            selectedValues={cities}
-            onChange={setCities}
-            placeholder="Все города"
-          />
-        </div>
+        {showCityFilter ? (
+          <div className="field col-span-6 md:col-span-3 lg:col-span-2">
+            <span className="label">Город</span>
+            <MultiSelectDropdown
+              label="Город"
+              options={meta.cities || []}
+              selectedValues={cities}
+              onChange={setCities}
+              placeholder="Все города"
+            />
+          </div>
+        ) : null}
 
         {/* Марка */}
         <div className="field col-span-6 md:col-span-3 lg:col-span-2">
@@ -688,4 +698,5 @@ export default function FilterBar({
       `}</style>
     </form>
   );
+
 }
