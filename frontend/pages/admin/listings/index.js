@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import FilterBar from '../../../components/FilterBar';
+import computeTradeTiming from '../../../lib/tradeTiming';
+import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../../../lib/tradeTypes';
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -65,11 +67,15 @@ function formatDate(value) {
   return date.toLocaleDateString('ru-RU');
 }
 
-function formatVehicle(item) {
-  if (!item) return DASH;
-  const parts = [item.brand, item.model, item.year].filter(Boolean);
-  if (parts.length) return parts.join(' ');
-  return item.category || DASH;
+function formatTradeType(value) {
+  const normalized = normalizeTradeTypeCode(value);
+  return (
+    formatTradeTypeLabel(normalized)
+    || formatTradeTypeLabel(value)
+    || normalized
+    || value
+    || DASH
+  );
 }
 
 function formatCreatedAt(value) {
@@ -663,6 +669,7 @@ export default function AdminParserTradesPage() {
             initial={filterInitial}
             favoritesCount={0}
             showFavoritesLink={false}
+            showCityFilter={false}
           />
         </div>
 
@@ -734,7 +741,7 @@ export default function AdminParserTradesPage() {
                 <tr>
                   <th>Заголовок</th>
                   <th>Регион</th>
-                  <th>ТС</th>
+                  <th>Тип объявления</th>
                   <th>Стартовая цена</th>
                   <th>Окончание</th>
                   <th>Действия</th>
@@ -757,6 +764,18 @@ export default function AdminParserTradesPage() {
                       pathname: '/admin/listings/[id]',
                       query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
                     };
+                    const tradeTypeValue =
+                      item.trade_type_resolved
+                      ?? item.trade_type
+                      ?? item.tradeType
+                      ?? item?.lot_details?.trade_type
+                      ?? item?.details?.trade_type;
+                    const tradeTypeText = formatTradeType(tradeTypeValue);
+                    const timing = computeTradeTiming(item);
+                    const status = timing?.status;
+                    const finishDateText = formatDate(timing?.finishDate || item.date_finish);
+                    const statusColor = status?.color || '#334155';
+                    const statusBackground = status?.color ? `${status.color}1a` : 'rgba(148,163,184,0.12)';
                     return (
                       <tr key={item.id}>
                         <td>
@@ -777,12 +796,41 @@ export default function AdminParserTradesPage() {
                         </td>
                         <td>{item.region || DASH}</td>
                         <td>
-                          <div className="admin-table__value">{formatVehicle(item)}</div>
-                          {item.vin ? <div className="admin-table__meta">VIN: {item.vin}</div> : null}
+                          <div className="admin-table__value">{tradeTypeText}</div>
+                          {tradeTypeValue && tradeTypeText !== tradeTypeValue ? (
+                            <div className="admin-table__meta">Код: {tradeTypeValue}</div>
+                          ) : null}
                         </td>
                         <td>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
                         <td>
-                          <div className="admin-table__value">{formatDate(item.date_finish)}</div>
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '6px 10px',
+                              borderRadius: 999,
+                              background: statusBackground,
+                              color: statusColor,
+                              fontWeight: 700,
+                              border: `1px solid ${status?.color ? `${status.color}33` : 'rgba(148,163,184,0.35)'}`,
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: statusColor,
+                                display: 'inline-block',
+                              }}
+                            />
+                            <span>{status?.label || 'Статус не определён'}</span>
+                          </div>
+                          {finishDateText ? (
+                            <div className="admin-table__meta">Окончание: {finishDateText}</div>
+                          ) : null}
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
                         </td>
                         <td>
@@ -856,6 +904,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
