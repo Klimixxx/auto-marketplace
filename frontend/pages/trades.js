@@ -6,7 +6,7 @@ import ListingCard from '../components/ListingCard';
 import { sortListingsByRelevance } from '../lib/tradeSorting';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || '').replace(/\/$/, '');
-const FILTER_KEYS = ['q', 'region_code', 'city', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
+const FILTER_KEYS = ['q', 'region_code', 'brand', 'trade_type', 'minPrice', 'maxPrice'];
 
 function buildApiUrl(path) {
   if (API_BASE) return `${API_BASE}${path}`;
@@ -262,7 +262,12 @@ export default function Trades() {
         <h1 style={{ margin: 0 }}>Торги</h1>
       </div>
 
-      <FilterBar onSearch={handleSearch} initial={filters} favoritesCount={favoriteIds.length} />
+      <FilterBar
+        onSearch={handleSearch}
+        initial={filters}
+        favoritesCount={favoriteIds.length}
+        showCityFilter={false}
+      />
 
 
       <div style={{ marginTop: 16 }}>
@@ -320,5 +325,6 @@ export default function Trades() {
     </div>
   );
 }
+
 
 
