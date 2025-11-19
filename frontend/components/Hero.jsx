@@ -140,7 +140,6 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrd
         <div style={styles.badge}>
           <span style={styles.pulse} />
           <span style={styles.badgeNum}>{fmt.format(Math.max(0, listingCount))}</span>
-          <span style={styles.badgeLabel}>Объявлений ждут своих покупателей</span>
         </div>
 
         {inspectionsUnread > 0 && (
@@ -258,7 +257,6 @@ const styles = {
     letterSpacing: 0.3,
     fontVariantNumeric: 'tabular-nums',
   },
-  badgeLabel: { color: 'var(--text-900)' },  // ЧЁРНЫЙ для "Объявлений"
 
   title: {
     margin: '14px 0 8px',
@@ -345,6 +343,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
