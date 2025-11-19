@@ -5,6 +5,7 @@ import Hero from "../components/Hero";
 import ListingCard from "../components/ListingCard";
 import About from "../components/About";
 import { formatTradeTypeLabel } from "../lib/tradeTypes";
+import { sortListingsByRelevance } from "../lib/tradeSorting";
 
 import { useRouter } from "next/router";
 
@@ -1169,7 +1170,9 @@ export default function Home() {
         const data = await res.json();
 
         if (!ignore) {
-          setRecent(Array.isArray(data?.items) ? data.items : []);
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const sorted = sortListingsByRelevance(items);
+          setRecent(sorted);
         }
       } catch (e) {
         console.error("Failed to load recent listings", e);
@@ -1222,7 +1225,6 @@ export default function Home() {
   return (
     <>
       <Hero
-        listingCount={summary?.totalListings ?? 0}
         inspectionsUnread={inspectionsUnread}
         tradeOrdersUnread={tradeUnread}
         autotekaUnread={autotekaUnread}
@@ -1709,6 +1711,7 @@ export default function Home() {
     </>
   );
 }
+
 
 
 
