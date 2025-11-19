@@ -14,9 +14,8 @@ const UI = {
   btnHover: '#1e53d6',
 };
 
-const fmt = new Intl.NumberFormat('ru-RU');
+export default function Hero({ inspectionsUnread = 0, tradeOrdersUnread = 0 }) {
 
-export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrdersUnread = 0 }) {
   const [q, setQ] = useState('');
   const inputRef = useRef(null);
 
@@ -136,12 +135,6 @@ export default function Hero({ listingCount = 0, inspectionsUnread = 0, tradeOrd
   return (
     <section style={styles.wrap}>
       <div style={styles.inner}>
-        {/* Бейдж с количеством объявлений */}
-        <div style={styles.badge}>
-          <span style={styles.pulse} />
-          <span style={styles.badgeNum}>{fmt.format(Math.max(0, listingCount))}</span>
-        </div>
-
         {inspectionsUnread > 0 && (
           <a href="/inspections" style={styles.alert}>
             <span>Новые обновления осмотров</span>
@@ -232,32 +225,6 @@ const styles = {
     margin: '0 auto',
     padding: '0 16px',
   },
-  badge: {
-    display: 'inline-flex',
-    alignItems:'center',
-    gap: 10,
-    padding: '8px 12px',
-    borderRadius: 999,
-    background:
-      'linear-gradient(135deg, rgba(42,101,247,0.12) 0%, rgba(42,101,247,0.04) 60%, rgba(103,232,249,0.08) 100%)',
-    border: '1.5px solid var(--stats-border)',
-    color: UI.text,
-    fontSize: 13.5,
-    backdropFilter: 'blur(6px)',
-  },
-  pulse: {
-    width:8, height:8, borderRadius:999,
-    background: '#34d399',
-    animation: 'pulseKey 1.8s infinite',
-  },
-  badgeNum: {
-    fontWeight: 800,
-    fontSize: 15.5,
-    color: 'var(--blue)',             // СИНИЙ как «прозрачно и удобно»
-    letterSpacing: 0.3,
-    fontVariantNumeric: 'tabular-nums',
-  },
-
   title: {
     margin: '14px 0 8px',
     fontSize: '38px',
@@ -343,6 +310,7 @@ const styles = {
     fontSize: 14,
   },
 };
+
 
 
 
