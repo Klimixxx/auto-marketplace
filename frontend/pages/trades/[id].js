@@ -378,10 +378,12 @@ function normalizeDocuments(list) {
 }
 
 function resolveAuctionStep(details, item) {
-  const lotDetails = details?.lot_details && typeof details.lot_details === "object"
-    ? details.lot_details
-    : {};
-  const listingLot = item?.lot_details && typeof item.lot_details === "object" ? item.lot_details : {};
+  const lotDetails =
+    details?.lot_details && typeof details.lot_details === "object"
+      ? details.lot_details
+      : {};
+  const listingLot =
+    item?.lot_details && typeof item.lot_details === "object" ? item.lot_details : {};
   const candidates = [
     lotDetails.price_step,
     lotDetails.auction_step,
@@ -554,6 +556,8 @@ function KeyValueGrid({ entries }) {
               )}
             </div>
           );
+
+        return null;
       })}
     </div>
   );
@@ -564,7 +568,7 @@ function KeyValueList({ entries, renderValue, valueClassName, valueStyle }) {
   const baseStyle = {
     fontWeight: 600,
     textAlign: "right",
-    wordBreak: "break-word",
+    wordBreak: "word-break",
     ...(valueStyle || {}),
   };
   return (
@@ -627,6 +631,7 @@ export default function ListingPage({ item }) {
     item?.id ?? item?.source_id ?? item?.listing_id ?? item?._id ?? null;
   const listingIdRaw =
     listingIdentifier != null ? String(listingIdentifier).trim() : "";
+
   const timing = computeTradeTiming(item || {});
   const statusInfo = timing?.status || null;
   const periods = Array.isArray(timing?.periods) ? timing.periods : [];
@@ -658,6 +663,7 @@ export default function ListingPage({ item }) {
       : item?.end_date
       ? formatDateTime(item.end_date)
       : null;
+
   const fallbackStatusLabel = item?.status
     ? translateValueByKey("status", item.status) ||
       translateFieldKey(item.status)
@@ -667,6 +673,7 @@ export default function ListingPage({ item }) {
     (fallbackStatusLabel
       ? { label: fallbackStatusLabel, color: "#64748b" }
       : null);
+
   const normalizedStatusLabels = [
     statusInfo?.label,
     fallbackStatusLabel,
@@ -674,14 +681,17 @@ export default function ListingPage({ item }) {
   ]
     .filter(Boolean)
     .map((value) => value.toLowerCase());
+
   const isTradeFinished =
     statusInfo?.key === "finished" ||
     normalizedStatusLabels.some((label) => label.includes("торги завершены"));
+
   const summaryStartPrice =
     item?.start_price ??
     periods[0]?.priceNumber ??
     periods[0]?.minPriceNumber ??
     null;
+
   const summaryCurrentPrice =
     timing?.currentPriceNumber != null
       ? timing.currentPriceNumber
@@ -703,6 +713,7 @@ export default function ListingPage({ item }) {
     periods[0]?.depositNumber,
     periods[0]?.depositRaw,
   ];
+
   let summaryDeposit = null;
   let summaryDepositRaw = null;
   for (const candidate of depositCandidates) {
@@ -714,18 +725,48 @@ export default function ListingPage({ item }) {
     }
     if (summaryDepositRaw == null) summaryDepositRaw = candidate;
   }
+
   const summaryDepositDisplay = fmtPrice(
     summaryDeposit != null ? summaryDeposit : summaryDepositRaw,
     currency,
   );
 
+  // ВАЖНО: эти константы объявляем ДО использования в summaryPriceBlocks и priceHistoryEntries
+  const prices = Array.isArray(details?.prices) ? details.prices : [];
+
+  const locationLabel = [item?.city, item?.region].filter(Boolean).join(", ");
+  const tradeTypeLabel =
+    item?.trade_type_label ||
+    formatTradeType(item?.trade_type_resolved ?? item?.trade_type);
+  const normalizedTradeType = normalizeTradeTypeCode(
+    item?.trade_type_resolved ?? item?.trade_type,
+  );
+  const isOpenAuction = normalizedTradeType === "open_auction";
+  const isPublicOffer = normalizedTradeType === "public_offer";
+  const summaryAuctionStepRaw = resolveAuctionStep(details, item);
+  const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
+  const summaryAuctionStep =
+    summaryAuctionStepNumber != null
+      ? summaryAuctionStepNumber
+      : summaryAuctionStepRaw;
+
   const summaryPriceBlocks = (() => {
     const blocks = [];
+
     if (isPublicOffer) {
-      blocks.push({ label: "Текущая цена", value: fmtPrice(summaryCurrentPrice, currency) });
-      blocks.push({ label: "Стартовая цена", value: fmtPrice(summaryStartPrice, currency) });
+      blocks.push({
+        label: "Текущая цена",
+        value: fmtPrice(summaryCurrentPrice, currency),
+      });
+      blocks.push({
+        label: "Стартовая цена",
+        value: fmtPrice(summaryStartPrice, currency),
+      });
     } else {
-      blocks.push({ label: "Стартовая цена", value: fmtPrice(summaryStartPrice, currency) });
+      blocks.push({
+        label: "Стартовая цена",
+        value: fmtPrice(summaryStartPrice, currency),
+      });
       blocks.push({
         label: isOpenAuction ? "Шаг аукциона" : "Текущая цена",
         value: fmtPrice(
@@ -829,7 +870,9 @@ export default function ListingPage({ item }) {
   });
 
   const [authToken, setAuthToken] = useState(null);
-  const [viewCount, setViewCount] = useState(() => parseViewCount(item?.view_count));
+  const [viewCount, setViewCount] = useState(() =>
+    parseViewCount(item?.view_count),
+  );
   const [openTradeModal, setOpenTradeModal] = useState(false);
   const [openInspectionModal, setOpenInspectionModal] = useState(false);
   const [openAutotekaModal, setOpenAutotekaModal] = useState(false);
@@ -865,6 +908,7 @@ export default function ListingPage({ item }) {
   useEffect(() => {
     setActivePhotoIndex(0);
   }, [item?.id, photos.length]);
+
   const activePhoto = photos[activePhotoIndex] || photos[0] || null;
   const lightboxPhoto = photos[lightboxPhotoIndex] || null;
 
@@ -992,34 +1036,19 @@ export default function ListingPage({ item }) {
     setLightboxPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
   }
 
-
   const lotEntries = buildKeyValueEntries(details?.lot_details);
   const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
     lotEntries,
   );
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
-  const prices = Array.isArray(details?.prices) ? details.prices : [];
   const documents = normalizeDocuments(
-    Array.isArray(details?.documents) ? details.documents : []
+    Array.isArray(details?.documents) ? details.documents : [],
   );
   const periodScheduleEntries = periods;
   const periodScheduleDeadline = applicationDeadlineDate;
   const fedresursMeta = details?.fedresurs_meta;
 
-  const locationLabel = [item?.city, item?.region].filter(Boolean).join(", ");
-  const tradeTypeLabel =
-    item?.trade_type_label ||
-    formatTradeType(item?.trade_type_resolved ?? item?.trade_type);
-  const normalizedTradeType = normalizeTradeTypeCode(
-    item?.trade_type_resolved ?? item?.trade_type,
-  );
-  const isOpenAuction = normalizedTradeType === "open_auction";
-  const isPublicOffer = normalizedTradeType === "public_offer";
-  const summaryAuctionStepRaw = resolveAuctionStep(details, item);
-  const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
-  const summaryAuctionStep =
-    summaryAuctionStepNumber != null ? summaryAuctionStepNumber : summaryAuctionStepRaw;
   const actionButtons = [
     {
       key: "participate",
@@ -1071,7 +1100,7 @@ export default function ListingPage({ item }) {
         }}
       >
         <div className="detail-hero__gallery" style={{ marginTop: 60 }}>
-<div className="detail-hero__main-photo">
+          <div className="detail-hero__main-photo">
             {activePhoto ? (
               <button
                 type="button"
@@ -1139,8 +1168,12 @@ export default function ListingPage({ item }) {
             <div className="detail-summary__prices">
               {summaryPriceBlocks.map((block) => (
                 <div className="detail-summary__price" key={block.label}>
-                  <div className="detail-summary__price-label">{block.label}</div>
-                  <div className="detail-summary__price-value">{block.value}</div>
+                  <div className="detail-summary__price-label">
+                    {block.label}
+                  </div>
+                  <div className="detail-summary__price-value">
+                    {block.value}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1205,7 +1238,8 @@ export default function ListingPage({ item }) {
                     }}
                   >
                     <div>
-                      <strong>Приём заявок до:</strong> {applicationDeadlineLabel}
+                      <strong>Приём заявок до:</strong>{" "}
+                      {applicationDeadlineLabel}
                     </div>
                     <ViewCounter count={viewCount} />
                   </div>
@@ -1236,8 +1270,8 @@ export default function ListingPage({ item }) {
               </div>
             )}
 
-<div className="detail-summary__actions">
-             {actionButtons.map((action) =>
+            <div className="detail-summary__actions">
+              {actionButtons.map((action) =>
                 action.href ? (
                   <a
                     key={action.key}
@@ -1270,7 +1304,7 @@ export default function ListingPage({ item }) {
                   >
                     {action.label}
                   </button>
-                )
+                ),
               )}
             </div>
           </div>
@@ -1491,7 +1525,7 @@ export default function ListingPage({ item }) {
                   <tbody>
                     {priceHistoryEntries.map((entry) => {
                       const rowStyle = { ...PRICE_CELL_STYLE };
-                      let rowBackground = undefined;
+                      let rowBackground;
                       if (entry.state === "current") {
                         rowBackground = "rgba(37,99,235,0.08)";
                       } else if (entry.state === "past") {
@@ -1502,7 +1536,9 @@ export default function ListingPage({ item }) {
                       return (
                         <tr
                           key={entry.key}
-                          style={rowBackground ? { background: rowBackground } : undefined}
+                          style={
+                            rowBackground ? { background: rowBackground } : undefined
+                          }
                         >
                           <td style={rowStyle}>{entry.priceText}</td>
                           <td style={rowStyle}>{entry.depositText}</td>
@@ -1559,7 +1595,8 @@ export default function ListingPage({ item }) {
               </div>
             </section>
           )}
-          {/* 
+
+          {/*
           {hasData(fedresursMeta) && (
             <section className="detail-section">
               <h2>Дополнительные данные</h2>
@@ -1576,24 +1613,10 @@ export default function ListingPage({ item }) {
                 </pre>
               </div>
             </section>
-          )} */}
+          )}
+          */}
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
