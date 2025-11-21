@@ -783,7 +783,25 @@ router.get('/parser-trades', async (req, res) => {
       : 'order by created_at desc';
     const listSql = `
       select id, title, region, region_code, category, brand, model, year, vin, start_price,
-             date_finish, trade_place, source_url, created_at, published_at
+             date_finish, trade_place, source_url, created_at, published_at,
+             coalesce(
+               lot_details->>'trade_type',
+               lot_details->>'tradeType',
+               lot_details->>'type',
+               raw_payload->'fedresurs_data'->>'procedureType',
+               raw_payload->'fedresurs_data'->>'procedure_type',
+               raw_payload->'fedresurs_data'->>'tradeType',
+               raw_payload->'fedresurs_data'->>'trade_type',
+               raw_payload->'fedresurs_data'->>'type'
+             ) as trade_type,
+             coalesce(
+               lot_details->>'trade_type_label',
+               raw_payload->'fedresurs_data'->>'procedureType',
+               raw_payload->'fedresurs_data'->>'procedure_type',
+               raw_payload->'fedresurs_data'->>'tradeType',
+               raw_payload->'fedresurs_data'->>'trade_type',
+               raw_payload->'fedresurs_data'->>'type'
+             ) as trade_type_label
         from parser_trades
       ${whereSql}
       ${orderSql}
