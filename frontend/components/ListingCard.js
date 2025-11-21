@@ -675,27 +675,21 @@ export default function ListingCard({
       secondaryLabel = "Задаток";
     }
   } else if (listingKind === "public_offer") {
-    if (timing?.currentPriceNumber != null) {
-      primaryValue = timing.currentPriceNumber;
-      primaryLabel = "Текущая цена";
-      if (
-        numericStart != null &&
-        Math.abs(numericStart - timing.currentPriceNumber) > 1
-      ) {
-        secondaryValue = numericStart;
-        secondaryLabel = "Стартовая цена";
+    if (numericStart != null) {
+      primaryValue = numericStart;
+      primaryLabel = "Стартовая цена";
+      const resolvedCurrent =
+        timing?.currentPriceNumber ?? numericCurrent ?? numericStart;
+      if (resolvedCurrent != null && Math.abs(resolvedCurrent - numericStart) > 1) {
+        secondaryValue = resolvedCurrent;
+        secondaryLabel = "Текущая цена";
       }
-    } else if (numericCurrent != null) {
-      primaryValue = numericCurrent;
-      primaryLabel = "Текущая цена";
-      if (numericStart != null) {
-        secondaryValue = numericStart;
-        secondaryLabel = "Стартовая цена";
-      }
+    } else if (timing?.currentPriceNumber != null || numericCurrent != null) {
+      primaryValue = timing?.currentPriceNumber ?? numericCurrent ?? null;
+      primaryLabel = primaryValue != null ? "Текущая цена" : "Цена уточняется";
     } else {
-      primaryValue = numericStart ?? null;
-      primaryLabel =
-        primaryValue != null ? "Стартовая цена" : "Цена уточняется";
+      primaryValue = null;
+      primaryLabel = "Цена уточняется";
     }
   } else {
     primaryValue = numericCurrent ?? numericStart ?? null;
@@ -888,7 +882,7 @@ const articleHoverStyle = {
         tabIndex={detailHref ? 0 : -1}
         style={compactArticleStyle}
       >
-        <div
+        <div␊
           ref={photoContainerRef}
           style={{
             position: "relative",
@@ -990,23 +984,38 @@ const articleHoverStyle = {
                 bottom: 12,
                 display: "flex",
                 gap: 6,
-                pointerEvents: "none",
+                justifyContent: "center",
+                pointerEvents: "auto",
               }}
             >
               {photos.map((_, index) => (
-                <div
+                <button
                   key={`indicator-${index}`}
-                  aria-hidden="true"
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setActivePhotoIndex(index);
+                  }}
+                  aria-label={`Переключить на фото ${index + 1}`}
                   style={{
-                    flex: 1,
-                    height: 3,
+                    width: 12,
+                    height: 12,
                     borderRadius: 999,
+                    border: "1px solid #e2e8f0",
                     background:
                       index === activePhotoIndex
                         ? "#2563eb"
-                        : "rgba(255,255,255,0.55)",
+                        : "rgba(255,255,255,0.85)",
                     opacity: index === activePhotoIndex ? 1 : 0.65,
-                    transition: "background 0.2s ease, opacity 0.2s ease",
+                    boxShadow:
+                      index === activePhotoIndex
+                        ? "0 0 0 3px rgba(37,99,235,0.18)"
+                        : "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    transition:
+                      "background 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease",
                   }}
                 />
               ))}
@@ -1302,29 +1311,44 @@ const articleHoverStyle = {
           {hasMultiplePhotos ? (
             <div
               style={{
-                // position: "absolute",
-                // left: 16,
-                // right: 16,
-                // bottom: 12,
+                position: "absolute",
+                left: 16,
+                right: 16,
+                bottom: 12,
                 display: "flex",
                 gap: 6,
-                pointerEvents: "none",
+                justifyContent: "center",
+                pointerEvents: "auto",
               }}
             >
               {photos.map((_, index) => (
-                <div
+                <button
                   key={`indicator-${index}`}
-                  aria-hidden="true"
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setActivePhotoIndex(index);
+                  }}
+                  aria-label={`Переключить на фото ${index + 1}`}
                   style={{
-                    flex: 1,
-                    height: 3,
+                    width: 12,
+                    height: 12,
                     borderRadius: 999,
+                    border: "1px solid #d9e2ec",
                     background:
                       index === activePhotoIndex
                         ? "#2563eb"
-                        : "rgba(255,255,255,0.55)",
+                        : "rgba(255,255,255,0.9)",
                     opacity: index === activePhotoIndex ? 1 : 0.65,
-                    transition: "background 0.2s ease, opacity 0.2s ease",
+                    boxShadow:
+                      index === activePhotoIndex
+                        ? "0 0 0 3px rgba(37,99,235,0.18)"
+                        : "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    transition:
+                      "background 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease",
                   }}
                 />
               ))}
@@ -1583,6 +1607,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
