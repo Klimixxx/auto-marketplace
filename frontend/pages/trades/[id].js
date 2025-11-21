@@ -1527,7 +1527,8 @@ export default function ListingPage({ item }) {
                       const rowStyle = { ...PRICE_CELL_STYLE };
                       let rowBackground;
                       if (entry.state === "current") {
-                        rowBackground = "rgba(37,99,235,0.08)";
+                        rowStyle.fontWeight = 700;
+                        rowBackground = "rgba(37,99,235,0.12)";
                       } else if (entry.state === "past") {
                         rowStyle.color = "#94a3b8";
                         rowBackground = "rgba(148,163,184,0.08)";
@@ -1536,9 +1537,12 @@ export default function ListingPage({ item }) {
                       return (
                         <tr
                           key={entry.key}
-                          style={
-                            rowBackground ? { background: rowBackground } : undefined
-                          }
+                          style={{
+                            ...(rowBackground ? { background: rowBackground } : null),
+                            ...(entry.state === "current"
+                              ? { boxShadow: "inset 3px 0 0 #2563eb" }
+                              : null),
+                          }}
                         >
                           <td style={rowStyle}>{entry.priceText}</td>
                           <td style={rowStyle}>{entry.depositText}</td>
@@ -1620,3 +1624,4 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
