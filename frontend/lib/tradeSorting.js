@@ -51,16 +51,26 @@ export function sortListingsByRelevance(listings) {
       const statusKey = timing?.status?.key;
       const isFinished = statusKey === 'finished';
       const timestamp = deriveSortTimestamp(item, timing);
+      const publishedDate = parseDateLike(item?.published_at ?? item?.publishedAt);
+      const publishedTs = publishedDate instanceof Date ? publishedDate.getTime() : null;
       return {
         item,
         index,
         isFinished,
         timestamp: timestamp != null ? timestamp : Number.NEGATIVE_INFINITY,
+        publishedTs,
       };
     })
     .sort((a, b) => {
       if (a.isFinished !== b.isFinished) {
         return a.isFinished ? 1 : -1;
+      }
+      if (!a.isFinished && !b.isFinished) {
+        const aPub = a.publishedTs ?? Number.NEGATIVE_INFINITY;
+        const bPub = b.publishedTs ?? Number.NEGATIVE_INFINITY;
+        if (aPub !== bPub) {
+          return bPub - aPub;
+        }
       }
       if (a.timestamp !== b.timestamp) {
         return (b.timestamp ?? Number.NEGATIVE_INFINITY) - (a.timestamp ?? Number.NEGATIVE_INFINITY);
