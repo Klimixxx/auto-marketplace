@@ -9,7 +9,7 @@ import {
   translateValueByKey,
 } from "../../lib/lotFormatting";
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from "../../lib/tradeTypes";
-import computeTradeTiming from "../../lib/tradeTiming";
+import computeTradeTiming, { parseDateLike } from "../../lib/tradeTiming";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || process.env.API_BASE || "";
 
@@ -690,6 +690,143 @@ export default function ListingPage({ item }) {
         item?.start_price ??
         null;
 
+  const depositCandidates = [
+    currentPeriod?.depositNumber,
+    currentPeriod?.depositRaw,
+    item?.deposit,
+    item?.deposit_amount,
+    details?.deposit,
+    details?.deposit_amount,
+    details?.lot_details?.deposit,
+    details?.lot_details?.deposit_amount,
+    periods[0]?.depositNumber,
+    periods[0]?.depositRaw,
+  ];
+  let summaryDeposit = null;
+  let summaryDepositRaw = null;
+  for (const candidate of depositCandidates) {
+    if (candidate == null || candidate === "") continue;
+    const numeric = parseNumberValue(candidate);
+    if (numeric != null) {
+      summaryDeposit = numeric;
+      break;
+    }
+    if (summaryDepositRaw == null) summaryDepositRaw = candidate;
+  }
+  const summaryDepositDisplay = fmtPrice(
+    summaryDeposit != null ? summaryDeposit : summaryDepositRaw,
+    currency,
+  );
+
+  const summaryPriceBlocks = (() => {
+    const blocks = [];
+    if (isPublicOffer) {
+      blocks.push({ label: "Текущая цена", value: fmtPrice(summaryCurrentPrice, currency) });
+      blocks.push({ label: "Стартовая цена", value: fmtPrice(summaryStartPrice, currency) });
+    } else {
+      blocks.push({ label: "Стартовая цена", value: fmtPrice(summaryStartPrice, currency) });
+      blocks.push({
+        label: isOpenAuction ? "Шаг аукциона" : "Текущая цена",
+        value: fmtPrice(
+          isOpenAuction
+            ? summaryAuctionStep != null && summaryAuctionStep !== ""
+              ? summaryAuctionStep
+              : summaryCurrentPrice
+            : summaryCurrentPrice,
+          currency,
+        ),
+      });
+    }
+
+    if (summaryDeposit != null || summaryDepositRaw != null) {
+      blocks.push({ label: "Задаток", value: summaryDepositDisplay });
+    }
+
+    return blocks;
+  })();
+
+  const priceHistoryEntries = prices.map((entry, index) => {
+    const priceNumber = parseNumberValue(
+      entry.price ??
+        entry.currentPrice ??
+        entry.current_price ??
+        entry.startPrice ??
+        entry.start_price ??
+        entry.value ??
+        entry.amount,
+    );
+    const fallbackPrice =
+      entry.price ??
+      entry.currentPrice ??
+      entry.current_price ??
+      entry.startPrice ??
+      entry.start_price ??
+      entry.value ??
+      entry.amount ??
+      "—";
+    const depositRaw =
+      entry.deposit ??
+      entry.deposit_amount ??
+      entry.bail ??
+      entry.zadatok ??
+      entry.pledge ??
+      entry.guarantee ??
+      entry.collateral ??
+      null;
+    const depositNumber = parseNumberValue(depositRaw);
+    const startDate = parseDateLike(
+      entry.date_start ??
+        entry.start_date ??
+        entry.period_start ??
+        entry.dateBegin ??
+        entry.date_from ??
+        entry.begin ??
+        entry.start,
+    );
+    const endDate = parseDateLike(
+      entry.date_finish ??
+        entry.dateFinish ??
+        entry.end_date ??
+        entry.date_end ??
+        entry.period_end ??
+        entry.date_to ??
+        entry.finish ??
+        entry.end,
+    );
+
+    const priceText =
+      priceNumber != null
+        ? fmtPrice(priceNumber, currency)
+        : formatValueForDisplay("price", fallbackPrice);
+    const depositText =
+      depositNumber != null
+        ? fmtPrice(depositNumber, currency)
+        : depositRaw != null
+        ? formatValueForDisplay("deposit", depositRaw)
+        : "—";
+    const startText = startDate ? formatDateTime(startDate) : "—";
+    const endText = endDate ? formatDateTime(endDate) : "—";
+
+    const nowTs = Date.now();
+    const startTs = startDate ? startDate.getTime() : null;
+    const endTs = endDate ? endDate.getTime() : null;
+    let state = "default";
+    if (startTs != null && nowTs >= startTs && (endTs == null || nowTs < endTs)) {
+      state = "current";
+    } else if (endTs != null && nowTs >= endTs) {
+      state = "past";
+    }
+
+    return {
+      key: entry.id || `history-${index}`,
+      priceText,
+      depositText,
+      startText,
+      endText,
+      state,
+    };
+  });
+
   const [authToken, setAuthToken] = useState(null);
   const [viewCount, setViewCount] = useState(() => parseViewCount(item?.view_count));
   const [openTradeModal, setOpenTradeModal] = useState(false);
@@ -878,6 +1015,7 @@ export default function ListingPage({ item }) {
     item?.trade_type_resolved ?? item?.trade_type,
   );
   const isOpenAuction = normalizedTradeType === "open_auction";
+  const isPublicOffer = normalizedTradeType === "public_offer";
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
   const summaryAuctionStep =
@@ -999,29 +1137,12 @@ export default function ListingPage({ item }) {
 
           <div className="detail-summary-card detail-summary-card--inline">
             <div className="detail-summary__prices">
-              <div className="detail-summary__price">
-                <div className="detail-summary__price-label">
-                  Стартовая цена
+              {summaryPriceBlocks.map((block) => (
+                <div className="detail-summary__price" key={block.label}>
+                  <div className="detail-summary__price-label">{block.label}</div>
+                  <div className="detail-summary__price-value">{block.value}</div>
                 </div>
-                <div className="detail-summary__price-value">
-                  {fmtPrice(summaryStartPrice, currency)}
-                </div>
-              </div>
-              <div className="detail-summary__price">
-                <div className="detail-summary__price-label">
-                  {isOpenAuction ? "Шаг аукциона" : "Текущая цена"}
-                </div>
-                <div className="detail-summary__price-value">
-                  {fmtPrice(
-                    isOpenAuction
-                      ? summaryAuctionStep != null && summaryAuctionStep !== ""
-                        ? summaryAuctionStep
-                        : summaryCurrentPrice
-                      : summaryCurrentPrice,
-                    currency,
-                  )}
-                </div>
-              </div>
+              ))}
             </div>
 
             {(statusDisplay ||
@@ -1354,91 +1475,39 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {!isOpenAuction && Array.isArray(prices) && prices.length > 0 && (
+          {!isOpenAuction && priceHistoryEntries.length > 0 && (
             <section className="detail-section">
               <h2>История цен</h2>
               <div className="panel table-scroll" style={{ padding: 0 }}>
                 <table>
                   <thead>
                     <tr>
-                      <th style={PRICE_HEADER_STYLE}>Этап</th>
                       <th style={PRICE_HEADER_STYLE}>Цена</th>
-                      <th style={PRICE_HEADER_STYLE}>Дата</th>
-                      <th style={PRICE_HEADER_STYLE}>Комментарий</th>
+                      <th style={PRICE_HEADER_STYLE}>Задаток</th>
+                      <th style={PRICE_HEADER_STYLE}>Начало периода</th>
+                      <th style={PRICE_HEADER_STYLE}>Конец периода</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {prices.map((entry, index) => {
-                      const labelRaw =
-                        entry.stage ||
-                        entry.stage_name ||
-                        entry.stageName ||
-                        entry.round ||
-                        entry.type ||
-                        entry.name ||
-                        entry.title;
-                      const label = labelRaw
-                        ? translateFieldKey(labelRaw)
-                        : `Запись ${index + 1}`;
-                      const numericPrice = parseNumberValue(
-                        entry.price ??
-                          entry.currentPrice ??
-                          entry.current_price ??
-                          entry.startPrice ??
-                          entry.start_price ??
-                          entry.value ??
-                          entry.amount
-                      );
-                      const fallbackPrice =
-                        entry.price ??
-                        entry.currentPrice ??
-                        entry.current_price ??
-                        entry.startPrice ??
-                        entry.start_price ??
-                        entry.value ??
-                        entry.amount ??
-                        "—";
-                      const priceText =
-                        numericPrice != null
-                          ? fmtPrice(numericPrice, currency)
-                          : formatValueForDisplay("price", fallbackPrice);
-                      const dateValue =
-                        entry.date ||
-                        entry.date_start ||
-                        entry.dateStart ||
-                        entry.date_finish ||
-                        entry.dateFinish ||
-                        entry.updated_at ||
-                        entry.updatedAt;
-                      const dateText = dateValue
-                        ? formatDateTime(dateValue)
-                        : "—";
-                      const commentRaw =
-                        entry.comment ||
-                        entry.description ||
-                        entry.info ||
-                        entry.status ||
-                        entry.note ||
-                        entry.result ||
-                        null;
-                      const commentText = commentRaw
-                        ? formatValueForDisplay("comment", commentRaw)
-                        : null;
+                    {priceHistoryEntries.map((entry) => {
+                      const rowStyle = { ...PRICE_CELL_STYLE };
+                      let rowBackground = undefined;
+                      if (entry.state === "current") {
+                        rowBackground = "rgba(37,99,235,0.08)";
+                      } else if (entry.state === "past") {
+                        rowStyle.color = "#94a3b8";
+                        rowBackground = "rgba(148,163,184,0.08)";
+                      }
 
                       return (
-                        <tr key={entry.id || `${label}-${index}`}>
-                          <td style={PRICE_CELL_STYLE}>{label}</td>
-                          <td style={PRICE_CELL_STYLE}>{priceText}</td>
-                          <td style={PRICE_CELL_STYLE}>{dateText}</td>
-                          <td style={PRICE_CELL_STYLE}>
-                            {commentText ? (
-                              <span style={{ whiteSpace: "pre-wrap" }}>
-                                {commentText}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
+                        <tr
+                          key={entry.key}
+                          style={rowBackground ? { background: rowBackground } : undefined}
+                        >
+                          <td style={rowStyle}>{entry.priceText}</td>
+                          <td style={rowStyle}>{entry.depositText}</td>
+                          <td style={rowStyle}>{entry.startText}</td>
+                          <td style={rowStyle}>{entry.endText}</td>
                         </tr>
                       );
                     })}
@@ -1513,6 +1582,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
