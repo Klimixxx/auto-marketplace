@@ -78,6 +78,17 @@ function formatTradeType(value) {
   );
 }
 
+function pickFirstText(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      const text = String(candidate).trim();
+      if (text) return text;
+    }
+  }
+  return null;
+}
+
 function formatCreatedAt(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -764,13 +775,31 @@ export default function AdminParserTradesPage() {
                       pathname: '/admin/listings/[id]',
                       query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
                     };
+                    const tradeTypeLabel =
+                      pickFirstText(
+                        item.trade_type_label,
+                        item.resolved_trade_type_label,
+                        item?.lot_details?.trade_type_label,
+                        item?.details?.trade_type_label,
+                      );
                     const tradeTypeValue =
-                      item.trade_type_resolved
-                      ?? item.trade_type
-                      ?? item.tradeType
-                      ?? item?.lot_details?.trade_type
-                      ?? item?.details?.trade_type;
-                    const tradeTypeText = formatTradeType(tradeTypeValue);
+                      pickFirstText(
+                        item.trade_type_resolved,
+                        item.resolved_trade_type,
+                        item.normalized_trade_type,
+                        item.trade_type,
+                        item.tradeType,
+                        item?.lot_details?.trade_type,
+                        item?.details?.trade_type,
+                        tradeTypeLabel,
+                      );
+                    const tradeTypeCode = normalizeTradeTypeCode(tradeTypeValue);
+                    const tradeTypeText =
+                      tradeTypeLabel
+                      || formatTradeType(tradeTypeValue)
+                      || formatTradeType(tradeTypeLabel)
+                      || DASH;
+                    const tradeTypeCodeText = tradeTypeCode || tradeTypeValue;
                     const timing = computeTradeTiming(item);
                     const status = timing?.status;
                     const finishDateText = formatDate(timing?.finishDate || item.date_finish);
@@ -797,8 +826,8 @@ export default function AdminParserTradesPage() {
                         <td>{item.region || DASH}</td>
                         <td>
                           <div className="admin-table__value">{tradeTypeText}</div>
-                          {tradeTypeValue && tradeTypeText !== tradeTypeValue ? (
-                            <div className="admin-table__meta">Код: {tradeTypeValue}</div>
+                          {tradeTypeCodeText && tradeTypeText !== tradeTypeCodeText ? (
+                            <div className="admin-table__meta">Код: {tradeTypeCodeText}</div>
                           ) : null}
                         </td>
                         <td>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
@@ -904,6 +933,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
