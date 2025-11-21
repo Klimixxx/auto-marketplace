@@ -816,25 +816,30 @@ export default function ListingPage({ item }) {
       entry.collateral ??
       null;
     const depositNumber = parseNumberValue(depositRaw);
-    const startDate = parseDateLike(
+    const rawStartDate =
       entry.date_start ??
-        entry.start_date ??
-        entry.period_start ??
-        entry.dateBegin ??
-        entry.date_from ??
-        entry.begin ??
-        entry.start,
-    );
-    const endDate = parseDateLike(
+      entry.start_date ??
+      entry.period_start ??
+      entry.dateBegin ??
+      entry.date_from ??
+      entry.begin ??
+      entry.start ??
+      entry.date ??
+      entry.updated_at ??
+      entry.updatedAt;
+    const rawEndDate =
       entry.date_finish ??
-        entry.dateFinish ??
-        entry.end_date ??
-        entry.date_end ??
-        entry.period_end ??
-        entry.date_to ??
-        entry.finish ??
-        entry.end,
-    );
+      entry.dateFinish ??
+      entry.end_date ??
+      entry.date_end ??
+      entry.period_end ??
+      entry.date_to ??
+      entry.finish ??
+      entry.end ??
+      rawStartDate;
+
+    const startDate = parseDateLike(rawStartDate);
+    const endDate = parseDateLike(rawEndDate);
 
     const priceText =
       priceNumber != null
@@ -1526,12 +1531,47 @@ export default function ListingPage({ item }) {
                     {priceHistoryEntries.map((entry) => {
                       const rowStyle = { ...PRICE_CELL_STYLE };
                       let rowBackground;
+                      let chip;
                       if (entry.state === "current") {
                         rowStyle.fontWeight = 700;
                         rowBackground = "rgba(37,99,235,0.12)";
+                        chip = (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "4px 8px",
+                              borderRadius: 999,
+                              background: "rgba(37,99,235,0.15)",
+                              color: "#1d4ed8",
+                              fontWeight: 700,
+                              fontSize: 12,
+                            }}
+                          >
+                            Текущий период
+                          </span>
+                        );
                       } else if (entry.state === "past") {
                         rowStyle.color = "#94a3b8";
                         rowBackground = "rgba(148,163,184,0.08)";
+                        chip = (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "4px 8px",
+                              borderRadius: 999,
+                              background: "rgba(148,163,184,0.2)",
+                              color: "#475569",
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            Завершён
+                          </span>
+                        );
                       }
 
                       return (
@@ -1546,7 +1586,12 @@ export default function ListingPage({ item }) {
                         >
                           <td style={rowStyle}>{entry.priceText}</td>
                           <td style={rowStyle}>{entry.depositText}</td>
-                          <td style={rowStyle}>{entry.startText}</td>
+                          <td style={rowStyle}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <span>{entry.startText}</span>
+                              {chip}
+                            </div>
+                          </td>
                           <td style={rowStyle}>{entry.endText}</td>
                         </tr>
                       );
@@ -1624,4 +1669,5 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
