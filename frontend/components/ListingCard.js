@@ -882,7 +882,7 @@ const articleHoverStyle = {
         tabIndex={detailHref ? 0 : -1}
         style={compactArticleStyle}
       >
-        <div␊
+        <div
           ref={photoContainerRef}
           style={{
             position: "relative",
@@ -1607,6 +1607,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
