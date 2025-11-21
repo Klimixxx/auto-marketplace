@@ -622,6 +622,7 @@ function pickLotValue(source, keys = []) {
 export default function ListingPage({ item }) {
   const details =
     item?.details && typeof item.details === "object" ? item.details : {};
+  const currency = item?.currency || "RUB";
   const listingIdentifier =
     item?.id ?? item?.source_id ?? item?.listing_id ?? item?._id ?? null;
   const listingIdRaw =
@@ -1005,7 +1006,6 @@ export default function ListingPage({ item }) {
   const periodScheduleEntries = periods;
   const periodScheduleDeadline = applicationDeadlineDate;
   const fedresursMeta = details?.fedresurs_meta;
-  const currency = item?.currency || "RUB";
 
   const locationLabel = [item?.city, item?.region].filter(Boolean).join(", ");
   const tradeTypeLabel =
@@ -1582,6 +1582,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
