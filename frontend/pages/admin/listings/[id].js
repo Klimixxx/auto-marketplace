@@ -61,6 +61,13 @@ function formatDateTime(value) {
   return date.toLocaleString('ru-RU');
 }
 
+function parseDateLike(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
 function formatArray(value) {
   return JSON.stringify(Array.isArray(value) ? value : [], null, 2);
 }
@@ -3195,17 +3202,19 @@ export default function AdminParserTradeCard() {
         <section style={{ marginTop: 24 }}>
         <h2>История цен</h2>
         <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
             <thead>
               <tr>
                 <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Этап</th>
                 <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Цена</th>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Дата</th>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Начало периода</th>
+                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Конец периода</th>
                 <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Комментарий</th>
               </tr>
             </thead>
             <tbody>
               {d.prices.map((entry, index) => {
+                const baseCellStyle = { ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' };
                 const stage =
                   entry.stage ||
                   entry.stage_name ||
@@ -3233,15 +3242,47 @@ export default function AdminParserTradeCard() {
                     : rawPrice != null
                     ? String(rawPrice)
                     : '—';
-                const dateValue =
-                  entry.date ||
+                const rawStartDate =
                   entry.date_start ||
                   entry.dateStart ||
-                  entry.date_finish ||
-                  entry.dateFinish ||
+                  entry.start_date ||
+                  entry.period_start ||
+                  entry.dateBegin ||
+                  entry.date_from ||
+                  entry.begin ||
+                  entry.start ||
+                  entry.date ||
                   entry.updated_at ||
                   entry.updatedAt ||
                   null;
+                const rawEndDate =
+                  entry.date_finish ||
+                  entry.dateFinish ||
+                  entry.end_date ||
+                  entry.date_end ||
+                  entry.period_end ||
+                  entry.date_to ||
+                  entry.finish ||
+                  entry.end ||
+                  rawStartDate;
+                const startDate = parseDateLike(rawStartDate);
+                const endDate = parseDateLike(rawEndDate);
+                const startText = startDate ? formatDateTime(startDate) : '—';
+                const endText = endDate ? formatDateTime(endDate) : '—';
+                const nowTs = Date.now();
+                const startTs = startDate ? startDate.getTime() : null;
+                const endTs = endDate ? endDate.getTime() : null;
+
+                let rowStyle = baseCellStyle;
+                let rowBackground;
+                if (startTs != null && nowTs >= startTs && (endTs == null || nowTs < endTs)) {
+                  rowStyle = { ...rowStyle, fontWeight: 700 };
+                  rowBackground = 'rgba(37,99,235,0.12)';
+                } else if (endTs != null && nowTs >= endTs) {
+                  rowStyle = { ...rowStyle, color: '#94a3b8' };
+                  rowBackground = 'rgba(148,163,184,0.08)';
+                }
+
                 const comment =
                   entry.comment ||
                   entry.description ||
@@ -3257,13 +3298,17 @@ export default function AdminParserTradeCard() {
                     : '—';
                 const commentMultiline = commentText.includes('\n');
                 return (
-                  <tr key={entry.id || `${stage}-${index}`}>
-                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{stageText}</td>
-                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{priceText}</td>
-                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>{dateValue ? formatDateTime(dateValue) : '—'}</td>
-                    <td style={{ ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' }}>
+                  <tr
+                    key={entry.id || `${stage}-${index}`}
+                    style={rowBackground ? { background: rowBackground } : undefined}
+                  >
+                    <td style={rowStyle}>{stageText}</td>
+                    <td style={rowStyle}>{priceText}</td>
+                    <td style={rowStyle}>{startText}</td>
+                    <td style={rowStyle}>{endText}</td>
+                    <td style={rowStyle}>
                       {commentMultiline ? (
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#111827 !important' }}>{commentText}</pre>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: rowStyle.color }}>{commentText}</pre>
                       ) : (
                         commentText
                       )}
@@ -3335,6 +3380,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
