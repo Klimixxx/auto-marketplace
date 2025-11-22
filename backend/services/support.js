@@ -267,17 +267,14 @@ export async function ensureListingTicketForUser(clientId, listingId) {
     throw err;
   }
 
-  const numericCandidate = Number(normalizedListingId);
-  const numericListingId = Number.isFinite(numericCandidate) && numericCandidate > 0 ? numericCandidate : null;
-
   const { rows: listingRows } = await query(
     `SELECT id, title, region, city, region_code, published
        FROM listings
       WHERE published = TRUE
-        AND ( ( $1::int IS NOT NULL AND id = $1::int )
+        AND ( ( $1::text IS NOT NULL AND id::text = $1::text )
               OR ( $2::text IS NOT NULL AND source_id = $2::text ) )
       LIMIT 1`,
-    [numericListingId, normalizedListingId]
+    [normalizedListingId, normalizedListingId]
   );
   const listing = listingRows[0];
   if (!listing) {
@@ -286,22 +283,29 @@ export async function ensureListingTicketForUser(clientId, listingId) {
     throw err;
   }
 
-  const listingIdNumeric = Number(listing.id);
-  if (!Number.isFinite(listingIdNumeric) || listingIdNumeric <= 0) {
+  const listingIdRaw = listing.id;
+  const listingIdNumeric = Number(listingIdRaw);
+  const isNumericListingId = Number.isInteger(listingIdNumeric) && listingIdNumeric > 0 && String(listingIdNumeric) === String(listingIdRaw);
+  const isUuidListingId = typeof listingIdRaw === 'string' && isUUID(listingIdRaw);
+
+  if (!isNumericListingId && !isUuidListingId) {
     const err = new Error('INVALID_LISTING');
     err.statusCode = 400;
     throw err;
   }
 
+  const listingIdParam = isUuidListingId ? listingIdRaw : listingIdNumeric;
+  const listingIdCast = isUuidListingId ? '::uuid' : '::int';
+
   const { rows: existingRows } = await query(
     `${TICKET_SELECT}
      WHERE t.client_id = $1::uuid
-       AND t.listing_id = $2
+       AND t.listing_id = $2${listingIdCast}
        AND t.type = 'listing'
        AND t.status IN ('open', 'assigned')
      ORDER BY t.created_at DESC
      LIMIT 1`,
-    [clientId, listingIdNumeric]
+    [clientId, listingIdParam]
   );
   if (existingRows[0]) {
     return attachTicketMeta(mapTicketRow(existingRows[0]));
@@ -309,15 +313,15 @@ export async function ensureListingTicketForUser(clientId, listingId) {
 
   const subject = listing.title
     ? `Консультация по объявлению «${listing.title}»`
-    : `Консультация по объявлению #${listingIdNumeric}`;
+    : `Консультация по объявлению #${listingIdRaw}`;
   const regionSnapshot = listing.region || listing.region_code || listing.city || null;
 
   const inserted = await query(
     `INSERT INTO support_tickets
        (client_id, status, type, listing_id, listing_region, subject, created_at, updated_at, last_message_at)
-     VALUES ($1::uuid, 'open', 'listing', $2, $3, $4, now(), now(), now())
+     VALUES ($1::uuid, 'open', 'listing', $2${listingIdCast}, $3, $4, now(), now(), now())
      RETURNING id`,
-    [clientId, listingIdNumeric, regionSnapshot, subject]
+    [clientId, listingIdParam, regionSnapshot, subject]
   );
 
   const ticketId = inserted.rows[0]?.id;
