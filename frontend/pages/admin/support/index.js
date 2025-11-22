@@ -23,6 +23,10 @@ function formatName(user) {
   return 'Без имени';
 }
 
+function formatTicketTypeLabel(type) {
+  return type === 'listing' ? 'По объявлению' : 'Общий тикет';
+}
+
 function sortTickets(list = []) {
   return list
     .slice()
@@ -61,6 +65,35 @@ function TicketItem({ ticket, active, onSelect }) {
           }}>
             +{unread}
           </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <span
+          style={{
+            background: ticket?.type === 'listing' ? 'var(--accent-50)' : 'var(--surface-2)',
+            color: ticket?.type === 'listing' ? 'var(--accent-800)' : 'var(--text)',
+            border: '1px solid var(--border)',
+            borderColor: ticket?.type === 'listing' ? 'var(--accent-200)' : 'var(--border)',
+            padding: '4px 10px',
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          {formatTicketTypeLabel(ticket?.type)}
+        </span>
+        {ticket?.listing?.id && (
+          <a
+            href={`/trades/${ticket.listing.id}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: 'var(--accent)', fontSize: 13, textDecoration: 'none' }}
+          >
+            Объявление №{ticket.listing.id}
+          </a>
+        )}
+        {ticket?.listing?.region && (
+          <span style={{ fontSize: 12, color: 'var(--text-600)' }}>• {ticket.listing.region}</span>
         )}
       </div>
       <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -461,6 +494,35 @@ export default function AdminSupportPage() {
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                     {selectedTicket.client?.phone || '—'} · {selectedTicket.client?.userCode ? `ID ${selectedTicket.client.userCode}` : 'ID отсутствует'}
                   </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                    <span
+                      style={{
+                        background: selectedTicket.type === 'listing' ? 'var(--accent-50)' : 'var(--surface-2)',
+                        color: selectedTicket.type === 'listing' ? 'var(--accent-800)' : 'var(--text)',
+                        border: '1px solid var(--border)',
+                        borderColor: selectedTicket.type === 'listing' ? 'var(--accent-200)' : 'var(--border)',
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {formatTicketTypeLabel(selectedTicket.type)}
+                    </span>
+                    {selectedTicket.listing?.id && (
+                      <a
+                        href={`/trades/${selectedTicket.listing.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: 'var(--accent)', fontSize: 13, textDecoration: 'none' }}
+                      >
+                        Объявление №{selectedTicket.listing.id}
+                      </a>
+                    )}
+                    {selectedTicket.listing?.region && (
+                      <span style={{ fontSize: 12, color: 'var(--text-600)' }}>• {selectedTicket.listing.region}</span>
+                    )}
+                  </div>
                   <span style={{ fontSize: 12, color: 'var(--text-500)' }}>
                     Статус: {selectedTicket.status === 'closed' ? 'Закрыт' : selectedTicket.assigned?.id === me?.id ? 'В работе' : 'В очереди'} · Последнее сообщение {formatDate(selectedTicket.lastMessageAt)}
                   </span>
