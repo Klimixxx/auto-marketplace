@@ -5,6 +5,7 @@ import { validate as isUUID } from 'uuid';
 import {
   ensureActiveTicketForUser,
   findActiveTicketForUser,
+  ensureListingTicketForUser,
   listMessages,
   addMessage,
   markTicketRead,
@@ -33,7 +34,7 @@ router.get('/tickets/open', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'UNAUTHORIZED' });
 
-    const ticket = await findActiveTicketForUser(userId);
+    const ticket = await findActiveTicketForUser(userId, { type: 'general' });
     if (!ticket) {
       return res.json({ ticket: null, messages: [] });
     }
@@ -66,7 +67,7 @@ router.post('/tickets/open', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'UNAUTHORIZED' });
 
-    const ticket = await ensureActiveTicketForUser(userId);
+    const ticket = await ensureActiveTicketForUser(userId, { type: 'general' });
     if (!ticket) {
       return res.status(500).json({ error: 'FAILED_TO_CREATE_TICKET' });
     }
@@ -75,6 +76,25 @@ router.post('/tickets/open', async (req, res) => {
   } catch (error) {
     console.error('support open ticket error:', error);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
+});
+
+router.post('/tickets/listing', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    const listingId = req.body?.listingId ?? req.body?.listing_id ?? req.query?.listingId;
+    const ticket = await ensureListingTicketForUser(userId, listingId);
+    if (!ticket) {
+      return res.status(500).json({ error: 'FAILED_TO_CREATE_TICKET' });
+    }
+    const messages = await listMessages(ticket.id, { limit: 200 });
+    res.json({ ticket, messages });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error('support open listing ticket error:', error);
+    res.status(status).json({ error: error.message || 'INTERNAL_ERROR' });
   }
 });
 
