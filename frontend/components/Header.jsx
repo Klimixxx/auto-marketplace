@@ -468,7 +468,7 @@ export default function Header({ user }) {
       style={{
         width: "100%",
         position: "sticky",
-        top: 0,␊
+        top: 0,
         zIndex: 4000,
         borderBottom: "none",
         boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08) !important"
@@ -928,6 +928,7 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
 
