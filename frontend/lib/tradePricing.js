@@ -157,9 +157,8 @@ export function computeTradeOrderPrice(listing, {
   depositPercent = DEFAULT_DEPOSIT_PERCENT,
 } = {}) {
   const lotPrice = estimateLotPrice(listing);
-  const depositRaw = resolveDeposit(listing);
-  const depositAmount = depositRaw != null && Number.isFinite(depositRaw) && depositRaw > 0
-    ? Math.round(depositRaw)
+  const depositAmount = lotPrice != null && Number.isFinite(lotPrice) && lotPrice > 0
+    ? Math.round(lotPrice * 0.1)
     : 0;
 
   const normalizedDepositPercent = normalizeDepositPercent(depositPercent);
@@ -190,3 +189,4 @@ export function computeTradeOrderPrice(listing, {
 }
 
 // Никакого export { PRICE_TIERS } — такой константы нет и не нужна.
+
