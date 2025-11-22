@@ -252,9 +252,8 @@ function formatPercentLabel(percent) {
 
 function computePricing(listing, subscriptionStatus, settings) {
   const lotPrice = resolveLotPrice(listing);
-  const depositRaw = resolveDeposit(listing);
-  const depositAmount = depositRaw != null && Number.isFinite(depositRaw) && depositRaw > 0
-    ? Math.round(depositRaw)
+  const depositAmount = lotPrice != null && Number.isFinite(lotPrice) && lotPrice > 0
+    ? Math.round(lotPrice * 0.1)
     : 0;
 
   const configuredPercent = normalizeDepositPercent(settings?.depositPercent);
