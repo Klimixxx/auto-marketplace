@@ -136,17 +136,16 @@ function formatPriceNumber(value) {
 }
 
 function formatPrice(value, currency = "RUB") {
+  const numeric = normalizeNumber(value);
+  if (numeric == null) return value == null || value === "" ? "—" : String(value);
   try {
-    if (value == null || value === "") return "Цена уточняется";
     return new Intl.NumberFormat("ru-RU", {
       style: "currency",
       currency,
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(numeric);
   } catch {
-    return value
-      ? `${formatPriceNumber(value)} ${currency}`
-      : "Цена уточняется";
+    return `${numeric} ${currency}`;
   }
 }
 
@@ -617,7 +616,10 @@ export default function ListingCard({
   // prices
   const tradeTypeInfo = useMemo(() => resolveTradeType(l), [l]);
   const timing = useMemo(() => computeTradeTiming(l), [l]);
-  const listingKind = tradeTypeInfo?.kind || null;
+  const normalizedTradeType = normalizeTradeTypeCode(
+    l?.trade_type_resolved ?? l?.trade_type ?? tradeTypeInfo?.kind,
+  );
+  const listingKind = tradeTypeInfo?.kind || normalizedTradeType || null;
 
   const currency = l.currency || "RUB";
   const startPriceRaw =
@@ -626,14 +628,6 @@ export default function ListingCard({
   const currentPriceRaw =
     l.current_price ??
     pickDetailValue(l, ["current_price", "currentPrice", "price"]);
-  const minPriceRaw =
-    l.min_price ??
-    pickDetailValue(l, [
-      "min_price",
-      "minimal_price",
-      "price_min",
-      "minimum_price",
-    ]);
   const stepRaw = pickDetailValue(l, [
     "auction_step",
     "price_step",
@@ -645,7 +639,6 @@ export default function ListingCard({
   ]);
   const numericStart = normalizeNumber(startPriceRaw);
   const numericCurrent = normalizeNumber(currentPriceRaw);
-  const numericMin = normalizeNumber(minPriceRaw);
   const numericStep = normalizeNumber(stepRaw);
   const numericDeposit = useMemo(() => {
     const periodDeposit = timing?.currentPeriod?.depositNumber;
@@ -703,55 +696,49 @@ export default function ListingCard({
   }, [l, listingKind, numericCurrent, numericStart, timing]);
 
   // исправленный блок расчёта цен
-  let primaryValue = numericCurrent ?? numericStart;
-  let primaryLabel = numericCurrent != null ? "Текущая цена" : "Начальная цена";
+  const summaryStartPrice =
+    numericStart ??
+    timing?.periods?.[0]?.priceNumber ??
+    timing?.periods?.[0]?.minPriceNumber ??
+    null;
+
+  const summaryCurrentPrice =
+    timing?.currentPriceNumber ??
+    numericCurrent ??
+    timing?.currentPeriod?.priceNumber ??
+    timing?.currentPeriod?.minPriceNumber ??
+    numericStart ??
+    null;
+
+  const resolvedCurrentPrice =
+    listingKind === "public_offer"
+      ? summaryCurrentPrice ?? summaryStartPrice ?? null
+      : summaryCurrentPrice;
+
+  let primaryValue = null;
+  let primaryLabel = "Цена";
   let secondaryValue = null;
   let secondaryLabel = null;
 
-  if (listingKind === "open_auction") {
-    primaryValue = numericStart ?? numericCurrent ?? null;
-    primaryLabel = "Начальная цена";
-    if (numericStep != null) {
-      secondaryValue = numericStep;
-      secondaryLabel = "Величина повышения";
-    }
-  } else if (listingKind === "public_offer") {
-    if (numericStart != null) {
-      primaryValue = numericStart;
-      primaryLabel = "Стартовая цена";
-      const resolvedCurrent =
-        timing?.currentPriceNumber ?? numericCurrent ?? numericStart;
-      if (resolvedCurrent != null && Math.abs(resolvedCurrent - numericStart) > 1) {
-        secondaryValue = resolvedCurrent;
-        secondaryLabel = "Текущая цена";
-      }
-    } else if (timing?.currentPriceNumber != null || numericCurrent != null) {
-      primaryValue = timing?.currentPriceNumber ?? numericCurrent ?? null;
-      primaryLabel = primaryValue != null ? "Текущая цена" : "Цена уточняется";
-    } else {
-      primaryValue = null;
-      primaryLabel = "Цена уточняется";
-    }
+  if (listingKind === "public_offer") {
+    primaryValue = resolvedCurrentPrice;
+    primaryLabel = "Текущая цена";
+    secondaryValue = summaryStartPrice;
+    secondaryLabel = "Стартовая цена";
+  } else if (listingKind === "open_auction") {
+    primaryValue = summaryStartPrice;
+    primaryLabel = "Стартовая цена";
+    secondaryValue = numericStep ?? summaryCurrentPrice;
+    secondaryLabel = "Шаг аукциона";
   } else {
-    primaryValue = numericCurrent ?? numericStart ?? null;
-    primaryLabel = numericCurrent != null ? "Текущая цена" : "Начальная цена";
-    if (
-      numericMin != null &&
-      (primaryValue == null || numericMin < primaryValue)
-    ) {
-      secondaryValue = numericMin;
-      secondaryLabel = "Минимальная цена";
-    }
+    primaryValue = summaryStartPrice ?? summaryCurrentPrice ?? null;
+    primaryLabel = "Стартовая цена";
+    secondaryValue = summaryCurrentPrice;
+    secondaryLabel = "Текущая цена";
   }
 
   const priceLabel = formatPrice(primaryValue, currency);
-  const shouldShowSecondaryPrice =
-    secondaryValue != null &&
-    (primaryValue == null ||
-      Math.abs(secondaryValue - primaryValue) > 1 ||
-      (listingKind === "public_offer" && secondaryLabel === "Стартовая цена"));
-
-  const secondaryPriceLabel = shouldShowSecondaryPrice
+  const secondaryPriceLabel = secondaryLabel
     ? formatPrice(secondaryValue, currency)
     : null;
   const depositPriceLabel =
@@ -1672,6 +1659,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
