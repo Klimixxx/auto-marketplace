@@ -643,20 +643,15 @@ export default function ListingCard({
     "increase_step",
     "step_value",
   ]);
-  const depositRaw = pickDetailValue(l, [
-    "deposit",
-    "deposit_amount",
-    "zadatok",
-    "pledge",
-    "bail",
-    "guarantee",
-  ]);
-
   const numericStart = normalizeNumber(startPriceRaw);
   const numericCurrent = normalizeNumber(currentPriceRaw);
   const numericMin = normalizeNumber(minPriceRaw);
   const numericStep = normalizeNumber(stepRaw);
-  const numericDeposit = normalizeNumber(depositRaw);
+  const numericDeposit = (() => {
+    const basePrice = numericCurrent ?? numericStart;
+    if (basePrice == null || !Number.isFinite(basePrice) || basePrice <= 0) return null;
+    return Math.round(basePrice * 0.1);
+  })();
 
   // исправленный блок расчёта цен
   let primaryValue = numericCurrent ?? numericStart;
@@ -1607,6 +1602,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
