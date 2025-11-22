@@ -5,3 +5,4 @@ ALTER TABLE support_tickets
 
 CREATE INDEX IF NOT EXISTS idx_support_tickets_type ON support_tickets(type);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_listing ON support_tickets(listing_id);
+
