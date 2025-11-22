@@ -20,6 +20,7 @@ function formatDateTime(v){ if(!v) return ''; try{ return new Date(v).toLocaleSt
 function formatStatusLabel(s){ return s==='open'?'Ожидает специалиста':s==='assigned'?'В работе':s==='closed'?'Закрыт':'—'; }
 function formatMessagePreview(m){ if(!m) return 'Нет сообщений'; if(m.isSystem) return m.content||'Системное уведомление'; if(m.file) return m.file.name?`Вложение: ${m.file.name}`:'Вложение'; if(m.content?.trim()){const t=m.content.trim(); return t.length>140?`${t.slice(0,137)}…`:t;} return 'Сообщение'; }
 function normalizeMessages(list=[]){ return list.filter(Boolean).slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)); }
+function formatTicketType(type){ return type === 'listing' ? 'По объявлению' : 'Общий вопрос'; }
 
 function MessageBubble({ message, isOwn }) {
   if (message?.isSystem || message?.senderRole === 'system' || message?.contentType === 'system') {
@@ -81,6 +82,7 @@ export default function SupportChatWidget() {
   const [needsLogin, setNeedsLogin] = useState(false);
   const [showClosedBanner, setShowClosedBanner] = useState(false);
   const [closedInfo, setClosedInfo] = useState(null);
+  const [initialTicketId, setInitialTicketId] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
@@ -114,7 +116,16 @@ export default function SupportChatWidget() {
   const isViewingHistory = Boolean(historyViewMode && selectedHistoryId && (!ticket?.id || selectedHistoryId !== ticket.id));
   const canCompose = !loading && !needsLogin && !isTicketClosed && !isViewingHistory;
 
-  useEffect(() => { setIsClient(true); const t=getToken(); if(!t){ setNeedsLogin(true); return; } setAuthToken(t); }, []);
+  useEffect(() => {
+    setIsClient(true);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search || '');
+      const rawId = params.get('ticketId');
+      const parsed = Number(rawId);
+      if (Number.isFinite(parsed) && parsed > 0) setInitialTicketId(parsed);
+    }
+    const t=getToken(); if(!t){ setNeedsLogin(true); return; } setAuthToken(t);
+  }, []);
   useEffect(() => { if(!authToken){ setHistory([]); setSelectedHistoryId(null); setHistoryMessages([]); setHistoryViewMode(false);} }, [authToken]);
 
   useEffect(() => {
@@ -122,7 +133,22 @@ export default function SupportChatWidget() {
     let ignore=false;
     (async () => {
       setLoading(true);
+      setError(null);
       try{
+        if(initialTicketId){
+          const ticketRes = await apiFetch(`/api/support/tickets/${initialTicketId}`);
+          if(!ticketRes.ok) throw new Error('FAILED');
+          const ticketData = await ticketRes.json();
+          const messagesRes = await apiFetch(`/api/support/tickets/${initialTicketId}/messages`);
+          if(!messagesRes.ok) throw new Error('FAILED');
+          const messagesData = await messagesRes.json();
+          if(ignore) return;
+          setTicket(ticketData.ticket||null);
+          setMessages(normalizeMessages(messagesData.messages||[]));
+          setSelectedHistoryId(initialTicketId);
+          setHistoryViewMode(false);
+          return;
+        }
         const res=await apiFetch('/api/support/tickets/open');
         if(!res.ok) throw new Error('FAILED');
         const data=await res.json();
@@ -130,12 +156,13 @@ export default function SupportChatWidget() {
         setTicket(data.ticket||null);
         setMessages(normalizeMessages(data.messages||[]));
       }catch(e){
+        if(initialTicketId){ setInitialTicketId(null); }
         if(!ignore) setError('Не удалось загрузить чат поддержки.');
         console.error(e);
       }finally{ if(!ignore) setLoading(false); }
     })();
     return ()=>{ ignore=true; };
-  }, [authToken]);
+  }, [authToken, initialTicketId]);
 
   useEffect(() => {
     if (!authToken) return;
@@ -266,7 +293,7 @@ export default function SupportChatWidget() {
   function handleExitHistoryView(){ setHistoryViewMode(false); setSelectedHistoryId(ticket?.id || null); }
   function resetClosedState(){
     const s=socketRef.current; if(s && ticket?.id) s.emit('support:leave',{ticketId:ticket.id});
-    setTicket(null); setMessages([]); setShowClosedBanner(false); setClosedInfo(null); setComposer(''); previousTicketRef.current=null; setHistoryViewMode(false);
+    setTicket(null); setMessages([]); setShowClosedBanner(false); setClosedInfo(null); setComposer(''); previousTicketRef.current=null; setHistoryViewMode(false); setInitialTicketId(null);
   }
 
   async function sendMessage(){
@@ -338,6 +365,29 @@ export default function SupportChatWidget() {
                         {formatStatusLabel(selectedHistoryTicket.status)}
                         {selectedHistoryTicket.assigned ? ` • ${formatDisplayName(selectedHistoryTicket.assigned)}` : ''}
                       </p>
+                      <div className="ticket-meta-row">
+                        <span className={`ticket-type ${selectedHistoryTicket.type === 'listing' ? 'listing' : 'general'}`}>
+                          {formatTicketType(selectedHistoryTicket.type)}
+                        </span>
+                        {selectedHistoryTicket.listing ? (
+                          <div className="ticket-listing">
+                            <a
+                              href={`/trades/${selectedHistoryTicket.listing.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ticket-link"
+                            >
+                              Объявление №{selectedHistoryTicket.listing.id}
+                            </a>
+                            {selectedHistoryTicket.listing.title && (
+                              <span className="ticket-listing__title">{selectedHistoryTicket.listing.title}</span>
+                            )}
+                            {selectedHistoryTicket.listing.region && (
+                              <span className="ticket-region">{selectedHistoryTicket.listing.region}</span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                       <p className="history-view-meta">
                         {selectedHistoryTicket.lastMessage?.createdAt || selectedHistoryTicket.updatedAt
                           ? `Обновлено ${formatDateTime(
@@ -359,6 +409,24 @@ export default function SupportChatWidget() {
                     <p>Ваш тикет ведёт {assignedName}. Мы остаёмся на связи.</p>
                   ) : (
                     <p>Ответим на вопросы, поможем с документами и торгами.</p>
+                  )}
+                  {ticket && (
+                    <div className="ticket-meta-row">
+                      <span className={`ticket-type ${ticket.type === 'listing' ? 'listing' : 'general'}`}>
+                        {formatTicketType(ticket.type)}
+                      </span>
+                      {ticket.listing ? (
+                        <div className="ticket-listing">
+                          <a href={`/trades/${ticket.listing.id}`} target="_blank" rel="noreferrer" className="ticket-link">
+                            Объявление №{ticket.listing.id}
+                          </a>
+                          {ticket.listing.title && (
+                            <span className="ticket-listing__title">{ticket.listing.title}</span>
+                          )}
+                          {ticket.listing.region && <span className="ticket-region">{ticket.listing.region}</span>}
+                        </div>
+                      ) : null}
+                    </div>
                   )}
                   {showQueueInfo && (
                     <p className="queue-info">
@@ -461,11 +529,27 @@ export default function SupportChatWidget() {
                           <li key={item.id} className={`history-item ${isActive ? 'active' : ''}`}>
                             <button type="button" onClick={() => handleSelectHistoryTicket(item.id)}>
                               <div className="history-item__row">
+                                <span className={`history-type ${item.type === 'listing' ? 'listing' : 'general'}`}>
+                                  {formatTicketType(item.type)}
+                                </span>
                                 <span className={`history-status status-${item.status || 'unknown'}`}>{formatStatusLabel(item.status)}</span>
                                 <span className="history-time">{formatDateTime(timestamp)}</span>
                               </div>
                               <div className="history-subject">{specialist ? `Специалист: ${specialist}` : 'Ожидает назначения'}</div>
                               <div className="history-preview-text">{formatMessagePreview(item.lastMessage)}</div>
+                              {item.listing ? (
+                                <div className="history-listing">
+                                  <a
+                                    href={`/trades/${item.listing.id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="ticket-link"
+                                  >
+                                    Объявление №{item.listing.id}
+                                  </a>
+                                  {item.listing.region && <span className="history-region">{item.listing.region}</span>}
+                                </div>
+                              ) : null}
                               {item.status === 'open' && itemQueuePos && (
                                 <div className="history-queue">В очереди: {itemQueuePos}{itemQueueTotal ? ` из ${itemQueueTotal}` : ''}</div>
                               )}
@@ -512,6 +596,18 @@ export default function SupportChatWidget() {
         .badge{min-width:22px;padding:2px 8px;border-radius:999px;background:${palette.badgeBg};color:${palette.badgeText};font-size:12px;text-align:center;}
         .status{font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
         .status.online{color:var(--green-600);} .status.offline{color:${palette.muted};}
+        .ticket-meta-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;}
+        .ticket-type{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.01em;background:var(--surface-2);color:${palette.text};border:1px solid ${palette.border};}
+        .ticket-type.listing{background:var(--accent-50);color:var(--accent-800, ${palette.primary});border-color:var(--accent-200);}
+        .ticket-listing{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+        .ticket-link{color:${palette.primary};font-weight:600;text-decoration:none;}
+        .ticket-link:hover{text-decoration:underline;}
+        .ticket-listing__title{color:${palette.text};font-size:13px;}
+        .ticket-region{padding:2px 8px;border-radius:10px;background:var(--surface-2);color:${palette.text};font-size:12px;}
+        .history-type{padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid ${palette.border};text-transform:uppercase;letter-spacing:.03em;color:${palette.text};}
+        .history-type.listing{background:var(--accent-50);border-color:var(--accent-200);color:var(--accent-800, ${palette.primary});}
+        .history-listing{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;align-items:center;}
+        .history-region{font-size:12px;color:${palette.text};background:var(--surface-2);padding:2px 8px;border-radius:10px;}
 
         /* ——— ЛЕЙАУТ: фиксируем две колонки и запрещаем перенос ——— */
         .support-layout{
