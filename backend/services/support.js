@@ -260,24 +260,36 @@ export async function ensureListingTicketForUser(clientId, listingId) {
     throw err;
   }
 
-  const numericListingId = Number(listingId);
-  if (!Number.isFinite(numericListingId) || numericListingId <= 0) {
+  const normalizedListingId = String(listingId ?? '')?.trim();
+  if (!normalizedListingId) {
     const err = new Error('INVALID_LISTING');
     err.statusCode = 400;
     throw err;
   }
 
+  const numericCandidate = Number(normalizedListingId);
+  const numericListingId = Number.isFinite(numericCandidate) && numericCandidate > 0 ? numericCandidate : null;
+
   const { rows: listingRows } = await query(
     `SELECT id, title, region, city, region_code, published
        FROM listings
-      WHERE id = $1 AND published = TRUE
+      WHERE published = TRUE
+        AND ( ( $1::int IS NOT NULL AND id = $1::int )
+              OR ( $2::text IS NOT NULL AND source_id = $2::text ) )
       LIMIT 1`,
-    [numericListingId]
+    [numericListingId, normalizedListingId]
   );
   const listing = listingRows[0];
   if (!listing) {
     const err = new Error('LISTING_NOT_FOUND');
     err.statusCode = 404;
+    throw err;
+  }
+
+  const listingIdNumeric = Number(listing.id);
+  if (!Number.isFinite(listingIdNumeric) || listingIdNumeric <= 0) {
+    const err = new Error('INVALID_LISTING');
+    err.statusCode = 400;
     throw err;
   }
 
@@ -289,7 +301,7 @@ export async function ensureListingTicketForUser(clientId, listingId) {
        AND t.status IN ('open', 'assigned')
      ORDER BY t.created_at DESC
      LIMIT 1`,
-    [clientId, numericListingId]
+    [clientId, listingIdNumeric]
   );
   if (existingRows[0]) {
     return attachTicketMeta(mapTicketRow(existingRows[0]));
@@ -297,7 +309,7 @@ export async function ensureListingTicketForUser(clientId, listingId) {
 
   const subject = listing.title
     ? `Консультация по объявлению «${listing.title}»`
-    : `Консультация по объявлению #${numericListingId}`;
+    : `Консультация по объявлению #${listingIdNumeric}`;
   const regionSnapshot = listing.region || listing.region_code || listing.city || null;
 
   const inserted = await query(
@@ -305,7 +317,7 @@ export async function ensureListingTicketForUser(clientId, listingId) {
        (client_id, status, type, listing_id, listing_region, subject, created_at, updated_at, last_message_at)
      VALUES ($1::uuid, 'open', 'listing', $2, $3, $4, now(), now(), now())
      RETURNING id`,
-    [clientId, numericListingId, regionSnapshot, subject]
+    [clientId, listingIdNumeric, regionSnapshot, subject]
   );
 
   const ticketId = inserted.rows[0]?.id;
