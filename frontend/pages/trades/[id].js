@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import TradeOrderModal from "../../components/TradeOrderModal";
 import InspectionModal from "../../components/InspectionModal";
 import AutotekaModal from "../../components/AutotekaModal";
@@ -649,6 +650,8 @@ export default function ListingPage({ item }) {
   const listingIdRaw =
     listingIdentifier != null ? String(listingIdentifier).trim() : "";
 
+  const router = useRouter();
+
   const timing = computeTradeTiming(item || {});
   const statusInfo = timing?.status || null;
   const periods = Array.isArray(timing?.periods) ? timing.periods : [];
@@ -928,6 +931,8 @@ export default function ListingPage({ item }) {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isPhotoLightboxOpen, setIsPhotoLightboxOpen] = useState(false);
   const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0);
+  const [contactingManager, setContactingManager] = useState(false);
+  const [contactError, setContactError] = useState(null);
 
   function handleOrderClick() {
     const token =
@@ -946,6 +951,40 @@ export default function ListingPage({ item }) {
 
   function handleAutotekaClick() {
     setOpenAutotekaModal(true);
+  }
+
+  async function handleContactManager() {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      const next = `/trades/${listingIdRaw || ""}`;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      return;
+    }
+    if (!listingIdRaw || contactingManager) return;
+    setContactError(null);
+    setContactingManager(true);
+    try {
+      const res = await fetch(buildApiUrl("/api/support/tickets/listing"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ listingId: listingIdRaw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ticket?.id) {
+        throw new Error(data?.error || "FAILED_TO_CREATE");
+      }
+      const targetTicketId = data.ticket.id;
+      router.push(`/support?ticketId=${targetTicketId}`);
+    } catch (error) {
+      console.error("contact manager error", error);
+      setContactError("Не удалось создать обращение. Попробуйте позже.");
+    } finally {
+      setContactingManager(false);
+    }
   }
 
   const photos = collectPhotos(details);
@@ -1099,6 +1138,14 @@ export default function ListingPage({ item }) {
   const fedresursMeta = details?.fedresurs_meta;
 
   const actionButtons = [
+    {
+      key: "contactManager",
+      label: contactingManager ? "Открываем чат..." : "Связаться с менеджером",
+      onClick: handleContactManager,
+      className: "button button-outline",
+      disabled: contactingManager,
+      title: "Создать тикет для консультации по объявлению",
+    },
     {
       key: "participate",
       label: "Участвовать в торгах",
@@ -1356,6 +1403,9 @@ export default function ListingPage({ item }) {
                 ),
               )}
             </div>
+            {contactError && (
+              <div style={{ color: "#dc2626", marginTop: 8, fontSize: 14 }}>{contactError}</div>
+            )}
           </div>
         </div>
       </div>
@@ -1713,6 +1763,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
