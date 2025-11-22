@@ -9,7 +9,7 @@ import {
   formatTradeTypeLabel,
   normalizeTradeTypeCode,
 } from "../lib/tradeTypes";
-import computeTradeTiming from "../lib/tradeTiming";
+import computeTradeTiming, { parseDateLike } from "../lib/tradeTiming";
 
 /* ---- helpers ----------------------------------------------------------- */
 
@@ -640,67 +640,156 @@ export default function ListingCard({
   const numericStart = normalizeNumber(startPriceRaw);
   const numericCurrent = normalizeNumber(currentPriceRaw);
   const numericStep = normalizeNumber(stepRaw);
-  const numericDeposit = useMemo(() => {
-    const periodDeposit = timing?.currentPeriod?.depositNumber;
-    const explicitDeposit = normalizeNumber(
-      pickDetailValue(l, [
-        "deposit",
-        "deposit_amount",
-        "depositAmount",
-        "deposit_sum",
-        "depositSum",
-        "pledge",
-        "pledge_amount",
-        "pledgeAmount",
-      ]),
-    );
-    const depositPercent = normalizeNumber(
-      pickDetailValue(l, [
-        "deposit_percentage",
-        "deposit_percent",
-        "depositPercent",
-        "deposit_rate",
-        "pledge_percent",
-        "pledgePercent",
-      ]),
-    );
-    const basePrice = (() => {
-      if (listingKind === "public_offer") {
-        return (
-          timing?.currentPriceNumber ??
-          timing?.currentPeriod?.priceNumber ??
-          timing?.currentPeriod?.minPriceNumber ??
-          numericCurrent ??
-          numericStart
-        );
-      }
-      if (listingKind === "open_auction") {
-        return numericStart ?? numericCurrent ?? timing?.currentPriceNumber ?? null;
-      }
-      return numericCurrent ?? numericStart ?? timing?.currentPriceNumber ?? null;
-    })();
-
-    if (listingKind === "public_offer" && periodDeposit != null) return periodDeposit;
-    if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
-    if (
-      depositPercent != null &&
-      depositPercent > 0 &&
-      basePrice != null &&
-      Number.isFinite(basePrice) &&
-      basePrice > 0
-    ) {
-      return Math.round((basePrice * depositPercent) / 100);
-    }
-    if (basePrice == null || !Number.isFinite(basePrice) || basePrice <= 0) return null;
-    return Math.round(basePrice * 0.1);
-  }, [l, listingKind, numericCurrent, numericStart, timing]);
-
   // исправленный блок расчёта цен
   const summaryStartPrice =
     numericStart ??
     timing?.periods?.[0]?.priceNumber ??
     timing?.periods?.[0]?.minPriceNumber ??
     null;
+
+  const priceHistoryEntries = useMemo(() => {
+    const details = l?.details && typeof l.details === "object" ? l.details : {};
+
+    const pools = [
+      Array.isArray(details?.prices) ? details.prices : [],
+      Array.isArray(l?.prices) ? l.prices : [],
+      extractPeriodPrices(l),
+    ];
+
+    const mapped = pools
+      .flat()
+      .filter((entry) => entry && typeof entry === "object")
+      .map((entry, index) => {
+        const priceNumber = normalizeNumber(
+          entry.price ??
+            entry.currentPrice ??
+            entry.current_price ??
+            entry.startPrice ??
+            entry.start_price ??
+            entry.value ??
+            entry.amount,
+        );
+        const fallbackPrice =
+          entry.price ??
+          entry.currentPrice ??
+          entry.current_price ??
+          entry.startPrice ??
+          entry.start_price ??
+          entry.value ??
+          entry.amount ??
+          "—";
+        const depositBasePrice =
+          priceNumber != null
+            ? priceNumber
+            : normalizeNumber(
+                entry.price ??
+                  entry.currentPrice ??
+                  entry.current_price ??
+                  entry.startPrice ??
+                  entry.start_price ??
+                  entry.value ??
+                  entry.amount,
+              );
+        const depositNumber =
+          depositBasePrice != null &&
+          Number.isFinite(depositBasePrice) &&
+          depositBasePrice > 0
+            ? Math.round(depositBasePrice * 0.1)
+            : null;
+        const rawStartDate =
+          entry.date_start ??
+          entry.start_date ??
+          entry.period_start ??
+          entry.dateBegin ??
+          entry.date_from ??
+          entry.begin ??
+          entry.start ??
+          entry.date ??
+          entry.updated_at ??
+          entry.updatedAt;
+        const rawEndDate =
+          entry.date_finish ??
+          entry.dateFinish ??
+          entry.end_date ??
+          entry.date_end ??
+          entry.period_end ??
+          entry.date_to ??
+          entry.finish ??
+          entry.end ??
+          rawStartDate;
+
+        return {
+          key: entry.id || `history-${index}`,
+          priceNumber,
+          fallbackPrice,
+          depositNumber,
+          startDate: parseDateLike(rawStartDate),
+          endDate: parseDateLike(rawEndDate),
+        };
+      })
+      .sort((a, b) => {
+        const aTs = a.startDate?.getTime() ?? a.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+        const bTs = b.startDate?.getTime() ?? b.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+        return aTs - bTs;
+      })
+      .map((entry, index, arr) => {
+        const nextStartDate = arr[index + 1]?.startDate ?? null;
+        const startTs = entry.startDate?.getTime() ?? null;
+        const endTs = entry.endDate?.getTime() ?? null;
+        let adjustedEndDate = entry.endDate;
+
+        if (startTs != null && endTs != null && startTs === endTs) {
+          adjustedEndDate = nextStartDate ?? null;
+        } else if (endTs == null && nextStartDate) {
+          adjustedEndDate = nextStartDate;
+        }
+
+        return { ...entry, endDate: adjustedEndDate };
+      });
+
+    return mapped;
+  }, [l]);
+
+  const { currentPriceFromHistory, depositFromCurrentPeriod } = useMemo(() => {
+    if (listingKind !== "public_offer" || priceHistoryEntries.length === 0)
+      return { currentPriceFromHistory: null, depositFromCurrentPeriod: null };
+
+    const nowTs = Date.now();
+    let latestPrice = null;
+    let latestDeposit = null;
+    let latestTimestamp = null;
+
+    for (const entry of priceHistoryEntries) {
+      const { priceNumber, depositNumber, startDate, endDate } = entry;
+      if (priceNumber == null) continue;
+
+      const startTs = startDate ? startDate.getTime() : null;
+      const endTs = endDate ? endDate.getTime() : null;
+      const isCurrent =
+        (startTs == null || nowTs >= startTs) && (endTs == null || nowTs < endTs);
+
+      if (isCurrent)
+        return {
+          currentPriceFromHistory: priceNumber,
+          depositFromCurrentPeriod: depositNumber,
+        };
+
+      const candidateTs = startTs ?? endTs;
+      if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
+        latestTimestamp = candidateTs;
+        latestPrice = priceNumber;
+        latestDeposit = depositNumber ?? latestDeposit;
+      } else if (latestTimestamp == null && latestPrice == null) {
+        latestPrice = priceNumber;
+        latestDeposit = depositNumber ?? latestDeposit;
+      }
+    }
+
+    return {
+      currentPriceFromHistory: latestPrice,
+      depositFromCurrentPeriod: latestDeposit,
+    };
+  }, [listingKind, priceHistoryEntries]);
 
   const summaryCurrentPrice =
     timing?.currentPriceNumber ??
@@ -711,7 +800,9 @@ export default function ListingCard({
     null;
 
   const resolvedCurrentPrice =
-    listingKind === "public_offer"
+    listingKind === "public_offer" && currentPriceFromHistory != null
+      ? currentPriceFromHistory
+      : listingKind === "public_offer"
       ? summaryCurrentPrice ?? summaryStartPrice ?? null
       : summaryCurrentPrice;
 
@@ -736,6 +827,62 @@ export default function ListingCard({
     secondaryValue = summaryCurrentPrice;
     secondaryLabel = "Текущая цена";
   }
+
+  const numericDeposit = useMemo(() => {
+    const periodDeposit = depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber;
+    const explicitDeposit = normalizeNumber(
+      pickDetailValue(l, [
+        "deposit",
+        "deposit_amount",
+        "depositAmount",
+        "deposit_sum",
+        "depositSum",
+        "pledge",
+        "pledge_amount",
+        "pledgeAmount",
+      ]),
+    );
+    const depositPercent = normalizeNumber(
+      pickDetailValue(l, [
+        "deposit_percentage",
+        "deposit_percent",
+        "depositPercent",
+        "deposit_rate",
+        "pledge_percent",
+        "pledgePercent",
+      ]),
+    );
+    const basePrice = (() => {
+      if (listingKind === "public_offer") {
+        return resolvedCurrentPrice ?? summaryStartPrice ?? null;
+      }
+      if (listingKind === "open_auction") {
+        return summaryStartPrice ?? resolvedCurrentPrice ?? null;
+      }
+      return resolvedCurrentPrice ?? summaryStartPrice ?? null;
+    })();
+
+    if (listingKind === "public_offer" && periodDeposit != null) return periodDeposit;
+    if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
+    if (
+      depositPercent != null &&
+      depositPercent > 0 &&
+      basePrice != null &&
+      Number.isFinite(basePrice) &&
+      basePrice > 0
+    ) {
+      return Math.round((basePrice * depositPercent) / 100);
+    }
+    if (basePrice == null || !Number.isFinite(basePrice) || basePrice <= 0) return null;
+    return Math.round(basePrice * 0.1);
+  }, [
+    depositFromCurrentPeriod,
+    l,
+    listingKind,
+    resolvedCurrentPrice,
+    summaryStartPrice,
+    timing,
+  ]);
 
   const priceLabel = formatPrice(primaryValue, currency);
   const secondaryPriceLabel = secondaryLabel
@@ -1659,6 +1806,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
