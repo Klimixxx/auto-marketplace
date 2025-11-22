@@ -733,8 +733,8 @@ export default function ListingPage({ item }) {
   );
   const isOpenAuction = normalizedTradeType === "open_auction";
   const isPublicOffer = normalizedTradeType === "public_offer";
-  const normalizedPriceHistory = prices
-    .map((entry, index) => {
+  const normalizedPriceHistory = (() => {
+    const mapped = prices.map((entry, index) => {
       const priceNumber = parseNumberValue(
         entry.price ??
           entry.currentPrice ??
@@ -799,12 +799,32 @@ export default function ListingPage({ item }) {
         startDate: parseDateLike(rawStartDate),
         endDate: parseDateLike(rawEndDate),
       };
-    })
-    .sort((a, b) => {
+    });
+
+    const sorted = mapped.sort((a, b) => {
       const aTs = a.startDate?.getTime() ?? a.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
       const bTs = b.startDate?.getTime() ?? b.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
       return aTs - bTs;
     });
+
+    return sorted.map((entry, index) => {
+      const nextStartDate = sorted[index + 1]?.startDate ?? null;
+      const startTs = entry.startDate?.getTime() ?? null;
+      const endTs = entry.endDate?.getTime() ?? null;
+      let adjustedEndDate = entry.endDate;
+
+      if (startTs != null && endTs != null && startTs === endTs) {
+        adjustedEndDate = nextStartDate ?? null;
+      } else if (endTs == null && nextStartDate) {
+        adjustedEndDate = nextStartDate;
+      }
+
+      return {
+        ...entry,
+        endDate: adjustedEndDate,
+      };
+    });
+  })();
   const currentPriceFromHistory = (() => {
     if (!isPublicOffer || normalizedPriceHistory.length === 0) return null;
     const nowTs = Date.now();
@@ -939,8 +959,6 @@ export default function ListingPage({ item }) {
       entry.priceNumber != null
         ? fmtPrice(entry.priceNumber, currency)
         : formatValueForDisplay("price", entry.fallbackPrice);
-    const depositText =
-      entry.depositNumber != null ? fmtPrice(entry.depositNumber, currency) : "—";
     const startText = entry.startDate ? formatDateTime(entry.startDate) : "—";
     const endText = entry.endDate ? formatDateTime(entry.endDate) : "—";
 
@@ -953,6 +971,13 @@ export default function ListingPage({ item }) {
     } else if (endTs != null && nowTs >= endTs) {
       state = "past";
     }
+
+    const depositNumber =
+      isPublicOffer && state === "current" && timing?.currentPeriod?.depositNumber != null
+        ? timing.currentPeriod.depositNumber
+        : entry.depositNumber;
+    const depositText =
+      depositNumber != null ? fmtPrice(depositNumber, currency) : "—";
 
     return {
       key: entry.key,
@@ -1806,6 +1831,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
