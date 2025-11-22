@@ -936,7 +936,7 @@ export default function ListingPage({ item }) {
         label: "Текущая цена",
         value: fmtPrice(resolvedCurrentPrice, currency),
       });
-      blocks.push({␊
+      blocks.push({
         label: "Стартовая цена",
         value: fmtPrice(summaryStartPrice, currency),
       });
@@ -1840,6 +1840,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
