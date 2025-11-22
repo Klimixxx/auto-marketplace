@@ -733,6 +733,102 @@ export default function ListingPage({ item }) {
   );
   const isOpenAuction = normalizedTradeType === "open_auction";
   const isPublicOffer = normalizedTradeType === "public_offer";
+  const normalizedPriceHistory = prices.map((entry, index) => {
+    const priceNumber = parseNumberValue(
+      entry.price ??
+        entry.currentPrice ??
+        entry.current_price ??
+        entry.startPrice ??
+        entry.start_price ??
+        entry.value ??
+        entry.amount,
+    );
+    const fallbackPrice =
+      entry.price ??
+      entry.currentPrice ??
+      entry.current_price ??
+      entry.startPrice ??
+      entry.start_price ??
+      entry.value ??
+      entry.amount ??
+      "—";
+    const depositBasePrice =
+      priceNumber != null
+        ? priceNumber
+        : parseNumberValue(
+            entry.price ??
+              entry.currentPrice ??
+              entry.current_price ??
+              entry.startPrice ??
+              entry.start_price ??
+              entry.value ??
+              entry.amount,
+          );
+    const depositNumber =
+      depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
+        ? Math.round(depositBasePrice * 0.1)
+        : null;
+    const rawStartDate =
+      entry.date_start ??
+      entry.start_date ??
+      entry.period_start ??
+      entry.dateBegin ??
+      entry.date_from ??
+      entry.begin ??
+      entry.start ??
+      entry.date ??
+      entry.updated_at ??
+      entry.updatedAt;
+    const rawEndDate =
+      entry.date_finish ??
+      entry.dateFinish ??
+      entry.end_date ??
+      entry.date_end ??
+      entry.period_end ??
+      entry.date_to ??
+      entry.finish ??
+      entry.end ??
+      rawStartDate;
+
+    return {
+      key: entry.id || `history-${index}`,
+      priceNumber,
+      fallbackPrice,
+      depositNumber,
+      startDate: parseDateLike(rawStartDate),
+      endDate: parseDateLike(rawEndDate),
+    };
+  });
+  const currentPriceFromHistory = (() => {
+    if (!isPublicOffer || normalizedPriceHistory.length === 0) return null;
+    const nowTs = Date.now();
+    let latestPrice = null;
+    let latestTimestamp = null;
+
+    for (const entry of normalizedPriceHistory) {
+      const { priceNumber, startDate, endDate } = entry;
+      if (priceNumber == null) continue;
+
+      const startTs = startDate ? startDate.getTime() : null;
+      const endTs = endDate ? endDate.getTime() : null;
+      const isCurrent = (startTs == null || nowTs >= startTs) && (endTs == null || nowTs < endTs);
+      if (isCurrent) return priceNumber;
+
+      const candidateTs = startTs ?? endTs;
+      if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
+        latestTimestamp = candidateTs;
+        latestPrice = priceNumber;
+      } else if (latestTimestamp == null && latestPrice == null) {
+        latestPrice = priceNumber;
+      }
+    }
+
+    return latestPrice;
+  })();
+  const resolvedCurrentPrice =
+    isPublicOffer && currentPriceFromHistory != null
+      ? currentPriceFromHistory
+      : summaryCurrentPrice;
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
   const summaryAuctionStep =
@@ -741,9 +837,9 @@ export default function ListingPage({ item }) {
       : summaryAuctionStepRaw;
 
   const depositBasePrice = (() => {
-    if (isPublicOffer) return summaryCurrentPrice ?? summaryStartPrice ?? null;
-    if (isOpenAuction) return summaryStartPrice ?? summaryCurrentPrice ?? null;
-    return summaryCurrentPrice ?? summaryStartPrice ?? null;
+    if (isPublicOffer) return resolvedCurrentPrice ?? summaryStartPrice ?? null;
+    if (isOpenAuction) return summaryStartPrice ?? resolvedCurrentPrice ?? null;
+    return resolvedCurrentPrice ?? summaryStartPrice ?? null;
   })();
 
   const explicitDeposit = pickNumericFromSources(
@@ -832,78 +928,19 @@ export default function ListingPage({ item }) {
     return blocks;
   })();
 
-  const priceHistoryEntries = prices.map((entry, index) => {
-    const priceNumber = parseNumberValue(
-      entry.price ??
-        entry.currentPrice ??
-        entry.current_price ??
-        entry.startPrice ??
-        entry.start_price ??
-        entry.value ??
-        entry.amount,
-    );
-    const fallbackPrice =
-      entry.price ??
-      entry.currentPrice ??
-      entry.current_price ??
-      entry.startPrice ??
-      entry.start_price ??
-      entry.value ??
-      entry.amount ??
-      "—";
-    const depositBasePrice =
-      priceNumber != null
-        ? priceNumber
-        : parseNumberValue(
-            entry.price ??
-              entry.currentPrice ??
-              entry.current_price ??
-              entry.startPrice ??
-              entry.start_price ??
-              entry.value ??
-              entry.amount,
-          );
-    const depositNumber =
-      depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
-        ? Math.round(depositBasePrice * 0.1)
-        : null;
-    const rawStartDate =
-      entry.date_start ??
-      entry.start_date ??
-      entry.period_start ??
-      entry.dateBegin ??
-      entry.date_from ??
-      entry.begin ??
-      entry.start ??
-      entry.date ??
-      entry.updated_at ??
-      entry.updatedAt;
-    const rawEndDate =
-      entry.date_finish ??
-      entry.dateFinish ??
-      entry.end_date ??
-      entry.date_end ??
-      entry.period_end ??
-      entry.date_to ??
-      entry.finish ??
-      entry.end ??
-      rawStartDate;
-
-    const startDate = parseDateLike(rawStartDate);
-    const endDate = parseDateLike(rawEndDate);
-
+  const priceHistoryEntries = normalizedPriceHistory.map((entry) => {
     const priceText =
-      priceNumber != null
-        ? fmtPrice(priceNumber, currency)
-        : formatValueForDisplay("price", fallbackPrice);
+      entry.priceNumber != null
+        ? fmtPrice(entry.priceNumber, currency)
+        : formatValueForDisplay("price", entry.fallbackPrice);
     const depositText =
-      depositNumber != null ? fmtPrice(depositNumber, currency) : "—";
-    const startText = startDate ? formatDateTime(startDate) : "—";
-    const endText = endDate ? formatDateTime(endDate) : "—";
+      entry.depositNumber != null ? fmtPrice(entry.depositNumber, currency) : "—";
+    const startText = entry.startDate ? formatDateTime(entry.startDate) : "—";
+    const endText = entry.endDate ? formatDateTime(entry.endDate) : "—";
 
     const nowTs = Date.now();
-    const startTs = startDate ? startDate.getTime() : null;
-    const endTs = endDate ? endDate.getTime() : null;
+    const startTs = entry.startDate ? entry.startDate.getTime() : null;
+    const endTs = entry.endDate ? entry.endDate.getTime() : null;
     let state = "default";
     if (startTs != null && nowTs >= startTs && (endTs == null || nowTs < endTs)) {
       state = "current";
@@ -912,7 +949,7 @@ export default function ListingPage({ item }) {
     }
 
     return {
-      key: entry.id || `history-${index}`,
+      key: entry.key,
       priceText,
       depositText,
       startText,
@@ -1763,6 +1800,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
