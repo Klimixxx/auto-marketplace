@@ -91,7 +91,10 @@ function MultiSelectDropdown({
   }, [selectedValues, options, placeholder, getOptionValue, getOptionLabel]);
 
   return (
-    <div className="multiselect-dropdown" ref={dropdownRef}>
+     <div
+      className={`multiselect-dropdown ${isOpen ? 'is-open' : ''}`}
+      ref={dropdownRef}
+    >
       <div 
         className="multiselect-trigger"
         onClick={() => setIsOpen(!isOpen)}
@@ -170,11 +173,14 @@ function MultiSelectDropdown({
       )}
 
       <style jsx>{`
-        .multiselect-dropdown {
+       .multiselect-dropdown {
           position: relative;
           width: 100%;
         }
 
+        .multiselect-dropdown.is-open {
+          z-index: 2000;
+        }
         .multiselect-trigger {
           width: 100%;
           height: 36px;
@@ -231,7 +237,7 @@ function MultiSelectDropdown({
           border: 1px solid var(--line);
           border-radius: 10px;
           box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
-          z-index: 1000;
+          z-index: 2100;
           max-height: 320px;
           display: flex;
           flex-direction: column;
@@ -700,3 +706,4 @@ export default function FilterBar({
   );
 
 }
+
