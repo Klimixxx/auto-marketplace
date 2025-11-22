@@ -733,72 +733,78 @@ export default function ListingPage({ item }) {
   );
   const isOpenAuction = normalizedTradeType === "open_auction";
   const isPublicOffer = normalizedTradeType === "public_offer";
-  const normalizedPriceHistory = prices.map((entry, index) => {
-    const priceNumber = parseNumberValue(
-      entry.price ??
+  const normalizedPriceHistory = prices
+    .map((entry, index) => {
+      const priceNumber = parseNumberValue(
+        entry.price ??
+          entry.currentPrice ??
+          entry.current_price ??
+          entry.startPrice ??
+          entry.start_price ??
+          entry.value ??
+          entry.amount,
+      );
+      const fallbackPrice =
+        entry.price ??
         entry.currentPrice ??
         entry.current_price ??
         entry.startPrice ??
         entry.start_price ??
         entry.value ??
-        entry.amount,
-    );
-    const fallbackPrice =
-      entry.price ??
-      entry.currentPrice ??
-      entry.current_price ??
-      entry.startPrice ??
-      entry.start_price ??
-      entry.value ??
-      entry.amount ??
-      "—";
-    const depositBasePrice =
-      priceNumber != null
-        ? priceNumber
-        : parseNumberValue(
-            entry.price ??
-              entry.currentPrice ??
-              entry.current_price ??
-              entry.startPrice ??
-              entry.start_price ??
-              entry.value ??
-              entry.amount,
-          );
-    const depositNumber =
-      depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
-        ? Math.round(depositBasePrice * 0.1)
-        : null;
-    const rawStartDate =
-      entry.date_start ??
-      entry.start_date ??
-      entry.period_start ??
-      entry.dateBegin ??
-      entry.date_from ??
-      entry.begin ??
-      entry.start ??
-      entry.date ??
-      entry.updated_at ??
-      entry.updatedAt;
-    const rawEndDate =
-      entry.date_finish ??
-      entry.dateFinish ??
-      entry.end_date ??
-      entry.date_end ??
-      entry.period_end ??
-      entry.date_to ??
-      entry.finish ??
-      entry.end ??
-      rawStartDate;
+        entry.amount ??
+        "—";
+      const depositBasePrice =
+        priceNumber != null
+          ? priceNumber
+          : parseNumberValue(
+              entry.price ??
+                entry.currentPrice ??
+                entry.current_price ??
+                entry.startPrice ??
+                entry.start_price ??
+                entry.value ??
+                entry.amount,
+            );
+      const depositNumber =
+        depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
+          ? Math.round(depositBasePrice * 0.1)
+          : null;
+      const rawStartDate =
+        entry.date_start ??
+        entry.start_date ??
+        entry.period_start ??
+        entry.dateBegin ??
+        entry.date_from ??
+        entry.begin ??
+        entry.start ??
+        entry.date ??
+        entry.updated_at ??
+        entry.updatedAt;
+      const rawEndDate =
+        entry.date_finish ??
+        entry.dateFinish ??
+        entry.end_date ??
+        entry.date_end ??
+        entry.period_end ??
+        entry.date_to ??
+        entry.finish ??
+        entry.end ??
+        rawStartDate;
 
-    return {
-      key: entry.id || `history-${index}`,
-      priceNumber,
-      fallbackPrice,
-      depositNumber,
-      startDate: parseDateLike(rawStartDate),
-      endDate: parseDateLike(rawEndDate),
-    };
-  });
+      return {
+        key: entry.id || `history-${index}`,
+        priceNumber,
+        fallbackPrice,
+        depositNumber,
+        startDate: parseDateLike(rawStartDate),
+        endDate: parseDateLike(rawEndDate),
+      };
+    })
+    .sort((a, b) => {
+      const aTs = a.startDate?.getTime() ?? a.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+      const bTs = b.startDate?.getTime() ?? b.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+      return aTs - bTs;
+    });
   const currentPriceFromHistory = (() => {
     if (!isPublicOffer || normalizedPriceHistory.length === 0) return null;
     const nowTs = Date.now();
@@ -1800,6 +1806,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
