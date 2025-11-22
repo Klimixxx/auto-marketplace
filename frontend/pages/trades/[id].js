@@ -825,31 +825,37 @@ export default function ListingPage({ item }) {
       };
     });
   })();
-  const currentPriceFromHistory = (() => {
-    if (!isPublicOffer || normalizedPriceHistory.length === 0) return null;
+  const { price: currentPriceFromHistory, deposit: depositFromCurrentPeriod } = (() => {
+    if (!isPublicOffer || normalizedPriceHistory.length === 0)
+      return { price: null, deposit: null };
     const nowTs = Date.now();
     let latestPrice = null;
+    let latestDeposit = null;
     let latestTimestamp = null;
 
     for (const entry of normalizedPriceHistory) {
-      const { priceNumber, startDate, endDate } = entry;
+      const { priceNumber, depositNumber, startDate, endDate } = entry;
       if (priceNumber == null) continue;
 
       const startTs = startDate ? startDate.getTime() : null;
       const endTs = endDate ? endDate.getTime() : null;
-      const isCurrent = (startTs == null || nowTs >= startTs) && (endTs == null || nowTs < endTs);
-      if (isCurrent) return priceNumber;
+      const isCurrent =
+        (startTs == null || nowTs >= startTs) &&
+        (endTs == null || nowTs < endTs);
+      if (isCurrent) return { price: priceNumber, deposit: depositNumber };
 
       const candidateTs = startTs ?? endTs;
       if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
         latestTimestamp = candidateTs;
         latestPrice = priceNumber;
+        latestDeposit = depositNumber ?? latestDeposit;
       } else if (latestTimestamp == null && latestPrice == null) {
         latestPrice = priceNumber;
+        latestDeposit = depositNumber ?? latestDeposit;
       }
     }
 
-    return latestPrice;
+    return { price: latestPrice, deposit: latestDeposit };
   })();
   const resolvedCurrentPrice =
     isPublicOffer && currentPriceFromHistory != null
@@ -895,8 +901,11 @@ export default function ListingPage({ item }) {
   );
 
   const summaryDeposit = (() => {
-    if (isPublicOffer && timing?.currentPeriod?.depositNumber != null)
-      return timing.currentPeriod.depositNumber;
+    if (isPublicOffer) {
+      if (depositFromCurrentPeriod != null) return depositFromCurrentPeriod;
+      if (timing?.currentPeriod?.depositNumber != null)
+        return timing.currentPeriod.depositNumber;
+    }
     if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
     if (
       depositPercent != null &&
@@ -925,9 +934,9 @@ export default function ListingPage({ item }) {
     if (isPublicOffer) {
       blocks.push({
         label: "Текущая цена",
-        value: fmtPrice(summaryCurrentPrice, currency),
+        value: fmtPrice(resolvedCurrentPrice, currency),
       });
-      blocks.push({
+      blocks.push({␊
         label: "Стартовая цена",
         value: fmtPrice(summaryStartPrice, currency),
       });
@@ -1831,6 +1840,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
