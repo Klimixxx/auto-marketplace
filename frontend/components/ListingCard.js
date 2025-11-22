@@ -714,9 +714,6 @@ export default function ListingCard({
     if (numericStep != null) {
       secondaryValue = numericStep;
       secondaryLabel = "Величина повышения";
-    } else if (numericDeposit != null) {
-      secondaryValue = numericDeposit;
-      secondaryLabel = "Задаток";
     }
   } else if (listingKind === "public_offer") {
     if (numericStart != null) {
@@ -1675,6 +1672,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
