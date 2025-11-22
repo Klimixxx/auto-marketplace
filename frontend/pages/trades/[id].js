@@ -701,35 +701,13 @@ export default function ListingPage({ item }) {
         item?.start_price ??
         null;
 
-  const depositCandidates = [
-    currentPeriod?.depositNumber,
-    currentPeriod?.depositRaw,
-    item?.deposit,
-    item?.deposit_amount,
-    details?.deposit,
-    details?.deposit_amount,
-    details?.lot_details?.deposit,
-    details?.lot_details?.deposit_amount,
-    periods[0]?.depositNumber,
-    periods[0]?.depositRaw,
-  ];
-
-  let summaryDeposit = null;
-  let summaryDepositRaw = null;
-  for (const candidate of depositCandidates) {
-    if (candidate == null || candidate === "") continue;
-    const numeric = parseNumberValue(candidate);
-    if (numeric != null) {
-      summaryDeposit = numeric;
-      break;
-    }
-    if (summaryDepositRaw == null) summaryDepositRaw = candidate;
-  }
-
-  const summaryDepositDisplay = fmtPrice(
-    summaryDeposit != null ? summaryDeposit : summaryDepositRaw,
-    currency,
-  );
+  const depositBasePrice = summaryCurrentPrice ?? summaryStartPrice ?? null;
+  const summaryDeposit =
+    depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
+      ? Math.round(depositBasePrice * 0.1)
+      : null;
+  const summaryDepositDisplay =
+    summaryDeposit != null ? fmtPrice(summaryDeposit, currency) : null;
 
   // ВАЖНО: эти константы объявляем ДО использования в summaryPriceBlocks и priceHistoryEntries
   const prices = Array.isArray(details?.prices) ? details.prices : [];
@@ -780,7 +758,7 @@ export default function ListingPage({ item }) {
       });
     }
 
-    if (summaryDeposit != null || summaryDepositRaw != null) {
+    if (summaryDeposit != null) {
       blocks.push({ label: "Задаток", value: summaryDepositDisplay });
     }
 
@@ -806,16 +784,22 @@ export default function ListingPage({ item }) {
       entry.value ??
       entry.amount ??
       "—";
-    const depositRaw =
-      entry.deposit ??
-      entry.deposit_amount ??
-      entry.bail ??
-      entry.zadatok ??
-      entry.pledge ??
-      entry.guarantee ??
-      entry.collateral ??
-      null;
-    const depositNumber = parseNumberValue(depositRaw);
+    const depositBasePrice =
+      priceNumber != null
+        ? priceNumber
+        : parseNumberValue(
+            entry.price ??
+              entry.currentPrice ??
+              entry.current_price ??
+              entry.startPrice ??
+              entry.start_price ??
+              entry.value ??
+              entry.amount,
+          );
+    const depositNumber =
+      depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
+        ? Math.round(depositBasePrice * 0.1)
+        : null;
     const rawStartDate =
       entry.date_start ??
       entry.start_date ??
@@ -846,11 +830,7 @@ export default function ListingPage({ item }) {
         ? fmtPrice(priceNumber, currency)
         : formatValueForDisplay("price", fallbackPrice);
     const depositText =
-      depositNumber != null
-        ? fmtPrice(depositNumber, currency)
-        : depositRaw != null
-        ? formatValueForDisplay("deposit", depositRaw)
-        : "—";
+      depositNumber != null ? fmtPrice(depositNumber, currency) : "—";
     const startText = startDate ? formatDateTime(startDate) : "—";
     const endText = endDate ? formatDateTime(endDate) : "—";
 
@@ -1669,5 +1649,6 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
