@@ -229,19 +229,19 @@ function MultiSelectDropdown({
         }
 
         .multiselect-panel {
-          position: absolute;
-          top: calc(100% + 4px);
-          left: 0;
-          right: 0;
-          background: #fff;
-          border: 1px solid var(--line);
-          border-radius: 10px;
-          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
-          z-index: 2100;
-          max-height: 320px;
-          display: flex;
-          flex-direction: column;
-        }
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  z-index: 3000; /* было 2100 */
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
 
         .multiselect-search {
           padding: 8px;
@@ -616,15 +616,14 @@ export default function FilterBar({
         }
 
         .filters-panel-pro {
-          background: var(--filters-bg);
-          border-radius: 14px;
-          border: 1px solid rgba(30,144,255,.08);
-          box-shadow: none;
-          padding: 12px;
-          backdrop-filter: saturate(1.05) blur(1.5px);
-          position: relative;
-          z-index: 3000;
-        }
+  background: var(--filters-bg);
+  border-radius: 14px;
+  border: 1px solid rgba(30,144,255,.08);
+  box-shadow: none;
+  padding: 12px;
+  backdrop-filter: saturate(1.05) blur(1.5px);
+  position: relative; /* z-index удалить */
+}
 
         .row.compact {
           display: grid;
@@ -708,5 +707,6 @@ export default function FilterBar({
   );
 
 }
+
 
 
