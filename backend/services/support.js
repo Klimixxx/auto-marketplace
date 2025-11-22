@@ -35,9 +35,12 @@ const QUEUE_NOTICE_TEXT = 'Специалист подключится в теч
 
 function mapTicketRow(row) {
   if (!row) return null;
+  const listingRegion =
+    row.listing_region || row.listing_region_name || row.listing_region_code || row.listing_city || null;
   return {
     id: row.id,
     status: row.status,
+    type: row.type || 'general',
     subject: row.subject,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -61,6 +64,15 @@ function mapTicketRow(row) {
           phone: row.assigned_phone,
           userCode: row.assigned_code,
           email: row.assigned_email,
+        }
+      : null,
+    listing: row.listing_id
+      ? {
+          id: row.listing_id,
+          title: row.listing_title,
+          region: listingRegion,
+          city: row.listing_city,
+          published: row.listing_published,
         }
       : null,
     // могут проставляться attachTicketMeta
@@ -105,6 +117,9 @@ const TICKET_SELECT = `
     t.assigned_id,
     t.subject,
     t.status,
+    t.type,
+    t.listing_id,
+    t.listing_region,
     t.created_at,
     t.updated_at,
     t.closed_at,
@@ -118,9 +133,15 @@ const TICKET_SELECT = `
     au.name  AS assigned_name,
     au.phone AS assigned_phone,
     au.email AS assigned_email,
-    au.user_code AS assigned_code
+    au.user_code AS assigned_code,
+    l.title AS listing_title,
+    l.region AS listing_region_name,
+    l.city AS listing_city,
+    l.region_code AS listing_region_code,
+    l.published AS listing_published
   FROM support_tickets t
   JOIN users cu ON cu.id = t.client_id
+  LEFT JOIN listings l ON l.id = t.listing_id
   LEFT JOIN users au ON au.id = t.assigned_id
 `;
 
@@ -177,42 +198,114 @@ export async function fetchTicketById(ticketId) {
   return attachTicketMeta(ticket);
 }
 
-async function findLatestActiveTicketRow(clientId) {
+async function findLatestActiveTicketRow(clientId, { type = 'general' } = {}) {
   if (typeof clientId !== 'string' || !isUUID(clientId)) {
     const err = new Error('INVALID_USER_ID');
     err.statusCode = 401;
     throw err;
   }
 
+  const params = [clientId];
+  let whereClause = `
+     WHERE t.client_id = $1
+       AND t.status IN ('open', 'assigned')`;
+
+  if (type) {
+    params.push(type);
+    whereClause += ` AND t.type = $${params.length}`;
+  }
+
   const existing = await query(
     `${TICKET_SELECT}
-     WHERE t.client_id = $1
-       AND t.status IN ('open', 'assigned')
+     ${whereClause}
      ORDER BY t.created_at DESC
      LIMIT 1`,
-    [clientId]
+    params
   );
   return existing.rows[0] || null;
 }
 
-export async function findActiveTicketForUser(clientId) {
-  const row = await findLatestActiveTicketRow(clientId);
+export async function findActiveTicketForUser(clientId, { type = 'general' } = {}) {
+  const row = await findLatestActiveTicketRow(clientId, { type });
   const ticket = mapTicketRow(row);
   return attachTicketMeta(ticket);
 }
 
-export async function ensureActiveTicketForUser(clientId) {
-  const existing = await findLatestActiveTicketRow(clientId);
+export async function ensureActiveTicketForUser(clientId, { type = 'general' } = {}) {
+  const existing = await findLatestActiveTicketRow(clientId, { type });
   if (existing) {
     return attachTicketMeta(mapTicketRow(existing));
   }
 
   const inserted = await query(
     `INSERT INTO support_tickets
-       (client_id, status, created_at, updated_at, last_message_at)
-     VALUES ($1::uuid, 'open', now(), now(), now())
+       (client_id, status, type, created_at, updated_at, last_message_at)
+     VALUES ($1::uuid, 'open', $2, now(), now(), now())
      RETURNING id`,
-    [clientId]
+    [clientId, type || 'general']
+  );
+
+  const ticketId = inserted.rows[0]?.id;
+  const created = ticketId ? await fetchTicketById(ticketId) : null;
+  if (created) {
+    emitTicketToAgents(created, 'created');
+  }
+  return created;
+}
+
+export async function ensureListingTicketForUser(clientId, listingId) {
+  if (typeof clientId !== 'string' || !isUUID(clientId)) {
+    const err = new Error('INVALID_USER_ID');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const numericListingId = Number(listingId);
+  if (!Number.isFinite(numericListingId) || numericListingId <= 0) {
+    const err = new Error('INVALID_LISTING');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { rows: listingRows } = await query(
+    `SELECT id, title, region, city, region_code, published
+       FROM listings
+      WHERE id = $1 AND published = TRUE
+      LIMIT 1`,
+    [numericListingId]
+  );
+  const listing = listingRows[0];
+  if (!listing) {
+    const err = new Error('LISTING_NOT_FOUND');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const { rows: existingRows } = await query(
+    `${TICKET_SELECT}
+     WHERE t.client_id = $1::uuid
+       AND t.listing_id = $2
+       AND t.type = 'listing'
+       AND t.status IN ('open', 'assigned')
+     ORDER BY t.created_at DESC
+     LIMIT 1`,
+    [clientId, numericListingId]
+  );
+  if (existingRows[0]) {
+    return attachTicketMeta(mapTicketRow(existingRows[0]));
+  }
+
+  const subject = listing.title
+    ? `Консультация по объявлению «${listing.title}»`
+    : `Консультация по объявлению #${numericListingId}`;
+  const regionSnapshot = listing.region || listing.region_code || listing.city || null;
+
+  const inserted = await query(
+    `INSERT INTO support_tickets
+       (client_id, status, type, listing_id, listing_region, subject, created_at, updated_at, last_message_at)
+     VALUES ($1::uuid, 'open', 'listing', $2, $3, $4, now(), now(), now())
+     RETURNING id`,
+    [clientId, numericListingId, regionSnapshot, subject]
   );
 
   const ticketId = inserted.rows[0]?.id;
