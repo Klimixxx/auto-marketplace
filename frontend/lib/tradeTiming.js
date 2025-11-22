@@ -166,20 +166,24 @@ function normalizePeriodEntry(entry, index = 0) {
     ?? entry.price_min
     ?? entry.priceMin
     ?? null;
-  const depositRaw = entry.deposit
-    ?? entry.deposit_amount
-    ?? entry.bail
-    ?? entry.zadatok
-    ?? entry.pledge
-    ?? entry.guarantee
-    ?? entry.collateral
-    ?? null;
+  const depositBasePrice = priceRaw ?? minPriceRaw ?? null;
 
   const start = parseDateLike(startRaw);
   const end = parseDateLike(endRaw);
   const priceNumber = parseNumberLike(priceRaw);
   const minPriceNumber = parseNumberLike(minPriceRaw);
-  const depositNumber = parseNumberLike(depositRaw);
+  const depositNumber = (() => {
+    if (priceNumber != null && Number.isFinite(priceNumber) && priceNumber > 0) {
+      return Math.round(priceNumber * 0.1);
+    }
+    if (minPriceNumber != null && Number.isFinite(minPriceNumber) && minPriceNumber > 0) {
+      return Math.round(minPriceNumber * 0.1);
+    }
+    const parsed = parseNumberLike(depositBasePrice);
+    return parsed != null && Number.isFinite(parsed) && parsed > 0
+      ? Math.round(parsed * 0.1)
+      : null;
+  })();
 
   const meaningful = [start, end, priceNumber, minPriceNumber, depositNumber].some((v) => v != null);
   if (!meaningful) return null;
@@ -190,7 +194,7 @@ function normalizePeriodEntry(entry, index = 0) {
     end,
     priceRaw,
     minPriceRaw,
-    depositRaw,
+    depositRaw: depositNumber,
     priceNumber,
     minPriceNumber,
     depositNumber,
@@ -368,3 +372,4 @@ export function computeTradeTiming(listing, nowInput) {
 export { parseDateLike, parseNumberLike };
 
 export default computeTradeTiming;
+
