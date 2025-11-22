@@ -186,6 +186,23 @@ function parseNumberValue(value) {
   return null;
 }
 
+function pickNumericFromSources(sources = [], keys = []) {
+  const normalizedKeys = keys.map((key) =>
+    typeof key === "string" ? key.toLowerCase() : String(key)
+  );
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue;
+    for (const [candidateKey, value] of Object.entries(source)) {
+      if (typeof candidateKey !== "string") continue;
+      if (normalizedKeys.includes(candidateKey.toLowerCase())) {
+        const parsed = parseNumberValue(value);
+        if (parsed != null) return parsed;
+      }
+    }
+  }
+  return null;
+}
+
 function fmtPrice(value, currency = "RUB") {
   const numeric = parseNumberValue(value);
   if (numeric == null)
@@ -701,14 +718,6 @@ export default function ListingPage({ item }) {
         item?.start_price ??
         null;
 
-  const depositBasePrice = summaryCurrentPrice ?? summaryStartPrice ?? null;
-  const summaryDeposit =
-    depositBasePrice != null && Number.isFinite(depositBasePrice) && depositBasePrice > 0
-      ? Math.round(depositBasePrice * 0.1)
-      : null;
-  const summaryDepositDisplay =
-    summaryDeposit != null ? fmtPrice(summaryDeposit, currency) : null;
-
   // ВАЖНО: эти константы объявляем ДО использования в summaryPriceBlocks и priceHistoryEntries
   const prices = Array.isArray(details?.prices) ? details.prices : [];
 
@@ -727,6 +736,63 @@ export default function ListingPage({ item }) {
     summaryAuctionStepNumber != null
       ? summaryAuctionStepNumber
       : summaryAuctionStepRaw;
+
+  const depositBasePrice = (() => {
+    if (isPublicOffer) return summaryCurrentPrice ?? summaryStartPrice ?? null;
+    if (isOpenAuction) return summaryStartPrice ?? summaryCurrentPrice ?? null;
+    return summaryCurrentPrice ?? summaryStartPrice ?? null;
+  })();
+
+  const explicitDeposit = pickNumericFromSources(
+    [item, details, details?.lot_details],
+    [
+      "deposit",
+      "deposit_amount",
+      "depositAmount",
+      "deposit_sum",
+      "depositSum",
+      "pledge",
+      "pledge_amount",
+      "pledgeAmount",
+    ],
+  );
+
+  const depositPercent = pickNumericFromSources(
+    [item, details, details?.lot_details],
+    [
+      "deposit_percentage",
+      "deposit_percent",
+      "depositPercent",
+      "deposit_rate",
+      "pledge_percent",
+      "pledgePercent",
+    ],
+  );
+
+  const summaryDeposit = (() => {
+    if (isPublicOffer && timing?.currentPeriod?.depositNumber != null)
+      return timing.currentPeriod.depositNumber;
+    if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
+    if (
+      depositPercent != null &&
+      depositPercent > 0 &&
+      depositBasePrice != null &&
+      Number.isFinite(depositBasePrice) &&
+      depositBasePrice > 0
+    ) {
+      return Math.round((depositBasePrice * depositPercent) / 100);
+    }
+    if (
+      depositBasePrice != null &&
+      Number.isFinite(depositBasePrice) &&
+      depositBasePrice > 0
+    ) {
+      return Math.round(depositBasePrice * 0.1);
+    }
+    return null;
+  })();
+
+  const summaryDepositDisplay = summaryDeposit != null ? fmtPrice(summaryDeposit, currency) : "—";
 
   const summaryPriceBlocks = (() => {
     const blocks = [];
@@ -758,9 +824,7 @@ export default function ListingPage({ item }) {
       });
     }
 
-    if (summaryDeposit != null) {
-      blocks.push({ label: "Задаток", value: summaryDepositDisplay });
-    }
+    blocks.push({ label: "Задаток", value: summaryDepositDisplay });
 
     return blocks;
   })();
@@ -1649,6 +1713,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
