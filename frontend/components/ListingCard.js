@@ -647,11 +647,60 @@ export default function ListingCard({
   const numericCurrent = normalizeNumber(currentPriceRaw);
   const numericMin = normalizeNumber(minPriceRaw);
   const numericStep = normalizeNumber(stepRaw);
-  const numericDeposit = (() => {
-    const basePrice = numericCurrent ?? numericStart;
+  const numericDeposit = useMemo(() => {
+    const periodDeposit = timing?.currentPeriod?.depositNumber;
+    const explicitDeposit = normalizeNumber(
+      pickDetailValue(l, [
+        "deposit",
+        "deposit_amount",
+        "depositAmount",
+        "deposit_sum",
+        "depositSum",
+        "pledge",
+        "pledge_amount",
+        "pledgeAmount",
+      ]),
+    );
+    const depositPercent = normalizeNumber(
+      pickDetailValue(l, [
+        "deposit_percentage",
+        "deposit_percent",
+        "depositPercent",
+        "deposit_rate",
+        "pledge_percent",
+        "pledgePercent",
+      ]),
+    );
+    const basePrice = (() => {
+      if (listingKind === "public_offer") {
+        return (
+          timing?.currentPriceNumber ??
+          timing?.currentPeriod?.priceNumber ??
+          timing?.currentPeriod?.minPriceNumber ??
+          numericCurrent ??
+          numericStart
+        );
+      }
+      if (listingKind === "open_auction") {
+        return numericStart ?? numericCurrent ?? timing?.currentPriceNumber ?? null;
+      }
+      return numericCurrent ?? numericStart ?? timing?.currentPriceNumber ?? null;
+    })();
+
+    if (listingKind === "public_offer" && periodDeposit != null) return periodDeposit;
+    if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
+    if (
+      depositPercent != null &&
+      depositPercent > 0 &&
+      basePrice != null &&
+      Number.isFinite(basePrice) &&
+      basePrice > 0
+    ) {
+      return Math.round((basePrice * depositPercent) / 100);
+    }
     if (basePrice == null || !Number.isFinite(basePrice) || basePrice <= 0) return null;
     return Math.round(basePrice * 0.1);
-  })();
+  }, [l, listingKind, numericCurrent, numericStart, timing]);
 
   // исправленный блок расчёта цен
   let primaryValue = numericCurrent ?? numericStart;
@@ -708,6 +757,8 @@ export default function ListingCard({
   const secondaryPriceLabel = shouldShowSecondaryPrice
     ? formatPrice(secondaryValue, currency)
     : null;
+  const depositPriceLabel =
+    numericDeposit != null ? formatPrice(numericDeposit, currency) : "—";
 
   // eyebrow
 
@@ -1196,6 +1247,12 @@ const articleHoverStyle = {
                 </div>
               </div>
             ) : null}
+            <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Задаток</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                {depositPriceLabel}
+              </div>
+            </div>
           </div>
 
           </div>
@@ -1565,6 +1622,22 @@ const articleHoverStyle = {
             </div>
           ) : null}
 
+          <div style={{ textAlign: "right" }}>
+            <div
+              style={{
+                ...resetPill,
+                fontSize: 16,
+                fontWeight: 800,
+                color: "#0f172a",
+              }}
+            >
+              {depositPriceLabel}
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+              Задаток
+            </div>
+          </div>
+
           <div />
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1602,6 +1675,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
