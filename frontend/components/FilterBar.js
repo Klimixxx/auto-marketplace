@@ -179,7 +179,7 @@ function MultiSelectDropdown({
         }
 
         .multiselect-dropdown.is-open {
-          z-index: 2000;
+          z-index: 3200;
         }
         .multiselect-trigger {
           width: 100%;
@@ -623,6 +623,7 @@ export default function FilterBar({
   padding: 12px;
   backdrop-filter: saturate(1.05) blur(1.5px);
   position: relative; /* z-index удалить */
+  z-index: 3100;
 }
 
         .row.compact {
@@ -707,6 +708,7 @@ export default function FilterBar({
   );
 
 }
+
 
 
 
