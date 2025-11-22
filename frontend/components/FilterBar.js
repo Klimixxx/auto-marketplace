@@ -622,6 +622,8 @@ export default function FilterBar({
           box-shadow: none;
           padding: 12px;
           backdrop-filter: saturate(1.05) blur(1.5px);
+          position: relative;
+          z-index: 3000;
         }
 
         .row.compact {
@@ -706,4 +708,5 @@ export default function FilterBar({
   );
 
 }
+
 
