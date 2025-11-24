@@ -35,7 +35,11 @@ function tryParseDateFromPattern(value) {
     .replace(/\bг\.?/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
-  const pattern = cleaned.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+
+  // Российский формат: ДД.ММ.ГГГГ, допускаем . / - как разделители + время
+  const pattern = cleaned.match(
+    /^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+  );
   if (!pattern) return null;
   const [, dayRaw, monthRaw, yearRaw, hourRaw, minuteRaw, secondRaw] = pattern;
   const day = Number.parseInt(dayRaw, 10);
@@ -51,29 +55,54 @@ function tryParseDateFromPattern(value) {
 
 function parseDateLike(value) {
   if (!value && value !== 0) return null;
+
+  // 1) Уже Date
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
   }
+
+  // 2) Чистый number (timestamp)
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null;
-    const dateFromNumber = new Date(value);
+    // Если похоже на секунды (10–11 знаков) — умножаем на 1000
+    const ts = value < 1e11 ? value * 1000 : value;
+    const dateFromNumber = new Date(ts);
     return Number.isNaN(dateFromNumber.getTime()) ? null : dateFromNumber;
   }
+
+  // 3) Всё, что не строка — игнорируем
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
 
+  // 4) Строка-число (timestamp в виде строки)
   const numericTimestamp = Number(trimmed);
-  if (Number.isFinite(numericTimestamp) && trimmed.length > 5) {
-    const dateFromNumeric = new Date(numericTimestamp);
+  if (Number.isFinite(numericTimestamp) && trimmed.length >= 9) {
+    const ts = numericTimestamp < 1e11 ? numericTimestamp * 1000 : numericTimestamp;
+    const dateFromNumeric = new Date(ts);
     if (!Number.isNaN(dateFromNumeric.getTime())) return dateFromNumeric;
   }
 
+  // 5) СНАЧАЛА пробуем наш российский паттерн (ДД.ММ.ГГГГ, ДД/ММ/ГГГГ, ДД-ММ-ГГГГ)
+  const patternDate = tryParseDateFromPattern(trimmed);
+  if (patternDate) return patternDate;
+
+  // 6) Только потом пробуем ISO / почти-ISO
   const isoCandidate = trimmed
     .replace(/\u00a0/g, ' ')
     .replace(/\s+г(?:\.|ода)?/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+  // если есть пробел между датой и временем — заменим на 'T'
+  const spacedIso =
+    isoCandidate.includes(' ') ? isoCandidate.replace(' ', 'T') : isoCandidate;
+
+  const parsedSpaced = Date.parse(spacedIso);
+  if (!Number.isNaN(parsedSpaced)) {
+    const dateFromSpaced = new Date(parsedSpaced);
+    if (!Number.isNaN(dateFromSpaced.getTime())) return dateFromSpaced;
+  }
 
   const parsedIso = Date.parse(isoCandidate);
   if (!Number.isNaN(parsedIso)) {
@@ -81,14 +110,8 @@ function parseDateLike(value) {
     if (!Number.isNaN(dateFromIso.getTime())) return dateFromIso;
   }
 
-  const spacedIso = isoCandidate.replace(' ', 'T');
-  const parsedSpaced = Date.parse(spacedIso);
-  if (!Number.isNaN(parsedSpaced)) {
-    const dateFromSpaced = new Date(parsedSpaced);
-    if (!Number.isNaN(dateFromSpaced.getTime())) return dateFromSpaced;
-  }
-
-  return tryParseDateFromPattern(isoCandidate);
+  // 7) Если ничего не подошло — считаем дату битой
+  return null;
 }
 
 function pickFromSources(listing, keys = []) {
@@ -372,4 +395,3 @@ export function computeTradeTiming(listing, nowInput) {
 export { parseDateLike, parseNumberLike };
 
 export default computeTradeTiming;
-
