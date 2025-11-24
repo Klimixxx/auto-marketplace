@@ -788,8 +788,7 @@ export default function ListingPage({ item }) {
         entry.period_end ??
         entry.date_to ??
         entry.finish ??
-        entry.end ??
-        rawStartDate;
+        entry.end;
 
       return {
         key: entry.id || `history-${index}`,
@@ -813,9 +812,7 @@ export default function ListingPage({ item }) {
       const endTs = entry.endDate?.getTime() ?? null;
       let adjustedEndDate = entry.endDate;
 
-      if (startTs != null && endTs != null && startTs === endTs) {
-        adjustedEndDate = nextStartDate ?? null;
-      } else if (endTs == null && nextStartDate) {
+      if (endTs == null && nextStartDate) {
         adjustedEndDate = nextStartDate;
       }
 
@@ -1840,6 +1837,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
