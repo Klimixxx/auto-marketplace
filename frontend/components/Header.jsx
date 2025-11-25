@@ -462,7 +462,7 @@ export default function Header({ user }) {
     );
   };
 
-  return (
+    return (
     <header
       className="header-solid"
       style={{
@@ -484,6 +484,7 @@ export default function Header({ user }) {
         }}
       >
         <div
+          className="header__top-inner"
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -497,6 +498,7 @@ export default function Header({ user }) {
           }}
         >
           <nav
+            className="header__nav"
             style={{
               display: "flex",
               alignItems: "center",
@@ -515,8 +517,10 @@ export default function Header({ user }) {
             {renderNavLink("/support", "Поддержка")}
             {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
           </nav>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            className="header__actions"
+            style={{ display: "flex", alignItems: "center", gap: 12 }}
+          >
             {me && (
               <div
                 style={{
@@ -661,7 +665,7 @@ export default function Header({ user }) {
         </div>
       </div>
 
-      {/* Нижняя шапка */}
+     {/* Нижняя шапка */}
       <div
         className="header--bottom hdr"
         style={{
@@ -671,6 +675,7 @@ export default function Header({ user }) {
         }}
       >
       <div
+          className="header__bottom-inner"
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -682,11 +687,14 @@ export default function Header({ user }) {
             padding: "0 12px",
           }}
         >
-          <Logo onClick={() => router.push("/")} />
+          <div className="header__logo-wrap" style={{ display: "flex", alignItems: "center" }}>
+            <Logo onClick={() => router.push("/")} />
+          </div>
 
           <div style={{ padding: 0 }}>
             <form
               onSubmit={submit}
+              className="header__search"
               style={{
                 display: "grid",
                 gridTemplateColumns: "auto 1fr",
@@ -773,12 +781,68 @@ export default function Header({ user }) {
               </div>
             </form>
           </div>
-        </div>
+          </div>
       </div>
+      <style jsx>{`
+        @media (max-width: 900px) {
+          .header__top-inner {
+            grid-template-columns: 1fr;
+            height: auto;
+            padding: 10px 12px;
+            row-gap: 10px;
+          }
+
+          .header__nav {
+            overflow-x: auto;
+            padding-bottom: 6px;
+            margin: 0 -4px;
+            width: calc(100% + 8px);
+            scrollbar-width: thin;
+          }
+
+          .header__nav a {
+            white-space: nowrap;
+          }
+
+          .header__actions {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+          }
+
+          .header__bottom-inner {
+            grid-template-columns: 1fr;
+            height: auto;
+            row-gap: 12px;
+            padding: 10px 12px 14px;
+          }
+
+          .header__search {
+            grid-template-columns: 1fr;
+          }
+
+          .header__search button {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .header__actions {
+            gap: 8px;
+          }
+
+          .header__actions > * {
+            flex: 1 1 auto;
+          }
+
+          .header__logo-wrap {
+            justify-content: space-between;
+          }
+        }
+      `}</style>
     </header>
   );
 }
-
 /* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const hasUnread = Number(badge) > 0;
@@ -928,6 +992,7 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
 
