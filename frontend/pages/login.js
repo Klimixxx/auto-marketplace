@@ -1,6 +1,7 @@
 // pages/login.js
 import { useState, useEffect, useRef } from "react";
 import PhoneInput, { toE164Ru } from "../components/PhoneInput";
+import PersonalDataConsentModal from "../components/PersonalDataConsentModal";
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -26,6 +27,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0); // сек до повторной отправки
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
   const codeInputRef = useRef(null);
 
   useEffect(() => {
@@ -290,12 +292,21 @@ export default function Login() {
                   <span>
                     Я соглашаюсь с
                     {" "}
-                    <a
-                      href="/personal-data-consent"
-                      style={{ color: "#2a65f7", fontWeight: 600 }}
+                    <button
+                      type="button"
+                      onClick={() => setIsConsentModalOpen(true)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        color: "#2a65f7",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                      }}
                     >
                       согласием на обработку персональных данных
-                    </a>
+                    </button>
                     .
                   </span>
                 </label>
@@ -468,6 +479,11 @@ export default function Login() {
             </p>
           </div>
         </div>
+
+        <PersonalDataConsentModal
+          open={isConsentModalOpen}
+          onClose={() => setIsConsentModalOpen(false)}
+        />
       </div>
     </section>
   );
@@ -488,4 +504,5 @@ function Dot() {
     />
   );
 }
+
 
