@@ -58,8 +58,8 @@ export default function PersonalDataConsent() {
           Согласие на обработку персональных данных
         </h1>
         <p style={{ fontSize: 16, margin: "0 0 24px" }}>
-          Этот документ подготовлен в демонстрационных целях и описывает,
-          как сервис AuctionAfto временно обрабатывает персональные данные при
+          Этот документ подготовлен в демонстрационных целях и описывает, как
+          сервис AuctionAfto временно обрабатывает персональные данные при
           регистрации и использовании приложения.
         </p>
 
@@ -76,11 +76,14 @@ export default function PersonalDataConsent() {
         >
           {sections.map((section) => (
             <section key={section.title}>
-              <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>{section.title}</h2>
+              <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>
+                {section.title}
+              </h2>
               <p style={{ margin: 0 }}>{section.text}</p>
             </section>
           ))}
         </div>
       </main>
     </div>
-  )
+  );
+}
