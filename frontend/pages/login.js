@@ -1,7 +1,7 @@
 // pages/login.js
 import { useState, useEffect, useRef } from "react";
 import PhoneInput, { toE164Ru } from "../components/PhoneInput";
-import PersonalDataConsentModal from "../components/PersonalDataConsentModal";
+import PersonalDataConsentModal from "./personal-data-consent";
 
 const API = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -504,5 +504,6 @@ function Dot() {
     />
   );
 }
+
 
 
