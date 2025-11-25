@@ -25,6 +25,7 @@ export default function Login() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0); // сек до повторной отправки
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const codeInputRef = useRef(null);
 
   useEffect(() => {
@@ -45,6 +46,10 @@ export default function Login() {
       return setErr("API_BASE не задан. Установи NEXT_PUBLIC_API_BASE.");
     setErr("");
     setInfo("");
+    if (!consentAccepted) {
+      setErr("Для регистрации подтвердите согласие на обработку данных.");
+      return;
+    }
     setLoading(true);
     try {
       // номер в E.164 из локальных 10 цифр
@@ -267,9 +272,37 @@ export default function Login() {
                   />
                 </div>
 
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    fontSize: 14,
+                    color: "#000",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={consentAccepted}
+                    onChange={(e) => setConsentAccepted(e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>
+                    Я соглашаюсь с
+                    {" "}
+                    <a
+                      href="/personal-data-consent"
+                      style={{ color: "#2a65f7", fontWeight: 600 }}
+                    >
+                      согласием на обработку персональных данных
+                    </a>
+                    .
+                  </span>
+                </label>
+
                 {err && <Err>{err}</Err>}
                 <button
-                  disabled={loading || phoneLocal.length !== 10}
+                  disabled={loading || phoneLocal.length !== 10 || !consentAccepted}
                   style={{
                     height: 48,
                     borderRadius: 12,
@@ -278,10 +311,13 @@ export default function Login() {
                     fontWeight: 700,
                     border: "none",
                     cursor:
-                      loading || phoneLocal.length !== 10
+                      loading || phoneLocal.length !== 10 || !consentAccepted
                         ? "not-allowed"
                         : "pointer",
-                    opacity: loading || phoneLocal.length !== 10 ? 0.7 : 1,
+                    opacity:
+                      loading || phoneLocal.length !== 10 || !consentAccepted
+                        ? 0.7
+                        : 1,
                   }}
                   // onMouseEnter={(e) =>
                   //   (e.currentTarget.style.background = UI.buttonHover)
@@ -452,3 +488,4 @@ function Dot() {
     />
   );
 }
+
