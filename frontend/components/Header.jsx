@@ -21,9 +21,6 @@ const UI = {
   btnBg: "var(--accent)",
   btnHover: "var(--accent-hover)",
   btnText: "var(--text-on-accent)",
-  btnSoftBg: "rgba(42,101,247,0.08)",
-  btnSoftText: "var(--accent)",
-  btnSoftHoverBg: "rgba(42,101,247,0.16)",
 
   navLinkColor: "#2a65f7",
   navLinkHover: "#1f4fe3",
@@ -36,14 +33,7 @@ const UI = {
   menuBg: "var(--surface-1)",
   menuBorder: "rgba(15,23,42,0.08)",
 
-  heroBtn: "var(--accent)",
-  heroBtnHover: "var(--accent-hover)",
   red: "#ef4444",
-  yellow: "#facc15",
-  chipBg: "rgba(42,101,247,0.12)",
-  chipBorder: "rgba(42,101,247,0.24)",
-  notice: "var(--accent)",
-  pillBg: "rgba(42,101,247,0.10)",
 };
 
 function IconUser({ size = 20, color = "#ffffff" }) {
@@ -294,6 +284,7 @@ export default function Header({ user }) {
     };
   }, []);
 
+  // счётчики
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     let ignore = false;
@@ -336,7 +327,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null; // FIX 1
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
       if (!token) {
         setTradeUnread(0);
         return;
@@ -371,7 +362,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null; // FIX 2
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
       if (!token) {
         setAutotekaUnread(0);
         return;
@@ -494,7 +485,7 @@ export default function Header({ user }) {
             gridTemplateColumns: "1fr auto",
             alignItems: "center",
             gap: 16,
-            padding: "0 16px",
+            padding: "4px 16px",
             color: UI.topText,
           }}
         >
@@ -627,18 +618,6 @@ export default function Header({ user }) {
                   boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                   transition: "background 0.2s ease, border-color 0.2s ease",
                 }}
-                onMouseEnter={(event) => {
-                  event.currentTarget.style.background =
-                    "rgba(255,255,255,0.15)";
-                  event.currentTarget.style.borderColor =
-                    "rgba(255,255,255,0.3)";
-                }}
-                onMouseLeave={(event) => {
-                  event.currentTarget.style.background =
-                    "rgba(255,255,255,0.1)";
-                  event.currentTarget.style.borderColor =
-                    "rgba(255,255,255,0.2)";
-                }}
               >
                 <span
                   style={{
@@ -730,8 +709,6 @@ export default function Header({ user }) {
             className="header__mobile-menu"
             style={{
               background: UI.menuBg,
-              borderTop: "none",
-              borderBottom: "none",
             }}
           >
             <div
@@ -771,7 +748,7 @@ export default function Header({ user }) {
 
       {/* Нижняя шапка */}
       <div
-        className="header--bottom hdr"
+        className="header--bottom"
         style={{
           width: "100%",
           borderBottom: "none",
@@ -825,12 +802,6 @@ export default function Header({ user }) {
                   whiteSpace: "nowrap",
                   fontWeight: 600,
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = UI.btnHover)
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = UI.btnBg)
-                }
               >
                 Все категории
               </button>
@@ -876,12 +847,6 @@ export default function Header({ user }) {
                     borderBottomLeftRadius: 0,
                     fontWeight: 600,
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = UI.btnHover)
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = UI.btnBg)
-                  }
                 >
                   Поиск
                 </button>
@@ -892,51 +857,14 @@ export default function Header({ user }) {
       </div>
 
       <style jsx>{`
+        /* Планшет/мобильный: адаптация нижней и верхней шапки */
         @media (max-width: 900px) {
-          .header__top-inner {
-            grid-template-columns: 1fr;
-            height: auto;
-            padding: 8px 16px 10px;
-            row-gap: 8px;
-          }
-
-          .header__nav {
-            overflow-x: auto;
-            padding-bottom: 6px;
-            margin: 0 -4px;
-            width: calc(100% + 8px);
-            scrollbar-width: thin;
-          }
-
-          .header__nav a {
-            white-space: nowrap;
-          }
-
-          .header__bottom-inner {
-            grid-template-columns: 1fr;
-            height: auto;
-            row-gap: 12px;
-            padding: 12px 16px 16px;
-          }
-
-          .header__search {
-            grid-template-columns: 1fr;
-            gap: 12px;
-          }
-
-          .header__search > button {
-            width: 100%;
-            justify-content: center;
-          }
-        }
-
-        @media (max-width: 768px) {
           .header__top-inner {
             display: flex;
             align-items: center;
             justify-content: space-between;
             column-gap: 12px;
-            padding: 8px 12px;
+            padding: 6px 12px;
           }
 
           .header__top-left {
@@ -947,8 +875,9 @@ export default function Header({ user }) {
             gap: 10px;
           }
 
+          /* убираем горизонтальное меню, всё в бургер */
           .header__nav {
-            display: none;
+            display: none !important;
           }
 
           .header__burger {
@@ -958,14 +887,39 @@ export default function Header({ user }) {
           .header__actions {
             flex-shrink: 0;
             justify-content: flex-end;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: nowrap;
           }
-        }
 
-        @media (max-width: 520px) {
+          /* баланс убираем — слишком тесно */
           .header__balance-pill {
             display: none;
+          }
+
+          /* нижняя шапка: всё в колонку */
+          .header__bottom-inner {
+            grid-template-columns: 1fr;
+            height: auto;
+            row-gap: 10px;
+            padding: 10px 12px 12px;
+          }
+
+          .header__logo-wrap {
+            justify-content: center;
+          }
+
+          .header__search {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+
+          .header__search > button {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .header--bottom {
+            background: var(--page-bg-gradient);
           }
         }
       `}</style>
@@ -976,22 +930,12 @@ export default function Header({ user }) {
 /* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const hasUnread = Number(badge) > 0;
-  const handleMouseEnter = (event) => {
-    event.currentTarget.style.background = "rgba(255,255,255,0.15)";
-    event.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
-  };
-  const handleMouseLeave = (event) => {
-    event.currentTarget.style.background = "rgba(255,255,255,0.1)";
-    event.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
-  };
 
   return (
     <button
       aria-label={ariaLabel}
       title={ariaLabel}
       onClick={onClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       style={{
         position: "relative",
         width: 36,
@@ -1020,7 +964,7 @@ function IconButton({ ariaLabel, onClick, children, badge }) {
             borderRadius: "50%",
             background: "#FF4D4F",
             border: "2px solid #1f1f1f",
-            boxShadow: "0 0 0 2px rgba(0,0,0,0.25)",
+            boxShadow: "0 0 0 2px rgba(0, 0, 0, 0.25)",
           }}
         />
       )}
@@ -1044,14 +988,6 @@ function MenuItem({ href, text, badge = 0 }) {
         textDecoration: "none",
         fontWeight: 600,
         transition: "background 0.2s ease, color 0.2s ease",
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.background = "rgba(42,101,247,0.08)";
-        event.currentTarget.style.color = "var(--accent)";
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.background = "transparent";
-        event.currentTarget.style.color = "var(--text-strong)";
       }}
     >
       <span>{text}</span>
@@ -1097,7 +1033,7 @@ function Logo({ onClick }) {
           fontSize: 18,
         }}
       >
-        AuctionA<span style={{ color: "#ef4444" }}>f</span>to
+        AuctionA<span style={{ color: UI.red }}>f</span>to
       </div>
     </div>
   );
