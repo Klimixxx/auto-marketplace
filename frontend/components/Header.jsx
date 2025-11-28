@@ -336,7 +336,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined") ? localStorage.getItem("token") : null;
+        typeof window !== "undefined" ? localStorage.getItem("token") : null; // FIX 1
       if (!token) {
         setTradeUnread(0);
         return;
@@ -371,7 +371,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined") ? localStorage.getItem("token") : null;
+        typeof window !== "undefined" ? localStorage.getItem("token") : null; // FIX 2
       if (!token) {
         setAutotekaUnread(0);
         return;
@@ -479,7 +479,7 @@ export default function Header({ user }) {
       <div
         style={{
           width: "100%",
-          borderBottom: "none", // убрал белую линию
+          borderBottom: "none",
           background: UI.topBg,
           backdropFilter: "blur(18px)",
         }}
@@ -498,7 +498,7 @@ export default function Header({ user }) {
             color: UI.topText,
           }}
         >
-          {/* Левый блок: только бургер и (на десктопе) навигация */}
+          {/* Левый блок: бургер + навигация на десктопе */}
           <div
             style={{ display: "flex", alignItems: "center", gap: 14 }}
             className="header__top-left"
