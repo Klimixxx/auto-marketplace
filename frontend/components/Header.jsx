@@ -243,7 +243,6 @@ export default function Header({ user }) {
   useEffect(() => {
     let aborted = false;
 
-
     async function fetchUnread() {
       try {
         const token =
@@ -418,9 +417,7 @@ export default function Header({ user }) {
     maximumFractionDigits: 0,
   });
   const notificationsLabel =
-    notif > 0
-      ? `Уведомления (непрочитано: ${notif})`
-      : "Уведомления";
+    notif > 0 ? `Уведомления (непрочитано: ${notif})` : "Уведомления";
 
   const [q, setQ] = useState("");
   const submit = (e) => {
@@ -431,21 +428,20 @@ export default function Header({ user }) {
 
   const renderNavLink = (href, label, badge = 0) => {
     const badgeValue = Number(badge) || 0;
-    const badgeText = badgeValue > 99 ? "99+" : String(badgeValue);
 
     const baseStyle = {
-      color: "#fff !important",
-      textDecoration: "none !important",
-      display: "flex !important",
-      alignItems: "center !important",
-      gap: "3px !important",
-      fontWeight: "600 !important",
-      padding: "8px 0 !important",
-      background: "transparent !important",
-      border: "none !important",
-      borderRadius: "0 !important",
-      transition: "color 0.2s ease !important",
-      position: "relative"
+      color: "#fff",
+      textDecoration: "none",
+      display: "flex",
+      alignItems: "center",
+      gap: "3px",
+      fontWeight: 600,
+      padding: "8px 0",
+      background: "transparent",
+      border: "none",
+      borderRadius: 0,
+      transition: "color 0.2s ease",
+      position: "relative",
     };
 
     return (
@@ -460,7 +456,7 @@ export default function Header({ user }) {
               borderRadius: "50%",
               position: "absolute",
               right: -6,
-              top: 0
+              top: 0,
             }}
           />
         )}
@@ -468,7 +464,7 @@ export default function Header({ user }) {
     );
   };
 
-    return (
+  return (
     <header
       className="header-solid"
       style={{
@@ -477,7 +473,7 @@ export default function Header({ user }) {
         top: 0,
         zIndex: 4000,
         borderBottom: "none",
-        boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08) !important"
+        boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08)",
       }}
     >
       {/* Верхняя шапка - черный фон */}
@@ -490,7 +486,7 @@ export default function Header({ user }) {
         }}
       >
         <div
-         className="header__top-inner"
+          className="header__top-inner"
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
@@ -583,6 +579,7 @@ export default function Header({ user }) {
           >
             {me && (
               <div
+                className="header__balance-pill"
                 style={{
                   padding: "6px 14px",
                   borderRadius: 999,
@@ -594,6 +591,7 @@ export default function Header({ user }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 6,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Баланс: {fmtRub.format(balance)}
@@ -720,15 +718,24 @@ export default function Header({ user }) {
                   </button>
                 </div>
               )}
-                     </div>
+            </div>
           </div>
-          {mobileNavOpen && (
+        </div>
+
+        {/* Мобильное меню под чёрной шапкой */}
+        {mobileNavOpen && (
+          <div
+            className="header__mobile-menu"
+            style={{
+              background: UI.menuBg,
+              borderTop: `1px solid ${UI.menuBorder}`,
+              borderBottom: `1px solid ${UI.menuBorder}`,
+            }}
+          >
             <div
-              className="header__mobile-menu"
               style={{
-                background: UI.menuBg,
-                borderTop: `1px solid ${UI.menuBorder}`,
-                borderBottom: `1px solid ${UI.menuBorder}`,
+                maxWidth: MAXW,
+                margin: "0 auto",
                 padding: "10px 16px 16px",
               }}
             >
@@ -741,21 +748,26 @@ export default function Header({ user }) {
               >
                 {renderNavLink("/trades", "Торги")}
                 {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
-                {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
+                {renderNavLink(
+                  "/inspections",
+                  "Мои Осмотры",
+                  inspectionUnread
+                )}
                 {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
                 {renderNavLink(
                   "https://www.auctionafto.online/training.html",
                   "Обучение"
                 )}
                 {renderNavLink("/support", "Поддержка")}
-                {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
+                {me?.role === "admin" &&
+                  renderNavLink("/admin", "Админ Панель")}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-     {/* Нижняя шапка */}
+      {/* Нижняя шапка */}
       <div
         className="header--bottom hdr"
         style={{
@@ -764,7 +776,7 @@ export default function Header({ user }) {
           background: "var(--page-bg-gradient)",
         }}
       >
-      <div
+        <div
           className="header__bottom-inner"
           style={{
             maxWidth: MAXW,
@@ -777,7 +789,10 @@ export default function Header({ user }) {
             padding: "8px 16px 12px",
           }}
         >
-          <div className="header__logo-wrap" style={{ display: "flex", alignItems: "center" }}>
+          <div
+            className="header__logo-wrap"
+            style={{ display: "flex", alignItems: "center" }}
+          >
             <Logo onClick={() => router.push("/")} />
           </div>
 
@@ -832,11 +847,11 @@ export default function Header({ user }) {
                   style={{
                     height: 44,
                     padding: "0 12px",
-                  background: UI.inputBg,
-                  border: `1px solid ${UI.inputBorder}`,
-                  color: UI.inputText,
-                  minWidth: 0,
-                  borderTopLeftRadius: 10,
+                    background: UI.inputBg,
+                    border: `1px solid ${UI.inputBorder}`,
+                    color: UI.inputText,
+                    minWidth: 0,
+                    borderTopLeftRadius: 10,
                     borderBottomLeftRadius: 10,
                     borderTopRightRadius: 0,
                     borderBottomRightRadius: 0,
@@ -871,15 +886,16 @@ export default function Header({ user }) {
               </div>
             </form>
           </div>
-          </div>
+        </div>
       </div>
+
       <style jsx>{`
         @media (max-width: 900px) {
           .header__top-inner {
             grid-template-columns: 1fr;
             height: auto;
-            padding: 12px 16px;
-            row-gap: 12px;
+            padding: 8px 16px 10px;
+            row-gap: 8px;
           }
 
           .header__nav {
@@ -944,15 +960,18 @@ export default function Header({ user }) {
           .header__logo-wrap {
             display: none;
           }
+        }
 
-          .header__search > div {
-            grid-template-columns: 1fr auto;
+        @media (max-width: 520px) {
+          .header__balance-pill {
+            display: none;
           }
         }
       `}</style>
     </header>
   );
 }
+
 /* ===== sub-components ===== */
 function IconButton({ ariaLabel, onClick, children, badge }) {
   const hasUnread = Number(badge) > 0;
@@ -1102,12 +1121,3 @@ function BellIcon() {
     </svg>
   );
 }
-
-
-
-
-
-
-
-
-
