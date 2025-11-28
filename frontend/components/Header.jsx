@@ -466,7 +466,7 @@ export default function Header({ user }) {
         boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08)",
       }}
     >
-      {/* Верхняя шапка - черный фон */}
+        {/* Верхняя шапка - черный фон */}
       <div
         style={{
           width: "100%",
@@ -489,10 +489,37 @@ export default function Header({ user }) {
             color: UI.topText,
           }}
         >
-          {/* Левый блок: бургер + навигация на десктопе */}
+             {/* Левый блок: десктопное меню */}
           <div
             style={{ display: "flex", alignItems: "center", gap: 14 }}
             className="header__top-left"
+          >
+            <nav
+              className="header__nav"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                fontSize: 14,
+              }}
+            >
+              {renderNavLink("/trades", "Торги")}
+              {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
+              {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
+              {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
+              {renderNavLink(
+                "https://www.auctionafto.online/training.html",
+                "Обучение"
+              )}
+              {renderNavLink("/support", "Поддержка")}
+              {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
+            </nav>
+          </div>
+
+          {/* Правый блок: баланс, колокольчик, профиль */}
+          <div
+            className="header__actions"
+            style={{ display: "flex", alignItems: "center", gap: 12 }}
           >
             <button
               className="header__burger"
@@ -543,33 +570,6 @@ export default function Header({ user }) {
               </span>
             </button>
 
-            <nav
-              className="header__nav"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 18,
-                fontSize: 14,
-              }}
-            >
-              {renderNavLink("/trades", "Торги")}
-              {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
-              {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
-              {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
-              {renderNavLink(
-                "https://www.auctionafto.online/training.html",
-                "Обучение"
-              )}
-              {renderNavLink("/support", "Поддержка")}
-              {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
-            </nav>
-          </div>
-
-          {/* Правый блок: баланс, колокольчик, профиль */}
-          <div
-            className="header__actions"
-            style={{ display: "flex", alignItems: "center", gap: 12 }}
-          >
             {me && (
               <div
                 className="header__balance-pill"
@@ -781,31 +781,10 @@ export default function Header({ user }) {
               className="header__search"
               style={{
                 display: "grid",
-                gridTemplateColumns: "auto 1fr",
+                gridTemplateColumns: "1fr",
                 gap: 10,
               }}
             >
-              <button
-                type="button"
-                onClick={() => router.push("/trades")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  height: 44,
-                  padding: "0 12px",
-                  borderRadius: 10,
-                  background: UI.btnBg,
-                  color: UI.btnText,
-                  border: "1px solid " + UI.btnBg,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  fontWeight: 600,
-                }}
-              >
-                Все категории
-              </button>
-
               <div
                 style={{
                   display: "grid",
@@ -829,6 +808,7 @@ export default function Header({ user }) {
                     borderTopRightRadius: 0,
                     borderBottomRightRadius: 0,
                     borderRight: "none",
+                    width: "100%",
                   }}
                 />
                 <button
@@ -846,6 +826,7 @@ export default function Header({ user }) {
                     borderTopLeftRadius: 0,
                     borderBottomLeftRadius: 0,
                     fontWeight: 600,
+                    width: "100%",
                   }}
                 >
                   Поиск
@@ -857,6 +838,10 @@ export default function Header({ user }) {
       </div>
 
       <style jsx>{`
+        .header__logo-text {
+          font-size: 18px;
+        }
+
         /* Планшет/мобильный: адаптация нижней и верхней шапки */
         @media (max-width: 900px) {
           .header__top-inner {
@@ -891,6 +876,10 @@ export default function Header({ user }) {
             flex-wrap: nowrap;
           }
 
+          .header__actions .header__burger {
+            margin-left: 4px;
+          }
+
           /* баланс убираем — слишком тесно */
           .header__balance-pill {
             display: none;
@@ -906,6 +895,10 @@ export default function Header({ user }) {
 
           .header__logo-wrap {
             justify-content: center;
+          }
+
+          .header__logo-text {
+            font-size: 16px;
           }
 
           .header__search {
@@ -1017,6 +1010,7 @@ function MenuItem({ href, text, badge = 0 }) {
 function Logo({ onClick }) {
   return (
     <div
+      className="header__logo"
       onClick={onClick}
       style={{
         display: "flex",
@@ -1026,6 +1020,7 @@ function Logo({ onClick }) {
       }}
     >
       <div
+        className="header__logo-text"
         style={{
           color: "var(--text-strong)",
           fontWeight: 900,
@@ -1058,3 +1053,4 @@ function BellIcon() {
     </svg>
   );
 }
+
