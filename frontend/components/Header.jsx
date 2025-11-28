@@ -6,7 +6,6 @@ const MAXW = 1100;
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "");
 
 const UI = {
-  // Черный фон для верхней шапки
   topBg: "#000000",
   topText: "#ffffff",
   topMuted: "rgba(255,255,255,0.7)",
@@ -337,7 +336,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        typeof window !== "undefined") ? localStorage.getItem("token") : null;
       if (!token) {
         setTradeUnread(0);
         return;
@@ -372,7 +371,7 @@ export default function Header({ user }) {
     async function load() {
       if (ignore) return;
       const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        typeof window !== "undefined") ? localStorage.getItem("token") : null;
       if (!token) {
         setAutotekaUnread(0);
         return;
@@ -480,7 +479,7 @@ export default function Header({ user }) {
       <div
         style={{
           width: "100%",
-          borderBottom: `1px solid ${UI.border}`,
+          borderBottom: "none", // убрал белую линию
           background: UI.topBg,
           backdropFilter: "blur(18px)",
         }}
@@ -499,11 +498,11 @@ export default function Header({ user }) {
             color: UI.topText,
           }}
         >
+          {/* Левый блок: только бургер и (на десктопе) навигация */}
           <div
             style={{ display: "flex", alignItems: "center", gap: 14 }}
             className="header__top-left"
           >
-            <Logo onClick={() => router.push("/")} />
             <button
               className="header__burger"
               aria-label={mobileNavOpen ? "Закрыть меню" : "Открыть меню"}
@@ -552,6 +551,7 @@ export default function Header({ user }) {
                 />
               </span>
             </button>
+
             <nav
               className="header__nav"
               style={{
@@ -573,6 +573,8 @@ export default function Header({ user }) {
               {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
             </nav>
           </div>
+
+          {/* Правый блок: баланс, колокольчик, профиль */}
           <div
             className="header__actions"
             style={{ display: "flex", alignItems: "center", gap: 12 }}
@@ -728,8 +730,8 @@ export default function Header({ user }) {
             className="header__mobile-menu"
             style={{
               background: UI.menuBg,
-              borderTop: `1px solid ${UI.menuBorder}`,
-              borderBottom: `1px solid ${UI.menuBorder}`,
+              borderTop: "none",
+              borderBottom: "none",
             }}
           >
             <div
@@ -910,11 +912,6 @@ export default function Header({ user }) {
             white-space: nowrap;
           }
 
-          .header__actions {
-            flex-wrap: wrap;
-            justify-content: flex-start;
-          }
-
           .header__bottom-inner {
             grid-template-columns: 1fr;
             height: auto;
@@ -934,6 +931,22 @@ export default function Header({ user }) {
         }
 
         @media (max-width: 768px) {
+          .header__top-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            column-gap: 12px;
+            padding: 8px 12px;
+          }
+
+          .header__top-left {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+          }
+
           .header__nav {
             display: none;
           }
@@ -942,23 +955,11 @@ export default function Header({ user }) {
             display: inline-flex;
           }
 
-          .header__top-left {
-            justify-content: space-between;
-            width: 100%;
-          }
-
           .header__actions {
+            flex-shrink: 0;
             justify-content: flex-end;
             gap: 10px;
             flex-wrap: nowrap;
-          }
-
-          .header__bottom-inner {
-            align-items: stretch;
-          }
-
-          .header__logo-wrap {
-            display: none;
           }
         }
 
