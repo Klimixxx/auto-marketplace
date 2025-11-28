@@ -187,6 +187,7 @@ export default function Header({ user }) {
   const [me, setMe] = useState(null);
   const [authed, setAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notif, setNotif] = useState(0);
   const [tradeUnread, setTradeUnread] = useState(0);
   const [inspectionUnread, setInspectionUnread] = useState(0);
@@ -234,9 +235,14 @@ export default function Header({ user }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [router.asPath]);
+
   // unread badge
   useEffect(() => {
     let aborted = false;
+
 
     async function fetchUnread() {
       try {
@@ -484,11 +490,11 @@ export default function Header({ user }) {
         }}
       >
         <div
-          className="header__top-inner"
+         className="header__top-inner"
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
-            height: 56,
+            minHeight: 56,
             display: "grid",
             gridTemplateColumns: "1fr auto",
             alignItems: "center",
@@ -497,26 +503,80 @@ export default function Header({ user }) {
             color: UI.topText,
           }}
         >
-          <nav
-            className="header__nav"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 18,
-              fontSize: 14,
-            }}
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 14 }}
+            className="header__top-left"
           >
-            {renderNavLink("/trades", "Торги")}
-            {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
-            {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
-            {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
-                        {renderNavLink(
-              "https://www.auctionafto.online/training.html",
-              "Обучение"
-            )}
-            {renderNavLink("/support", "Поддержка")}
-            {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
-          </nav>
+            <Logo onClick={() => router.push("/")} />
+            <button
+              className="header__burger"
+              aria-label={mobileNavOpen ? "Закрыть меню" : "Открыть меню"}
+              onClick={() => setMobileNavOpen((v) => !v)}
+              style={{
+                display: "none",
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 18,
+                  height: 2,
+                  background: "currentColor",
+                  position: "relative",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: -6,
+                    width: 18,
+                    height: 2,
+                    background: "currentColor",
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 6,
+                    width: 18,
+                    height: 2,
+                    background: "currentColor",
+                  }}
+                />
+              </span>
+            </button>
+            <nav
+              className="header__nav"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                fontSize: 14,
+              }}
+            >
+              {renderNavLink("/trades", "Торги")}
+              {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
+              {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
+              {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
+              {renderNavLink(
+                "https://www.auctionafto.online/training.html",
+                "Обучение"
+              )}
+              {renderNavLink("/support", "Поддержка")}
+              {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
+            </nav>
+          </div>
           <div
             className="header__actions"
             style={{ display: "flex", alignItems: "center", gap: 12 }}
@@ -660,8 +720,38 @@ export default function Header({ user }) {
                   </button>
                 </div>
               )}
-            </div>
+                     </div>
           </div>
+          {mobileNavOpen && (
+            <div
+              className="header__mobile-menu"
+              style={{
+                background: UI.menuBg,
+                borderTop: `1px solid ${UI.menuBorder}`,
+                borderBottom: `1px solid ${UI.menuBorder}`,
+                padding: "10px 16px 16px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                {renderNavLink("/trades", "Торги")}
+                {renderNavLink("/my-trades", "Мои Торги", tradeUnread)}
+                {renderNavLink("/inspections", "Мои Осмотры", inspectionUnread)}
+                {renderNavLink("/autoteka", "Автотека", autotekaUnread)}
+                {renderNavLink(
+                  "https://www.auctionafto.online/training.html",
+                  "Обучение"
+                )}
+                {renderNavLink("/support", "Поддержка")}
+                {me?.role === "admin" && renderNavLink("/admin", "Админ Панель")}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -679,12 +769,12 @@ export default function Header({ user }) {
           style={{
             maxWidth: MAXW,
             margin: "0 auto",
-            height: 64,
+            minHeight: 64,
             display: "grid",
             gridTemplateColumns: "auto 1fr",
             alignItems: "center",
             gap: 16,
-            padding: "0 12px",
+            padding: "8px 16px 12px",
           }}
         >
           <div className="header__logo-wrap" style={{ display: "flex", alignItems: "center" }}>
@@ -742,11 +832,11 @@ export default function Header({ user }) {
                   style={{
                     height: 44,
                     padding: "0 12px",
-                    background: UI.inputBg,
-                    border: `1px solid ${UI.inputBorder}`,
-                    color: UI.inputText,
-                    minWidth: 200,
-                    borderTopLeftRadius: 10,
+                  background: UI.inputBg,
+                  border: `1px solid ${UI.inputBorder}`,
+                  color: UI.inputText,
+                  minWidth: 0,
+                  borderTopLeftRadius: 10,
                     borderBottomLeftRadius: 10,
                     borderTopRightRadius: 0,
                     borderBottomRightRadius: 0,
@@ -788,8 +878,8 @@ export default function Header({ user }) {
           .header__top-inner {
             grid-template-columns: 1fr;
             height: auto;
-            padding: 10px 12px;
-            row-gap: 10px;
+            padding: 12px 16px;
+            row-gap: 12px;
           }
 
           .header__nav {
@@ -813,30 +903,50 @@ export default function Header({ user }) {
             grid-template-columns: 1fr;
             height: auto;
             row-gap: 12px;
-            padding: 10px 12px 14px;
+            padding: 12px 16px 16px;
           }
 
           .header__search {
             grid-template-columns: 1fr;
+            gap: 12px;
           }
 
-          .header__search button {
+          .header__search > button {
             width: 100%;
             justify-content: center;
           }
         }
 
-        @media (max-width: 600px) {
-          .header__actions {
-            gap: 8px;
+        @media (max-width: 768px) {
+          .header__nav {
+            display: none;
           }
 
-          .header__actions > * {
-            flex: 1 1 auto;
+          .header__burger {
+            display: inline-flex;
+          }
+
+          .header__top-left {
+            justify-content: space-between;
+            width: 100%;
+          }
+
+          .header__actions {
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: nowrap;
+          }
+
+          .header__bottom-inner {
+            align-items: stretch;
           }
 
           .header__logo-wrap {
-            justify-content: space-between;
+            display: none;
+          }
+
+          .header__search > div {
+            grid-template-columns: 1fr auto;
           }
         }
       `}</style>
@@ -992,6 +1102,7 @@ function BellIcon() {
     </svg>
   );
 }
+
 
 
 
