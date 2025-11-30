@@ -815,15 +815,15 @@ export default function ListingCard({
     primaryValue = resolvedCurrentPrice;
     primaryLabel = "Текущая цена";
     secondaryValue = summaryStartPrice;
-    secondaryLabel = "Стартовая цена";
+    secondaryLabel = "Начальная цена";
   } else if (listingKind === "open_auction") {
     primaryValue = summaryStartPrice;
-    primaryLabel = "Стартовая цена";
+    primaryLabel = "Начальная цена";
     secondaryValue = numericStep ?? summaryCurrentPrice;
     secondaryLabel = "Шаг аукциона";
   } else {
     primaryValue = summaryStartPrice ?? summaryCurrentPrice ?? null;
-    primaryLabel = "Стартовая цена";
+    primaryLabel = "Начальная цена";
     secondaryValue = summaryCurrentPrice;
     secondaryLabel = "Текущая цена";
   }
@@ -1806,6 +1806,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
