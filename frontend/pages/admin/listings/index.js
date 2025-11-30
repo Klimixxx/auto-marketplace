@@ -25,6 +25,7 @@ const DEFAULT_SEARCH_TERM = 'vin';
 const DASH = '—';
 const ARROW_LEFT = '←';
 const ARROW_RIGHT = '→';
+const FILTER_STORAGE_KEY = 'adminListingsFilters';
 
 function readToken() {
   if (typeof window === 'undefined') return null;
@@ -168,10 +169,23 @@ function formatNumber(value) {
   return String(value);
 }
 
+function loadStoredFilters() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return cleanFilters(parsed);
+  } catch (error) {
+    console.warn('Failed to read admin filters from storage', error);
+    return {};
+  }
+}
+
 export default function AdminParserTradesPage() {
   const router = useRouter();
   const [items, setItems] = useState([]);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState(() => loadStoredFilters());
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -385,6 +399,15 @@ export default function AdminParserTradesPage() {
   useEffect(() => {
     loadPage(1);
   }, [loadPage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    } catch (error) {
+      console.warn('Failed to persist admin filters', error);
+    }
+  }, [filters]);
 
   useEffect(() => {
     if (view === 'drafts') {
@@ -933,6 +956,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
