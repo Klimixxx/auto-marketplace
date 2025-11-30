@@ -2493,7 +2493,7 @@ export default function AdminParserTradeCard() {
         : 'Опубликовать'
       : sendingToWaiting
         ? 'Отправляем…'
-        : 'Добавить в ожидание';
+        : 'Ожидание';
 
   const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing || sendingToWaiting;
   const sectionCardStyle = {
@@ -3449,6 +3449,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
