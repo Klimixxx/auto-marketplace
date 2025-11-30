@@ -71,10 +71,6 @@ function MultiSelectDropdown({
     onChange(Array.from(newSet));
   };
 
-  const handleSelectAll = () => {
-    onChange(filteredOptions.map(getOptionValue));
-  };
-
   const handleClearAll = () => {
     onChange([]);
   };
@@ -124,16 +120,8 @@ function MultiSelectDropdown({
           </div>
 
           <div className="multiselect-actions">
-            <button 
-              type="button" 
-              className="action-btn"
-              style={{background: "#2a65f7", color: "white"}}
-              onClick={(e) => { e.stopPropagation(); handleSelectAll(); }}
-            >
-              Выбрать все
-            </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="action-btn"
               style={{background: "red", color: "white"}}
               onClick={(e) => { e.stopPropagation(); handleClearAll(); }}
@@ -362,6 +350,7 @@ export default function FilterBar({
     []
   );
   const [meta, setMeta] = useState(EMPTY_META);
+  const hasAutoAppliedRegionsRef = useRef(false);
 
   // регионы -> [{code,name}] + сортировка
   const regionOptions = useMemo(() => {
@@ -446,8 +435,7 @@ export default function FilterBar({
   }, [initial, showCityFilter]);
 
   // submit/reset
-  function submit(e) {
-    e.preventDefault();
+  const buildPayload = () => {
     const payload = {
       q,
       region_code: validRegionCodes,
@@ -457,7 +445,12 @@ export default function FilterBar({
       maxPrice,
     };
     if (showCityFilter) payload.city = cities.filter(Boolean);
-    onSearch(payload);
+    return payload;
+  };
+
+  function submit(e) {
+    e.preventDefault();
+    onSearch(buildPayload());
   }
 
   function resetFilters() {
@@ -479,6 +472,15 @@ export default function FilterBar({
     if (showCityFilter) payload.city = [];
     onSearch(payload);
   }
+
+  useEffect(() => {
+    if (!hasAutoAppliedRegionsRef.current) {
+      hasAutoAppliedRegionsRef.current = true;
+      return;
+    }
+
+    onSearch(buildPayload());
+  }, [validRegionCodes, onSearch]);
 
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
@@ -708,6 +710,7 @@ export default function FilterBar({
   );
 
 }
+
 
 
 
