@@ -753,7 +753,7 @@ export default function AdminParserTradesPage() {
                   <th>Заголовок</th>
                   <th>Регион</th>
                   <th>Тип объявления</th>
-                  <th>Стартовая цена</th>
+                  <th>Начальная цена</th>
                   <th>Окончание</th>
                   <th>Действия</th>
               </tr>
@@ -933,6 +933,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
