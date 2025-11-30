@@ -897,9 +897,9 @@ export default function AdminParserTradesPage() {
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
                         </td>
                         <td>
-                          <Link href={detailHref} className="button button-small button-outline">
+                            <Link href={detailHref} className="button button-small button-outline">␊
                               Открыть
-                            </Link>
+                            </Link>␊
                             {isPublishedView ? (
                               <button
                                 type="button"
@@ -966,6 +966,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
