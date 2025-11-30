@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import FilterBar from '../../../components/FilterBar';
@@ -186,6 +186,7 @@ export default function AdminParserTradesPage() {
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [filters, setFilters] = useState(() => loadStoredFilters());
+  const filtersRef = useRef(filters);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -346,7 +347,7 @@ export default function AdminParserTradesPage() {
       }
 
       const params = new URLSearchParams();
-      const activeFilters = cleanFilters(filtersOverride ?? filters);
+      const activeFilters = cleanFilters(filtersOverride ?? filtersRef.current);
       if (activeFilters.q) params.set('q', activeFilters.q);
       if (activeFilters.region_code) {
         const regionFilter = activeFilters.region_code;
@@ -393,8 +394,12 @@ export default function AdminParserTradesPage() {
         setListLoading(false);
       }
     },
-    [filters, view],
+    [view],
   );
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   useEffect(() => {
     loadPage(1);
@@ -419,10 +424,16 @@ export default function AdminParserTradesPage() {
     }
   }, [view, fetchProgress, applyProgress, filters.q, filters.region_code]);
 
-  const handleFilterSearch = useCallback((nextFilters) => {
-    setFilters(cleanFilters(nextFilters));
-    setPage(1);
-  }, []);
+  const handleFilterSearch = useCallback(
+    (nextFilters) => {
+      const cleaned = cleanFilters(nextFilters);
+      setFilters(cleaned);
+      filtersRef.current = cleaned;
+      setPage(1);
+      loadPage(1, cleaned);
+    },
+    [loadPage],
+  );
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -956,6 +967,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
