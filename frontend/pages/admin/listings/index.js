@@ -575,7 +575,7 @@ export default function AdminParserTradesPage() {
     async (id) => {
       if (view !== 'drafts') return;
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно добавить объявление в ожидание.');
         return;
       }
 
@@ -600,7 +600,7 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        alert('Объявление опубликовано и доступно в разделе /trades.');
+        alert('Объявление добавлено в раздел ожидания публикации.');
         await loadPage(page);
       } catch (error) {
         console.error('publish error:', error);
@@ -897,9 +897,8 @@ export default function AdminParserTradesPage() {
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
                         </td>
                         <td>
-                          <div className="admin-table__actions">
-                            <Link href={detailHref} className="button button-small button-outline">
-                              Редактировать
+                          <Link href={detailHref} className="button button-small button-outline">
+                              Открыть
                             </Link>
                             {isPublishedView ? (
                               <button
@@ -909,7 +908,7 @@ export default function AdminParserTradesPage() {
                                 disabled={isUnpublishing || listLoading}
                                 style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
                               >
-                                {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
+                                {isPublishing ? 'Отправляем…' : 'Добавить в ожидание'}
                               </button>
                             ) : (
                               <button
@@ -967,6 +966,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
