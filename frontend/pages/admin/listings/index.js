@@ -193,6 +193,7 @@ export default function AdminParserTradesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [waitingId, setWaitingId] = useState(null);
   const [unpublishingId, setUnpublishingId] = useState(null);
   const [nextOffset, setNextOffset] = useState(0);
   const [lastIngest, setLastIngest] = useState(null);
@@ -204,7 +205,7 @@ export default function AdminParserTradesPage() {
     if (!router.isReady) return;
     const rawView = queryView;
     const viewParam = Array.isArray(rawView) ? rawView[0] : rawView;
-    const normalized = viewParam === 'published' ? 'published' : 'drafts';
+    const normalized = viewParam === 'published' || viewParam === 'waiting' ? viewParam : 'drafts';
     setView((prev) => (prev === normalized ? prev : normalized));
   }, [router.isReady, queryView]);
 
@@ -215,6 +216,7 @@ export default function AdminParserTradesPage() {
       setPage(1);
       setPageCount(1);
       setPublishingId(null);
+      setWaitingId(null);
       setUnpublishingId(null);
       setListLoading(true);
       setIngesting(false);
@@ -222,6 +224,8 @@ export default function AdminParserTradesPage() {
       const nextQuery = { ...router.query };
       if (nextView === 'published') {
         nextQuery.view = 'published';
+      } else if (nextView === 'waiting') {
+        nextQuery.view = 'waiting';
       } else {
         delete nextQuery.view;
       }
@@ -368,7 +372,8 @@ export default function AdminParserTradesPage() {
       if (activeFilters.maxPrice) params.set('maxPrice', activeFilters.maxPrice);
       params.set('page', String(nextPage));
       params.set('limit', String(PAGE_SIZE));
-      params.set('status', view === 'published' ? 'published' : 'drafts');
+      const status = view === 'published' ? 'published' : view === 'waiting' ? 'waiting' : 'drafts';
+      params.set('status', status);
 
       setListLoading(true);
       try {
@@ -573,9 +578,8 @@ export default function AdminParserTradesPage() {
 
   const publish = useCallback(
     async (id) => {
-      if (view !== 'drafts') return;
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно добавить объявление в ожидание.');
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
         return;
       }
 
@@ -600,13 +604,54 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        alert('Объявление добавлено в раздел ожидания публикации.');
+        alert('Объявление опубликовано на сайте.');
         await loadPage(page);
       } catch (error) {
         console.error('publish error:', error);
         alert(`Ошибка публикации: ${error.message || 'failed'}`);
       } finally {
         setPublishingId(null);
+      }
+    },
+    [page, loadPage],
+  );
+
+  const addToWaiting = useCallback(
+    async (id) => {
+      if (view === 'published') return;
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно добавить объявление в ожидание.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      setWaitingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/wait`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        alert('Объявление добавлено в раздел ожидания публикации.');
+        await loadPage(page);
+      } catch (error) {
+        console.error('waiting error:', error);
+        alert(`Ошибка отправки в ожидание: ${error.message || 'failed'}`);
+      } finally {
+        setWaitingId(null);
       }
     },
     [page, loadPage, view],
@@ -659,7 +704,13 @@ export default function AdminParserTradesPage() {
   );
 
   const isPublishedView = view === 'published';
-  const pageTitle = isPublishedView ? 'Админка — Опубликованные объявления' : 'Админка — Объявления (из парсера)';
+  const isWaitingView = view === 'waiting';
+  const isDraftsView = !isPublishedView && !isWaitingView;
+  const pageTitle = isPublishedView
+    ? 'Админка — Опубликованные объявления'
+    : isWaitingView
+      ? 'Админка — Объявления в ожидании'
+      : 'Админка — Объявления (из парсера)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
   const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые с Федресурса';
@@ -685,18 +736,28 @@ export default function AdminParserTradesPage() {
           <p className="admin-page__subtitle">
             {isPublishedView
               ? 'Редактируйте объявления, которые уже опубликованы на сайте.'
-              : 'Отслеживайте свежие объявления из парсера и публикуйте лучшие предложения.'}
+              : isWaitingView
+                ? 'Подготовленные объявления, которые ожидают финальной проверки перед публикацией.'
+                : 'Отслеживайте свежие объявления из парсера и готовьте их к публикации.'}
           </p>
         </div>
 
         <div className="admin-tabs">
           <button
             type="button"
-            className={`admin-segment ${isPublishedView ? '' : 'is-active'}`}
+            className={`admin-segment ${isDraftsView ? 'is-active' : ''}`}
             onClick={() => changeView('drafts')}
             disabled={view === 'drafts'}
           >
             Неопубликованные
+          </button>
+          <button
+            type="button"
+            className={`admin-segment ${isWaitingView ? 'is-active' : ''}`}
+            onClick={() => changeView('waiting')}
+            disabled={view === 'waiting'}
+          >
+            Ожидание
           </button>
           <button
             type="button"
@@ -718,7 +779,7 @@ export default function AdminParserTradesPage() {
           />
         </div>
 
-        {!isPublishedView ? (
+        {isDraftsView ? (
           <div
             style={{
               display: 'flex',
@@ -752,6 +813,13 @@ export default function AdminParserTradesPage() {
             <div className="admin-hint-card__title">Опубликованные объявления</div>
             <p className="admin-hint-card__text">
               Здесь собраны объявления, которые уже видят пользователи сайта. Вы можете обновить данные или снять лот при необходимости.
+            </p>
+          </div>
+        ) : isWaitingView ? (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Ожидающие публикации</div>
+            <p className="admin-hint-card__text">
+              Эти объявления прошли подготовку и ждут финальной загрузки фотографий или документов. После проверки опубликуйте их на сайте.
             </p>
           </div>
         ) : (
@@ -803,11 +871,17 @@ export default function AdminParserTradesPage() {
                   items.map((item) => {
                     const createdAt = formatCreatedAt(item.created_at);
                     const publishedAt = formatCreatedAt(item.published_at);
+                    const waitingAt = formatCreatedAt(item.waiting_at);
                     const isPublishing = publishingId === item.id;
+                    const isWaiting = waitingId === item.id;
                     const isUnpublishing = unpublishingId === item.id;
                     const detailHref = {
                       pathname: '/admin/listings/[id]',
-                      query: isPublishedView ? { id: item.id, view: 'published' } : { id: item.id },
+                      query: isPublishedView
+                        ? { id: item.id, view: 'published' }
+                        : isWaitingView
+                          ? { id: item.id, view: 'waiting' }
+                          : { id: item.id },
                     };
                     const tradeTypeLabel =
                       pickFirstText(
@@ -856,6 +930,8 @@ export default function AdminParserTradesPage() {
                           </div>
                           {publishedAt ? (
                             <div className="admin-table__meta">Опубликовано: {publishedAt}</div>
+                          ) : waitingAt ? (
+                            <div className="admin-table__meta">В ожидании: {waitingAt}</div>
                           ) : null}
                         </td>
                         <td>{item.region || DASH}</td>
@@ -914,7 +990,7 @@ export default function AdminParserTradesPage() {
                             >
                               {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
                             </button>
-                          ) : (
+                          ) : isWaitingView ? (
                             <button
                               type="button"
                               className="button button-small"
@@ -922,6 +998,15 @@ export default function AdminParserTradesPage() {
                               disabled={isPublishing || listLoading}
                             >
                               {isPublishing ? 'Публикуем…' : 'Опубликовать'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button button-small"
+                              onClick={() => addToWaiting(item.id)}
+                              disabled={isWaiting || listLoading}
+                            >
+                              {isWaiting ? 'Отправляем…' : 'Добавить в ожидание'}
                             </button>
                           )}
                           {item.source_url ? (
@@ -969,3 +1054,4 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
