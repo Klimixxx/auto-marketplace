@@ -1968,10 +1968,6 @@ export default function AdminParserTradeCard() {
     });
   }, []);
 
-  const addPhotoEntry = useCallback(() => {
-    setPhotos((prev) => [...prev, { id: `photo-${Date.now()}`, url: '', title: '' }]);
-  }, []);
-
   const removePhotoEntry = useCallback((index) => {
     setPhotos((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
@@ -2551,10 +2547,29 @@ export default function AdminParserTradeCard() {
               <span className="muted">Площадка</span>
               <input className="input" value={form.trade_place} onChange={updateFormField('trade_place')} />
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Ссылка на источник</span>
-              <input className="input" value={form.source_url} onChange={updateFormField('source_url')} type="url" />
-            </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  className="input"
+                  value={form.source_url}
+                  onChange={updateFormField('source_url')}
+                  type="url"
+                  style={{ flex: '1 1 220px' }}
+                />
+                <button
+                  type="button"
+                  className="button outline"
+                  onClick={() =>
+                    form?.source_url && window.open(form.source_url, '_blank', 'noopener,noreferrer')
+                  }
+                  disabled={!form?.source_url}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  Открыть источник
+                </button>
+              </div>
+            </div>
           </div>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -2719,7 +2734,7 @@ export default function AdminParserTradeCard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h3 style={{ margin: 0 }}>Фотографии</h3>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Можно загрузить изображения или указать ссылки вручную. Порядок влияет на отображение в карточке.
+              Можно загрузить изображения. Порядок влияет на отображение в карточке.
             </p>
           </div>
           <div className="admin-upload">
@@ -2832,12 +2847,7 @@ export default function AdminParserTradeCard() {
               ))}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="button outline" onClick={addPhotoEntry}>
-              Добавить ссылку вручную
-            </button>
-          </div>
-        </section>
+          </section>
 
         <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
@@ -3380,6 +3390,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
