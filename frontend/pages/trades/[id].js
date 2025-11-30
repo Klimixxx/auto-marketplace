@@ -928,12 +928,12 @@ export default function ListingPage({ item }) {
         value: fmtPrice(resolvedCurrentPrice, currency),
       });
       blocks.push({
-        label: "Стартовая цена",
+        label: "Начальная цена",
         value: fmtPrice(summaryStartPrice, currency),
       });
     } else {
       blocks.push({
-        label: "Стартовая цена",
+        label: "Начальная цена",
         value: fmtPrice(summaryStartPrice, currency),
       });
       blocks.push({
@@ -1831,6 +1831,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
