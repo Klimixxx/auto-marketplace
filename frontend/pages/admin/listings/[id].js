@@ -1428,7 +1428,9 @@ export default function AdminParserTradeCard() {
   const viewQuery = Array.isArray(router.query?.view) ? router.query.view[0] : router.query?.view;
   const backLinkHref = viewQuery === 'published'
     ? { pathname: '/admin/listings', query: { view: 'published' } }
-    : '/admin/listings';
+    : viewQuery === 'waiting'
+      ? { pathname: '/admin/listings', query: { view: 'waiting' } }
+      : '/admin/listings';
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1461,8 +1463,9 @@ export default function AdminParserTradeCard() {
   const [documentUploadError, setDocumentUploadError] = useState(null);
   const documentFileInputRef = useRef(null);
 
-  const [saving, setSaving] = useState(false);
+ const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sendingToWaiting, setSendingToWaiting] = useState(false);
   const [updatingPublication, setUpdatingPublication] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [error, setError] = useState(null);
@@ -2314,6 +2317,50 @@ export default function AdminParserTradeCard() {
     [id, applyTrade],
   );
 
+  const sendToWaiting = useCallback(async () => {
+    if (!id) return null;
+    setSendingToWaiting(true);
+    setError(null);
+    try {
+      if (!API_BASE) {
+        throw new Error('NEXT_PUBLIC_API_BASE не задан.');
+      }
+      const token = readToken();
+      if (!token) {
+        throw new Error('Требуется авторизация администратора.');
+      }
+
+      const url = `${API_BASE}/api/admin/parser-trades/${id}/wait`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      if (res.status === 404) {
+        throw new Error('Лот не найден или уже удалён.');
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json().catch(() => null);
+      const updated = data && typeof data === 'object' ? data.trade || data.item || null : null;
+      if (updated) {
+        applyTrade(updated);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.alert('Лот отправлен в раздел ожидания публикации.');
+      }
+      return true;
+    } catch (e) {
+      setError(`Ошибка отправки в ожидание: ${e.message}`);
+      throw e;
+    } finally {
+      setSendingToWaiting(false);
+    }
+  }, [id, applyTrade]);
+
   const saveAndPublish = useCallback(async () => {
     if (!item?.published_at) {
       await publishTrade();
@@ -2337,10 +2384,16 @@ export default function AdminParserTradeCard() {
   const handlePublishClick = useCallback(() => {
     if (item?.published_at) {
       void saveAndPublish();
-    } else {
-      void publishTrade();
+      return;
     }
-  }, [item?.published_at, saveAndPublish, publishTrade]);
+
+    if (item?.waiting_at) {
+      void publishTrade();
+      return;
+    }
+
+    void sendToWaiting();
+  }, [item?.published_at, item?.waiting_at, saveAndPublish, publishTrade, sendToWaiting]);
 
   const unpublishTrade = useCallback(async () => {
     if (!id) return;
@@ -2434,11 +2487,15 @@ export default function AdminParserTradeCard() {
     ? updatingPublication || saving || publishing
       ? 'Обновляем…'
       : 'Сохранить и обновить публикацию'
-    : publishing
-    ? 'Публикуем…'
-    : 'Опубликовать';
+    : item.waiting_at
+      ? publishing
+        ? 'Публикуем…'
+        : 'Опубликовать'
+      : sendingToWaiting
+        ? 'Отправляем…'
+        : 'Добавить в ожидание';
 
-  const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing;
+  const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing || sendingToWaiting;
   const sectionCardStyle = {
     background: '#fff',
     border: '1px solid #e5e7eb',
@@ -2465,7 +2522,9 @@ export default function AdminParserTradeCard() {
       <div className="muted" style={{ fontSize: 13 }}>
         {item.published_at
           ? `Опубликовано: ${formatDateTime(item.published_at)}`
-          : 'Ещё не опубликовано на сайте.'}
+          : item.waiting_at
+            ? `В ожидании публикации с ${formatDateTime(item.waiting_at)}`
+            : 'Ещё не опубликовано на сайте.'}
       </div>
 
       {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
@@ -3390,6 +3449,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
