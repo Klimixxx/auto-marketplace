@@ -1006,7 +1006,7 @@ export default function AdminParserTradesPage() {
                               onClick={() => addToWaiting(item.id)}
                               disabled={isWaiting || listLoading}
                             >
-                              {isWaiting ? 'Отправляем…' : 'Добавить в ожидание'}
+                              {isWaiting ? 'Отправляем…' : 'Ожидание'}
                             </button>
                           )}
                           {item.source_url ? (
@@ -1054,4 +1054,5 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
