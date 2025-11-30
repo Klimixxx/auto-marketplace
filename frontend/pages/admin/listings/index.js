@@ -790,7 +790,7 @@ export default function AdminParserTradesPage() {
                   <th>Начальная цена</th>
                   <th>Окончание</th>
                   <th>Действия</th>
-              </tr>
+                </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
@@ -839,6 +839,7 @@ export default function AdminParserTradesPage() {
                     const finishDateText = formatDate(timing?.finishDate || item.date_finish);
                     const statusColor = status?.color || '#334155';
                     const statusBackground = status?.color ? `${status.color}1a` : 'rgba(148,163,184,0.12)';
+
                     return (
                       <tr key={item.id}>
                         <td>
@@ -897,40 +898,42 @@ export default function AdminParserTradesPage() {
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
                         </td>
                         <td>
-                            <Link href={detailHref} className="button button-small button-outline">␊
-                              Открыть
-                            </Link>␊
-                            {isPublishedView ? (
-                              <button
-                                type="button"
-                                className="button button-small button-outline"
-                                onClick={() => unpublish(item.id)}
-                                disabled={isUnpublishing || listLoading}
-                                style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
-                              >
-                                {isPublishing ? 'Отправляем…' : 'Добавить в ожидание'}
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="button button-small"
-                                onClick={() => publish(item.id)}
-                                disabled={isPublishing || listLoading}
-                              >
-                                {isPublishing ? 'Публикуем…' : 'Опубликовать'}
-                              </button>
-                            )}
-                            {item.source_url ? (
-                              <a
-                                href={item.source_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="button button-small button-outline"
-                              >
-                                Источник
-                              </a>
-                            ) : null}
-                          </div>
+                          <Link
+                            href={detailHref}
+                            className="button button-small button-outline"
+                          >
+                            Открыть
+                          </Link>
+                          {isPublishedView ? (
+                            <button
+                              type="button"
+                              className="button button-small button-outline"
+                              onClick={() => unpublish(item.id)}
+                              disabled={isUnpublishing || listLoading}
+                              style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
+                            >
+                              {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button button-small"
+                              onClick={() => publish(item.id)}
+                              disabled={isPublishing || listLoading}
+                            >
+                              {isPublishing ? 'Публикуем…' : 'Опубликовать'}
+                            </button>
+                          )}
+                          {item.source_url ? (
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="button button-small button-outline"
+                            >
+                              Источник
+                            </a>
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -966,16 +969,3 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
