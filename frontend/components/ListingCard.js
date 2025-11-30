@@ -750,6 +750,15 @@ export default function ListingCard({
     return mapped;
   }, [l]);
 
+  const minPriceFromHistory = useMemo(() => {
+    const prices = priceHistoryEntries
+      .map((entry) => entry?.priceNumber)
+      .filter((value) => value != null && Number.isFinite(value));
+
+    if (!prices.length) return null;
+    return prices.reduce((min, value) => (value < min ? value : min), prices[0]);
+  }, [priceHistoryEntries]);
+
   const { currentPriceFromHistory, depositFromCurrentPeriod } = useMemo(() => {
     if (listingKind !== "public_offer" || priceHistoryEntries.length === 0)
       return { currentPriceFromHistory: null, depositFromCurrentPeriod: null };
@@ -814,8 +823,8 @@ export default function ListingCard({
   if (listingKind === "public_offer") {
     primaryValue = resolvedCurrentPrice;
     primaryLabel = "Текущая цена";
-    secondaryValue = summaryStartPrice;
-    secondaryLabel = "Начальная цена";
+    secondaryValue = minPriceFromHistory ?? summaryStartPrice;
+    secondaryLabel = "Минимальная цена";
   } else if (listingKind === "open_auction") {
     primaryValue = summaryStartPrice;
     primaryLabel = "Начальная цена";
@@ -1806,6 +1815,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
