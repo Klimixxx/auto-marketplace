@@ -419,6 +419,9 @@ export default function FilterBar({
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
 
+    // Сброс флага авто-запроса, чтобы не триггерить onSearch при синхронизации initial
+    hasAutoAppliedRegionsRef.current = false;
+
     if (showCityFilter) {
       const cityVal = initial?.city || initial?.cities;
       setCities(cityVal ? (Array.isArray(cityVal) ? cityVal : [cityVal].filter(Boolean)) : []);
@@ -710,6 +713,7 @@ export default function FilterBar({
   );
 
 }
+
 
 
 
