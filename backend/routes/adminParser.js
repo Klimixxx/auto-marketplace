@@ -767,10 +767,15 @@ router.get('/parser-trades', async (req, res) => {
     if (statusRaw === 'published') {
       filters.push('published_at is not null');
       effectiveStatus = 'published';
+    } else if (statusRaw === 'waiting') {
+      filters.push('published_at is null');
+      filters.push('waiting_at is not null');
+      effectiveStatus = 'waiting';
     } else if (statusRaw === 'all') {
       effectiveStatus = 'all';
     } else {
       filters.push('published_at is null');
+      filters.push('waiting_at is null');
     }
     const pageNum = Math.max(1, parseInt(page, 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10)));
@@ -778,12 +783,15 @@ router.get('/parser-trades', async (req, res) => {
 
     const whereSql = filters.length ? `where ${filters.join(' and ')}` : '';
     const totalSql = `select count(*)::int as c from parser_trades ${whereSql}`;
-    const orderSql = effectiveStatus === 'published'
-      ? 'order by published_at desc nulls last, created_at desc'
-      : 'order by created_at desc';
+    let orderSql = 'order by created_at desc';
+    if (effectiveStatus === 'published') {
+      orderSql = 'order by published_at desc nulls last, created_at desc';
+    } else if (effectiveStatus === 'waiting') {
+      orderSql = 'order by waiting_at desc nulls last, created_at desc';
+    }
     const listSql = `
       select id, title, region, region_code, category, brand, model, year, vin, start_price,
-             date_finish, trade_place, source_url, created_at, published_at,
+             date_finish, trade_place, source_url, created_at, published_at, waiting_at,
              coalesce(
                lot_details->>'trade_type',
                lot_details->>'tradeType',
@@ -1370,13 +1378,33 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
     ]);
 
     await query(
-      'update parser_trades set published_at = now(), updated_at = now() where id = $1',
+      'update parser_trades set published_at = now(), waiting_at = null, updated_at = now() where id = $1',
       [id],
     );
 
     return res.json({ ok: true });
   } catch (error) {
     console.error('publish error:', error);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+router.post('/parser-trades/:id/wait', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await query('select * from parser_trades where id = $1', [id]);
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'not found' });
+    }
+
+    const { rows: updatedRows } = await query(
+      'update parser_trades set waiting_at = now(), published_at = null, updated_at = now() where id = $1 returning *',
+      [id],
+    );
+
+    return res.json({ ok: true, trade: updatedRows[0] || rows[0] });
+  } catch (error) {
+    console.error('parser-trade waiting error:', error);
     res.status(500).json({ error: 'failed' });
   }
 });
@@ -1393,7 +1421,7 @@ router.post('/parser-trades/:id/unpublish', async (req, res) => {
     const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
 
     const { rows: updatedRows } = await query(
-      'update parser_trades set published_at = null, updated_at = now() where id = $1 returning *',
+      'update parser_trades set published_at = null, waiting_at = null, updated_at = now() where id = $1 returning *',
       [id],
     );
     const updatedTrade = updatedRows[0] || trade;
