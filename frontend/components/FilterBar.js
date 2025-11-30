@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TRADE_TYPE_LABELS, formatTradeTypeLabel, normalizeTradeTypeCode } from '../lib/tradeTypes';
 import { RUSSIAN_REGIONS } from '../../shared/regions.js';
 
@@ -350,7 +350,6 @@ export default function FilterBar({
     []
   );
   const [meta, setMeta] = useState(EMPTY_META);
-  const hasAutoAppliedRegionsRef = useRef(false);
 
   // регионы -> [{code,name}] + сортировка
   const regionOptions = useMemo(() => {
@@ -419,9 +418,6 @@ export default function FilterBar({
     setQ(initial?.q || '');
     setRegionCodes(normalizeRegionCodes(initial?.region_code ?? initial?.region));
 
-    // Сброс флага авто-запроса, чтобы не триггерить onSearch при синхронизации initial
-    hasAutoAppliedRegionsRef.current = false;
-
     if (showCityFilter) {
       const cityVal = initial?.city || initial?.cities;
       setCities(cityVal ? (Array.isArray(cityVal) ? cityVal : [cityVal].filter(Boolean)) : []);
@@ -475,15 +471,6 @@ export default function FilterBar({
     if (showCityFilter) payload.city = [];
     onSearch(payload);
   }
-
-  useEffect(() => {
-    if (!hasAutoAppliedRegionsRef.current) {
-      hasAutoAppliedRegionsRef.current = true;
-      return;
-    }
-
-    onSearch(buildPayload());
-  }, [validRegionCodes, onSearch]);
 
   return (
     <form onSubmit={submit} className="filters-panel-pro" aria-label="Фильтры поиска по торгам">
@@ -713,6 +700,7 @@ export default function FilterBar({
   );
 
 }
+
 
 
 
