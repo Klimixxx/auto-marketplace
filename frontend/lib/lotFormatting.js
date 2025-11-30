@@ -66,8 +66,8 @@ const EXACT_FIELD_LABELS = {
   subcategory: 'Подкатегория',
   asset_category: 'Категория актива',
   price: 'Цена',
-  start_price: 'Стартовая цена',
-  startprice: 'Стартовая цена',
+  start_price: 'Начальная цена',
+  startprice: 'Начальная цена',
   current_price: 'Текущая цена',
   currentprice: 'Текущая цена',
   min_price: 'Минимальная цена',
@@ -245,6 +245,8 @@ const EXACT_FIELD_LABELS = {
   time_start: 'Время начала',
   time_finish: 'Время окончания',
 };
+
+const YEAR_FIELDS = new Set(['year', 'production_year', 'manufacture_year', 'release_year']);
 
 const TOKEN_LABELS = {
   asset: 'актива',
@@ -588,6 +590,9 @@ export function formatValueForDisplay(key, rawValue) {
 
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return String(value);
+    if (YEAR_FIELDS.has(normalizedKey)) {
+      return String(Math.round(value));
+    }
     return new Intl.NumberFormat('ru-RU').format(value);
   }
 
@@ -649,5 +654,6 @@ export function localizeListingBadge(value) {
   const translated = translateValueByKey('status', value);
   return typeof translated === 'string' ? translated : value;
 }
+
 
 
