@@ -681,10 +681,6 @@ export default function ListingPage({ item }) {
   const router = useRouter();
 
   const handleBackToList = () => {
-    if (typeof window !== "undefined" && window.history?.length > 1) {
-      router.back();
-      return;
-    }
     router.push("/trades");
   };
 
@@ -1319,9 +1315,7 @@ export default function ListingPage({ item }) {
   const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
     lotEntries,
   );
-  const filteredLotInfoEntries = lotInfoEntries.filter(
-    (entry) => entry?.key !== "inspection_procedure" && entry?.label !== "Порядок осмотра",
-  );
+  const filteredLotInfoEntries = lotInfoEntries;
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const documents = normalizeDocuments(
@@ -1968,6 +1962,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
