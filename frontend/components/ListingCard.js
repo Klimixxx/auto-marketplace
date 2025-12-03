@@ -853,7 +853,7 @@ export default function ListingCard({
 
   const resolvedPublicOfferCurrentPrice = hasActivePublicOfferPeriod
     ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice
-    : firstPeriodPrice ?? summaryStartPrice ?? minimalPeriodPrice ?? null;
+    : summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
 
   const resolvedCurrentPrice =
     listingKind === "public_offer"
@@ -1871,6 +1871,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
