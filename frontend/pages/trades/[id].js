@@ -816,13 +816,18 @@ export default function ListingPage({ item }) {
       };
     });
   })();
-  const { price: currentPriceFromHistory, deposit: depositFromCurrentPeriod } = (() => {
+  const {
+    price: currentPriceFromHistory,
+    deposit: depositFromCurrentPeriod,
+    hasActivePublicOfferPeriod: hasActivePublicOfferPeriodFromHistory,
+  } = (() => {
     if (!isPublicOffer || normalizedPriceHistory.length === 0)
-      return { price: null, deposit: null };
+      return { price: null, deposit: null, hasActivePublicOfferPeriod: false };
     const nowTs = Date.now();
     let latestPrice = null;
     let latestDeposit = null;
     let latestTimestamp = null;
+    let hasActivePeriod = false;
 
     for (const entry of normalizedPriceHistory) {
       const { priceNumber, depositNumber, startDate, endDate } = entry;
@@ -833,7 +838,12 @@ export default function ListingPage({ item }) {
       const isCurrent =
         (startTs == null || nowTs >= startTs) &&
         (endTs == null || nowTs < endTs);
-      if (isCurrent) return { price: priceNumber, deposit: depositNumber };
+      if (isCurrent)
+        return {
+          price: priceNumber,
+          deposit: depositNumber,
+          hasActivePublicOfferPeriod: true,
+        };
 
       const candidateTs = startTs ?? endTs;
       if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
@@ -846,11 +856,19 @@ export default function ListingPage({ item }) {
       }
     }
 
-    return { price: latestPrice, deposit: latestDeposit };
+    return {
+      price: latestPrice,
+      deposit: latestDeposit,
+      hasActivePublicOfferPeriod: hasActivePeriod,
+    };
   })();
+  const hasActivePublicOfferPeriod =
+    hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
   const resolvedCurrentPrice =
-    isPublicOffer && currentPriceFromHistory != null
+    isPublicOffer && hasActivePublicOfferPeriod && currentPriceFromHistory != null
       ? currentPriceFromHistory
+      : isPublicOffer
+      ? null
       : summaryCurrentPrice;
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
@@ -860,7 +878,10 @@ export default function ListingPage({ item }) {
       : summaryAuctionStepRaw;
 
   const depositBasePrice = (() => {
-    if (isPublicOffer) return resolvedCurrentPrice ?? summaryStartPrice ?? null;
+    if (isPublicOffer)
+      return hasActivePublicOfferPeriod
+        ? resolvedCurrentPrice ?? summaryStartPrice ?? null
+        : null;
     if (isOpenAuction) return summaryStartPrice ?? resolvedCurrentPrice ?? null;
     return resolvedCurrentPrice ?? summaryStartPrice ?? null;
   })();
@@ -893,6 +914,7 @@ export default function ListingPage({ item }) {
 
   const summaryDeposit = (() => {
     if (isPublicOffer) {
+      if (!hasActivePublicOfferPeriod) return null;
       if (depositFromCurrentPeriod != null) return depositFromCurrentPeriod;
       if (timing?.currentPeriod?.depositNumber != null)
         return timing.currentPeriod.depositNumber;
@@ -925,11 +947,17 @@ export default function ListingPage({ item }) {
     if (isPublicOffer) {
       blocks.push({
         label: "Текущая цена",
-        value: fmtPrice(resolvedCurrentPrice, currency),
+        value: fmtPrice(
+          hasActivePublicOfferPeriod ? resolvedCurrentPrice : null,
+          currency,
+        ),
       });
       blocks.push({
         label: "Начальная цена",
-        value: fmtPrice(summaryStartPrice, currency),
+        value: fmtPrice(
+          hasActivePublicOfferPeriod ? summaryStartPrice : null,
+          currency,
+        ),
       });
     } else {
       blocks.push({
@@ -1831,6 +1859,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
