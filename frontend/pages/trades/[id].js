@@ -880,9 +880,12 @@ export default function ListingPage({ item }) {
   })();
   const hasActivePublicOfferPeriod =
     hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
-  const publicOfferCurrentPrice = hasActivePublicOfferPeriod && currentPriceFromHistory != null
-    ? currentPriceFromHistory
-    : summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
+  const publicOfferCurrentPrice =
+    currentPriceFromHistory
+    ?? summaryStartPrice
+    ?? firstPeriodPrice
+    ?? minimalPeriodPrice
+    ?? null;
   const resolvedCurrentPrice = isPublicOffer
     ? publicOfferCurrentPrice
     : summaryCurrentPrice;
@@ -1879,6 +1882,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
