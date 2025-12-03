@@ -875,12 +875,11 @@ export default function ListingPage({ item }) {
   })();
   const hasActivePublicOfferPeriod =
     hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
-  const resolvedCurrentPrice =
-    isPublicOffer && hasActivePublicOfferPeriod && currentPriceFromHistory != null
+  const resolvedCurrentPrice = isPublicOffer
+    ? hasActivePublicOfferPeriod && currentPriceFromHistory != null
       ? currentPriceFromHistory
-      : isPublicOffer
-      ? firstPeriodPrice ?? minimalPeriodPrice ?? null
-      : summaryCurrentPrice;
+      : summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null
+    : summaryCurrentPrice;
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
   const summaryAuctionStep =
@@ -889,10 +888,7 @@ export default function ListingPage({ item }) {
       : summaryAuctionStepRaw;
 
   const depositBasePrice = (() => {
-    if (isPublicOffer)
-      return hasActivePublicOfferPeriod
-        ? resolvedCurrentPrice ?? summaryStartPrice ?? null
-        : null;
+    if (isPublicOffer) return resolvedCurrentPrice ?? summaryStartPrice ?? null;
     if (isOpenAuction) return summaryStartPrice ?? resolvedCurrentPrice ?? null;
     return resolvedCurrentPrice ?? summaryStartPrice ?? null;
   })();
@@ -924,8 +920,7 @@ export default function ListingPage({ item }) {
   );
 
   const summaryDeposit = (() => {
-    if (isPublicOffer) {
-      if (!hasActivePublicOfferPeriod) return null;
+    if (isPublicOffer && hasActivePublicOfferPeriod) {
       if (depositFromCurrentPeriod != null) return depositFromCurrentPeriod;
       if (timing?.currentPeriod?.depositNumber != null)
         return timing.currentPeriod.depositNumber;
@@ -956,14 +951,9 @@ export default function ListingPage({ item }) {
     const blocks = [];
 
     if (isPublicOffer) {
-      const publicOfferStartPrice =
-        hasActivePublicOfferPeriod && summaryStartPrice != null
-          ? summaryStartPrice
-          : firstPeriodPrice ?? summaryStartPrice ?? null;
+      const publicOfferStartPrice = summaryStartPrice ?? firstPeriodPrice ?? null;
       const publicOfferCurrentPrice =
-        hasActivePublicOfferPeriod && resolvedCurrentPrice != null
-          ? resolvedCurrentPrice
-          : firstPeriodPrice ?? resolvedCurrentPrice ?? null;
+        resolvedCurrentPrice ?? publicOfferStartPrice;
       const publicOfferMinimalPrice =
         minimalPeriodPrice ?? firstPeriodMinPrice ?? firstPeriodPrice ?? null;
 
@@ -1879,6 +1869,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
