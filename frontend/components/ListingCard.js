@@ -620,6 +620,7 @@ export default function ListingCard({
     l?.trade_type_resolved ?? l?.trade_type ?? tradeTypeInfo?.kind,
   );
   const listingKind = tradeTypeInfo?.kind || normalizedTradeType || null;
+  const nowTs = Date.now();
 
   const currency = l.currency || "RUB";
   const startPriceRaw =
@@ -808,11 +809,22 @@ export default function ListingCard({
     numericStart ??
     null;
 
+  const shouldShowPublicOfferCurrentPrice = (() => {
+    if (listingKind !== "public_offer") return true;
+    const explicitStartTs = timing?.startDate?.getTime();
+    if (explicitStartTs != null) return nowTs >= explicitStartTs;
+    const upcomingStartTs = timing?.upcomingPeriod?.start?.getTime();
+    if (upcomingStartTs != null && !timing?.currentPeriod) {
+      return nowTs >= upcomingStartTs;
+    }
+    return true;
+  })();
+
   const resolvedCurrentPrice =
-    listingKind === "public_offer" && currentPriceFromHistory != null
-      ? currentPriceFromHistory
+    listingKind === "public_offer" && shouldShowPublicOfferCurrentPrice
+      ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? null
       : listingKind === "public_offer"
-      ? summaryCurrentPrice ?? summaryStartPrice ?? null
+      ? null
       : summaryCurrentPrice;
 
   let primaryValue = null;
@@ -821,8 +833,12 @@ export default function ListingCard({
   let secondaryLabel = null;
 
   if (listingKind === "public_offer") {
-    primaryValue = resolvedCurrentPrice;
-    primaryLabel = "Текущая цена";
+    primaryValue = shouldShowPublicOfferCurrentPrice
+      ? resolvedCurrentPrice
+      : summaryStartPrice ?? null;
+    primaryLabel = shouldShowPublicOfferCurrentPrice
+      ? "Текущая цена"
+      : "Начальная цена";
     secondaryValue = minPriceFromHistory ?? summaryStartPrice;
     secondaryLabel = "Минимальная цена";
   } else if (listingKind === "open_auction") {
@@ -1815,6 +1831,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
