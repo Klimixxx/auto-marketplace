@@ -667,6 +667,10 @@ export default function ListingCard({
             entry.current_price ??
             entry.startPrice ??
             entry.start_price ??
+            entry.min_price ??
+            entry.minimum_price ??
+            entry.price_min ??
+            entry.priceMin ??
             entry.value ??
             entry.amount,
         );
@@ -676,6 +680,10 @@ export default function ListingCard({
           entry.current_price ??
           entry.startPrice ??
           entry.start_price ??
+          entry.min_price ??
+          entry.minimum_price ??
+          entry.price_min ??
+          entry.priceMin ??
           entry.value ??
           entry.amount ??
           "—";
@@ -688,6 +696,10 @@ export default function ListingCard({
                   entry.current_price ??
                   entry.startPrice ??
                   entry.start_price ??
+                  entry.min_price ??
+                  entry.minimum_price ??
+                  entry.price_min ??
+                  entry.priceMin ??
                   entry.value ??
                   entry.amount,
               );
@@ -1845,6 +1857,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
