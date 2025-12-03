@@ -968,10 +968,12 @@ export default function ListingPage({ item }) {
   );
 
   const summaryDeposit = (() => {
-    if (isPublicOffer && hasActivePublicOfferPeriod) {
-      if (depositFromCurrentPeriod != null) return depositFromCurrentPeriod;
-      if (timing?.currentPeriod?.depositNumber != null)
-        return timing.currentPeriod.depositNumber;
+    if (isPublicOffer) {
+      const periodDeposit = hasActivePublicOfferPeriod
+        ? depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber
+        : timing?.upcomingPeriod?.depositNumber ?? depositFromCurrentPeriod;
+
+      if (periodDeposit != null) return periodDeposit;
     }
     if (explicitDeposit != null && explicitDeposit > 0) return explicitDeposit;
     if (
@@ -1921,6 +1923,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
