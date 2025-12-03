@@ -846,6 +846,9 @@ export default function ListingPage({ item }) {
     let latestPastPrice = null;
     let latestPastDeposit = null;
     let latestPastTimestamp = null;
+    let nearestFuturePrice = null;
+    let nearestFutureDeposit = null;
+    let nearestFutureTimestamp = null;
     let hasActivePeriod = false;
 
     for (const entry of normalizedPriceHistory) {
@@ -869,11 +872,25 @@ export default function ListingPage({ item }) {
         (endTs != null && endTs <= nowTs)
         || (endTs == null && startTs != null && startTs <= nowTs);
 
+      const isFuturePeriod =
+        !isPastPeriod &&
+        !isCurrent &&
+        candidateTs != null &&
+        candidateTs > nowTs;
+
       if (isPastPeriod && candidateTs != null) {
         if (latestPastTimestamp == null || candidateTs > latestPastTimestamp) {
           latestPastTimestamp = candidateTs;
           latestPastPrice = priceNumber;
           latestPastDeposit = depositNumber ?? latestPastDeposit;
+        }
+      }
+
+      if (isFuturePeriod) {
+        if (nearestFutureTimestamp == null || candidateTs < nearestFutureTimestamp) {
+          nearestFutureTimestamp = candidateTs;
+          nearestFuturePrice = priceNumber;
+          nearestFutureDeposit = depositNumber ?? nearestFutureDeposit;
         }
       }
 
@@ -887,9 +904,16 @@ export default function ListingPage({ item }) {
       }
     }
 
+    const price = latestPastPrice ?? nearestFuturePrice ?? latestPrice;
+    const deposit = (() => {
+      if (latestPastPrice != null) return latestPastDeposit ?? nearestFutureDeposit ?? latestDeposit;
+      if (nearestFuturePrice != null) return nearestFutureDeposit ?? latestDeposit;
+      return latestDeposit;
+    })();
+
     return {
-      price: latestPastPrice ?? latestPrice,
-      deposit: latestPastPrice != null ? latestPastDeposit ?? latestDeposit : latestDeposit,
+      price,
+      deposit,
       hasActivePublicOfferPeriod: hasActivePeriod,
     };
   })();
@@ -1897,6 +1921,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
