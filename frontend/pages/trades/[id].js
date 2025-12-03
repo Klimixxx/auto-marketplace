@@ -827,6 +827,11 @@ export default function ListingPage({ item }) {
       };
     });
   })();
+  const minPriceFromHistory = normalizedPriceHistory.reduce((min, entry) => {
+    if (entry?.priceNumber == null || !Number.isFinite(entry.priceNumber)) return min;
+    if (min == null || entry.priceNumber < min) return entry.priceNumber;
+    return min;
+  }, null);
   const {
     price: currentPriceFromHistory,
     deposit: depositFromCurrentPeriod,
@@ -875,10 +880,11 @@ export default function ListingPage({ item }) {
   })();
   const hasActivePublicOfferPeriod =
     hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
+  const publicOfferCurrentPrice = hasActivePublicOfferPeriod && currentPriceFromHistory != null
+    ? currentPriceFromHistory
+    : summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
   const resolvedCurrentPrice = isPublicOffer
-    ? hasActivePublicOfferPeriod && currentPriceFromHistory != null
-      ? currentPriceFromHistory
-      : summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null
+    ? publicOfferCurrentPrice
     : summaryCurrentPrice;
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
@@ -955,7 +961,11 @@ export default function ListingPage({ item }) {
       const publicOfferCurrentPrice =
         resolvedCurrentPrice ?? publicOfferStartPrice;
       const publicOfferMinimalPrice =
-        minimalPeriodPrice ?? firstPeriodMinPrice ?? firstPeriodPrice ?? null;
+        minimalPeriodPrice
+          ?? minPriceFromHistory
+          ?? firstPeriodMinPrice
+          ?? firstPeriodPrice
+          ?? null;
 
       blocks.push({
         label: "Текущая цена",
@@ -1869,6 +1879,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
