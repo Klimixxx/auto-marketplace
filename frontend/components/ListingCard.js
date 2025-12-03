@@ -867,7 +867,7 @@ export default function ListingCard({
 
   if (listingKind === "public_offer") {
     primaryValue = resolvedCurrentPrice;
-    primaryLabel = hasActivePublicOfferPeriod ? "Текущая цена" : "Начальная цена";
+    primaryLabel = "Текущая цена";
     const publicOfferMinimalPrice =
       minimalPeriodPrice ?? minPriceFromHistory ?? firstPeriodMinPrice ?? null;
     secondaryValue = publicOfferMinimalPrice;
@@ -1871,6 +1871,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
