@@ -843,6 +843,9 @@ export default function ListingPage({ item }) {
     let latestPrice = null;
     let latestDeposit = null;
     let latestTimestamp = null;
+    let latestPastPrice = null;
+    let latestPastDeposit = null;
+    let latestPastTimestamp = null;
     let hasActivePeriod = false;
 
     for (const entry of normalizedPriceHistory) {
@@ -862,6 +865,18 @@ export default function ListingPage({ item }) {
         };
 
       const candidateTs = startTs ?? endTs;
+      const isPastPeriod =
+        (endTs != null && endTs <= nowTs)
+        || (endTs == null && startTs != null && startTs <= nowTs);
+
+      if (isPastPeriod && candidateTs != null) {
+        if (latestPastTimestamp == null || candidateTs > latestPastTimestamp) {
+          latestPastTimestamp = candidateTs;
+          latestPastPrice = priceNumber;
+          latestPastDeposit = depositNumber ?? latestPastDeposit;
+        }
+      }
+
       if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
         latestTimestamp = candidateTs;
         latestPrice = priceNumber;
@@ -873,8 +888,8 @@ export default function ListingPage({ item }) {
     }
 
     return {
-      price: latestPrice,
-      deposit: latestDeposit,
+      price: latestPastPrice ?? latestPrice,
+      deposit: latestPastPrice != null ? latestPastDeposit ?? latestDeposit : latestDeposit,
       hasActivePublicOfferPeriod: hasActivePeriod,
     };
   })();
@@ -1882,6 +1897,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
