@@ -730,6 +730,17 @@ export default function ListingPage({ item }) {
         item?.start_price ??
         null;
 
+  const firstPeriodPrice =
+    periods[0]?.priceNumber ?? periods[0]?.minPriceNumber ?? null;
+  const firstPeriodMinPrice =
+    periods[0]?.minPriceNumber ?? periods[0]?.priceNumber ?? null;
+  const minimalPeriodPrice = periods.reduce((min, entry) => {
+    const candidate = entry?.minPriceNumber ?? entry?.priceNumber ?? null;
+    if (candidate == null || !Number.isFinite(candidate)) return min;
+    if (min == null || candidate < min) return candidate;
+    return min;
+  }, null);
+
   // ВАЖНО: эти константы объявляем ДО использования в summaryPriceBlocks и priceHistoryEntries
   const prices = Array.isArray(details?.prices) ? details.prices : [];
 
@@ -868,7 +879,7 @@ export default function ListingPage({ item }) {
     isPublicOffer && hasActivePublicOfferPeriod && currentPriceFromHistory != null
       ? currentPriceFromHistory
       : isPublicOffer
-      ? null
+      ? firstPeriodPrice ?? minimalPeriodPrice ?? null
       : summaryCurrentPrice;
   const summaryAuctionStepRaw = resolveAuctionStep(details, item);
   const summaryAuctionStepNumber = parseNumberValue(summaryAuctionStepRaw);
@@ -945,19 +956,28 @@ export default function ListingPage({ item }) {
     const blocks = [];
 
     if (isPublicOffer) {
+      const publicOfferStartPrice =
+        hasActivePublicOfferPeriod && summaryStartPrice != null
+          ? summaryStartPrice
+          : firstPeriodPrice ?? summaryStartPrice ?? null;
+      const publicOfferCurrentPrice =
+        hasActivePublicOfferPeriod && resolvedCurrentPrice != null
+          ? resolvedCurrentPrice
+          : firstPeriodPrice ?? resolvedCurrentPrice ?? null;
+      const publicOfferMinimalPrice =
+        minimalPeriodPrice ?? firstPeriodMinPrice ?? firstPeriodPrice ?? null;
+
       blocks.push({
         label: "Текущая цена",
-        value: fmtPrice(
-          hasActivePublicOfferPeriod ? resolvedCurrentPrice : null,
-          currency,
-        ),
+        value: fmtPrice(publicOfferCurrentPrice, currency),
       });
       blocks.push({
         label: "Начальная цена",
-        value: fmtPrice(
-          hasActivePublicOfferPeriod ? summaryStartPrice : null,
-          currency,
-        ),
+        value: fmtPrice(publicOfferStartPrice, currency),
+      });
+      blocks.push({
+        label: "Минимальная цена",
+        value: fmtPrice(publicOfferMinimalPrice, currency),
       });
     } else {
       blocks.push({
@@ -1859,6 +1879,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
