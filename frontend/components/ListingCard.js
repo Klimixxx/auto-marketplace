@@ -928,12 +928,11 @@ export default function ListingCard({
   }
 
   const numericDeposit = useMemo(() => {
-    const periodDeposit =
-      depositFromCurrentPeriod ??
-      timing?.currentPeriod?.depositNumber ??
-      (!hasActivePublicOfferPeriod
-        ? timing?.upcomingPeriod?.depositNumber ?? upcomingDepositFromHistory
-        : null);
+    const periodDeposit = hasActivePublicOfferPeriod
+      ? depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber
+      : timing?.upcomingPeriod?.depositNumber ??
+        upcomingDepositFromHistory ??
+        depositFromCurrentPeriod;
     const explicitDeposit = normalizeNumber(
       pickDetailValue(l, [
         "deposit",
@@ -1921,6 +1920,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
