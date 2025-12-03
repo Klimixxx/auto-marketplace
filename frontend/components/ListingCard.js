@@ -790,12 +790,16 @@ export default function ListingCard({
     currentPriceFromHistory,
     depositFromCurrentPeriod,
     hasActivePublicOfferPeriod: hasActivePublicOfferPeriodFromHistory,
+    upcomingPriceFromHistory,
+    upcomingDepositFromHistory,
   } = useMemo(() => {
     if (listingKind !== "public_offer" || priceHistoryEntries.length === 0)
       return {
         currentPriceFromHistory: null,
         depositFromCurrentPeriod: null,
         hasActivePublicOfferPeriod: false,
+        upcomingPriceFromHistory: null,
+        upcomingDepositFromHistory: null,
       };
 
     const nowTs = Date.now();
@@ -805,6 +809,9 @@ export default function ListingCard({
     let latestPastPrice = null;
     let latestPastDeposit = null;
     let latestPastTimestamp = null;
+    let nearestUpcomingPrice = null;
+    let nearestUpcomingDeposit = null;
+    let nearestUpcomingTimestamp = null;
     let hasActivePeriod = false;
 
     for (const entry of priceHistoryEntries) {
@@ -822,7 +829,19 @@ export default function ListingCard({
           currentPriceFromHistory: priceNumber,
           depositFromCurrentPeriod: depositNumber,
           hasActivePublicOfferPeriod: hasActivePeriod,
+          upcomingPriceFromHistory: null,
+          upcomingDepositFromHistory: null,
         };
+      }
+
+      if (startTs != null && startTs > nowTs) {
+        const isNearer =
+          nearestUpcomingTimestamp == null || startTs < nearestUpcomingTimestamp;
+        if (isNearer) {
+          nearestUpcomingTimestamp = startTs;
+          nearestUpcomingPrice = priceNumber;
+          nearestUpcomingDeposit = depositNumber ?? nearestUpcomingDeposit;
+        }
       }
 
       const candidateTs = startTs ?? endTs;
@@ -849,15 +868,23 @@ export default function ListingCard({
     }
 
     return {
-      currentPriceFromHistory: latestPastPrice ?? latestPrice,
-      depositFromCurrentPeriod:
-        latestPastPrice != null ? latestPastDeposit ?? latestDeposit : latestDeposit,
-      hasActivePublicOfferPeriod: hasActivePeriod,
-    };
-  }, [listingKind, priceHistoryEntries]);
+        currentPriceFromHistory: latestPastPrice ?? latestPrice,
+        depositFromCurrentPeriod:
+          latestPastPrice != null ? latestPastDeposit ?? latestDeposit : latestDeposit,
+        hasActivePublicOfferPeriod: hasActivePeriod,
+        upcomingPriceFromHistory: nearestUpcomingPrice,
+        upcomingDepositFromHistory: nearestUpcomingDeposit,
+      };
+    }, [listingKind, priceHistoryEntries]);
 
   const hasActivePublicOfferPeriod =
     hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
+
+  const upcomingPublicOfferPrice =
+    timing?.upcomingPeriod?.priceNumber ??
+    timing?.upcomingPeriod?.minPriceNumber ??
+    upcomingPriceFromHistory ??
+    null;
 
   const summaryCurrentPrice =
     timing?.currentPriceNumber ??
@@ -869,7 +896,7 @@ export default function ListingCard({
 
   const resolvedPublicOfferCurrentPrice = hasActivePublicOfferPeriod
     ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice
-    : currentPriceFromHistory ?? summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
+    : upcomingPublicOfferPrice ?? summaryStartPrice ?? firstPeriodPrice ?? currentPriceFromHistory ?? minimalPeriodPrice ?? null;
 
   const resolvedCurrentPrice =
     listingKind === "public_offer"
@@ -901,7 +928,12 @@ export default function ListingCard({
   }
 
   const numericDeposit = useMemo(() => {
-    const periodDeposit = depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber;
+    const periodDeposit =
+      depositFromCurrentPeriod ??
+      timing?.currentPeriod?.depositNumber ??
+      (!hasActivePublicOfferPeriod
+        ? timing?.upcomingPeriod?.depositNumber ?? upcomingDepositFromHistory
+        : null);
     const explicitDeposit = normalizeNumber(
       pickDetailValue(l, [
         "deposit",
@@ -949,11 +981,13 @@ export default function ListingCard({
     return Math.round(basePrice * 0.1);
   }, [
     depositFromCurrentPeriod,
+    hasActivePublicOfferPeriod,
     l,
     listingKind,
     resolvedCurrentPrice,
     summaryStartPrice,
     timing,
+    upcomingDepositFromHistory,
   ]);
 
   const priceLabel = formatPrice(primaryValue, currency);
@@ -1887,6 +1921,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
