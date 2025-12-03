@@ -802,6 +802,9 @@ export default function ListingCard({
     let latestPrice = null;
     let latestDeposit = null;
     let latestTimestamp = null;
+    let latestPastPrice = null;
+    let latestPastDeposit = null;
+    let latestPastTimestamp = null;
     let hasActivePeriod = false;
 
     for (const entry of priceHistoryEntries) {
@@ -823,6 +826,18 @@ export default function ListingCard({
       }
 
       const candidateTs = startTs ?? endTs;
+      const isPastPeriod =
+        (endTs != null && endTs <= nowTs)
+        || (endTs == null && startTs != null && startTs <= nowTs);
+
+      if (isPastPeriod && candidateTs != null) {
+        if (latestPastTimestamp == null || candidateTs > latestPastTimestamp) {
+          latestPastTimestamp = candidateTs;
+          latestPastPrice = priceNumber;
+          latestPastDeposit = depositNumber ?? latestPastDeposit;
+        }
+      }
+
       if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
         latestTimestamp = candidateTs;
         latestPrice = priceNumber;
@@ -834,8 +849,9 @@ export default function ListingCard({
     }
 
     return {
-      currentPriceFromHistory: latestPrice,
-      depositFromCurrentPeriod: latestDeposit,
+      currentPriceFromHistory: latestPastPrice ?? latestPrice,
+      depositFromCurrentPeriod:
+        latestPastPrice != null ? latestPastDeposit ?? latestDeposit : latestDeposit,
       hasActivePublicOfferPeriod: hasActivePeriod,
     };
   }, [listingKind, priceHistoryEntries]);
@@ -853,7 +869,7 @@ export default function ListingCard({
 
   const resolvedPublicOfferCurrentPrice = hasActivePublicOfferPeriod
     ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice
-    : summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
+    : currentPriceFromHistory ?? summaryStartPrice ?? firstPeriodPrice ?? minimalPeriodPrice ?? null;
 
   const resolvedCurrentPrice =
     listingKind === "public_offer"
@@ -1871,6 +1887,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
