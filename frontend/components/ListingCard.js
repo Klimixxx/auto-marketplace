@@ -772,14 +772,23 @@ export default function ListingCard({
     return prices.reduce((min, value) => (value < min ? value : min), prices[0]);
   }, [priceHistoryEntries]);
 
-  const { currentPriceFromHistory, depositFromCurrentPeriod } = useMemo(() => {
+  const {
+    currentPriceFromHistory,
+    depositFromCurrentPeriod,
+    hasActivePublicOfferPeriod: hasActivePublicOfferPeriodFromHistory,
+  } = useMemo(() => {
     if (listingKind !== "public_offer" || priceHistoryEntries.length === 0)
-      return { currentPriceFromHistory: null, depositFromCurrentPeriod: null };
+      return {
+        currentPriceFromHistory: null,
+        depositFromCurrentPeriod: null,
+        hasActivePublicOfferPeriod: false,
+      };
 
     const nowTs = Date.now();
     let latestPrice = null;
     let latestDeposit = null;
     let latestTimestamp = null;
+    let hasActivePeriod = false;
 
     for (const entry of priceHistoryEntries) {
       const { priceNumber, depositNumber, startDate, endDate } = entry;
@@ -790,11 +799,14 @@ export default function ListingCard({
       const isCurrent =
         (startTs == null || nowTs >= startTs) && (endTs == null || nowTs < endTs);
 
-      if (isCurrent)
+      if (isCurrent) {
+        hasActivePeriod = true;
         return {
           currentPriceFromHistory: priceNumber,
           depositFromCurrentPeriod: depositNumber,
+          hasActivePublicOfferPeriod: hasActivePeriod,
         };
+      }
 
       const candidateTs = startTs ?? endTs;
       if (candidateTs != null && (latestTimestamp == null || candidateTs > latestTimestamp)) {
@@ -810,8 +822,12 @@ export default function ListingCard({
     return {
       currentPriceFromHistory: latestPrice,
       depositFromCurrentPeriod: latestDeposit,
+      hasActivePublicOfferPeriod: hasActivePeriod,
     };
   }, [listingKind, priceHistoryEntries]);
+
+  const hasActivePublicOfferPeriod =
+    hasActivePublicOfferPeriodFromHistory || Boolean(timing?.currentPeriod);
 
   const summaryCurrentPrice =
     timing?.currentPriceNumber ??
@@ -823,6 +839,7 @@ export default function ListingCard({
 
   const shouldShowPublicOfferCurrentPrice = (() => {
     if (listingKind !== "public_offer") return true;
+    if (!hasActivePublicOfferPeriod) return false;
     const explicitStartTs = timing?.startDate?.getTime();
     if (explicitStartTs != null) return nowTs >= explicitStartTs;
     const upcomingStartTs = timing?.upcomingPeriod?.start?.getTime();
@@ -833,11 +850,13 @@ export default function ListingCard({
   })();
 
   const shouldShowOnlyMinimalPublicOfferPrice =
-    listingKind === "public_offer" && !timing?.currentPeriod;
+    listingKind === "public_offer" && !hasActivePublicOfferPeriod;
 
   const resolvedCurrentPrice =
     listingKind === "public_offer" && shouldShowPublicOfferCurrentPrice
-      ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? null
+      ? hasActivePublicOfferPeriod
+        ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? null
+        : null
       : listingKind === "public_offer"
       ? null
       : summaryCurrentPrice;
@@ -856,7 +875,9 @@ export default function ListingCard({
     primaryLabel = shouldShowPublicOfferCurrentPrice
       ? "Текущая цена"
       : "Начальная цена";
-    secondaryValue = minPriceFromHistory ?? summaryStartPrice;
+    secondaryValue = hasActivePublicOfferPeriod
+      ? minPriceFromHistory ?? summaryStartPrice
+      : null;
     secondaryLabel = "Минимальная цена";
   } else if (listingKind === "open_auction") {
     primaryValue = summaryStartPrice;
@@ -1857,6 +1878,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
