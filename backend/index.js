@@ -749,9 +749,9 @@ function resolveListingTradeType(record) {
 
   const base = normalizeTradeTypeCode(record?.trade_type);
 
-  if (hasPublic || base === 'public_offer') return 'public_offer';
-  if (hasAuction || base === 'open_auction') return 'open_auction';
   if (base) return base;
+  if (hasAuction) return 'open_auction';
+  if (hasPublic) return 'public_offer';
   return null;
 }
 
