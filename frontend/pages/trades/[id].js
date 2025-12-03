@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import TradeOrderModal from "../../components/TradeOrderModal";
@@ -56,6 +55,26 @@ function EyeIcon({ size = 18, color = "#475569" }) {
         fill="none"
       />
       <circle cx="12" cy="12" r="1.5" fill={color} />
+    </svg>
+  );
+}
+
+function PriceDirectionArrow({ direction, size = 22, color = "#2A65F7" }) {
+  const isDown = direction === "down";
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+      style={{ transform: isDown ? "rotate(180deg)" : undefined }}
+    >
+      <path
+        d="M12 5l5.5 5.5a.75.75 0 01-1.06 1.06L12.75 8.87V19a.75.75 0 01-1.5 0V8.87L7.56 11.56a.75.75 0 01-1.06-1.06L12 5z"
+        fill={color}
+      />
     </svg>
   );
 }
@@ -661,6 +680,14 @@ export default function ListingPage({ item }) {
 
   const router = useRouter();
 
+  const handleBackToList = () => {
+    if (typeof window !== "undefined" && window.history?.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/trades");
+  };
+
   const timing = computeTradeTiming(item || {});
   const statusInfo = timing?.status || null;
   const periods = Array.isArray(timing?.periods) ? timing.periods : [];
@@ -997,6 +1024,8 @@ export default function ListingPage({ item }) {
 
   const summaryDepositDisplay = summaryDeposit != null ? fmtPrice(summaryDeposit, currency) : "—";
 
+  const tradePriceDirection = isPublicOffer ? "up" : isOpenAuction ? "down" : null;
+
   const summaryPriceBlocks = (() => {
     const blocks = [];
 
@@ -1014,6 +1043,7 @@ export default function ListingPage({ item }) {
       blocks.push({
         label: "Текущая цена",
         value: fmtPrice(publicOfferCurrentPrice, currency),
+        arrowDirection: tradePriceDirection,
       });
       blocks.push({
         label: "Начальная цена",
@@ -1027,6 +1057,7 @@ export default function ListingPage({ item }) {
       blocks.push({
         label: "Начальная цена",
         value: fmtPrice(summaryStartPrice, currency),
+        arrowDirection: tradePriceDirection,
       });
       blocks.push({
         label: isOpenAuction ? "Шаг аукциона" : "Текущая цена",
@@ -1288,6 +1319,9 @@ export default function ListingPage({ item }) {
   const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
     lotEntries,
   );
+  const filteredLotInfoEntries = lotInfoEntries.filter(
+    (entry) => entry?.key !== "inspection_procedure" && entry?.label !== "Порядок осмотра",
+  );
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const documents = normalizeDocuments(
@@ -1341,9 +1375,14 @@ export default function ListingPage({ item }) {
   return (
     <div className="container detail-page">
       <div className="back-link">
-        <Link href="/trades" className="link">
+        <button
+          type="button"
+          onClick={handleBackToList}
+          className="link"
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
           ← Назад к списку
-        </Link>
+        </button>
       </div>
 
       <div
@@ -1427,8 +1466,14 @@ export default function ListingPage({ item }) {
                   <div className="detail-summary__price-label">
                     {block.label}
                   </div>
-                  <div className="detail-summary__price-value">
-                    {block.value}
+                  <div
+                    className="detail-summary__price-value"
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span>{block.value}</span>
+                    {block.arrowDirection ? (
+                      <PriceDirectionArrow direction={block.arrowDirection} />
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -1661,10 +1706,10 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {lotInfoEntries.length > 0 && (
+          {filteredLotInfoEntries.length > 0 && (
             <section className="detail-section">
               <h2>Сведения о лоте</h2>
-              <KeyValueGrid entries={lotInfoEntries} />
+              <KeyValueGrid entries={filteredLotInfoEntries} />
             </section>
           )}
 
@@ -1923,6 +1968,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
