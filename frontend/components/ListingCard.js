@@ -820,6 +820,9 @@ export default function ListingCard({
     return true;
   })();
 
+  const shouldShowOnlyMinimalPublicOfferPrice =
+    listingKind === "public_offer" && !timing?.currentPeriod;
+
   const resolvedCurrentPrice =
     listingKind === "public_offer" && shouldShowPublicOfferCurrentPrice
       ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? null
@@ -833,8 +836,10 @@ export default function ListingCard({
   let secondaryLabel = null;
 
   if (listingKind === "public_offer") {
-    primaryValue = shouldShowPublicOfferCurrentPrice
+    primaryValue = shouldShowPublicOfferCurrentPrice && !shouldShowOnlyMinimalPublicOfferPrice
       ? resolvedCurrentPrice
+      : shouldShowOnlyMinimalPublicOfferPrice
+      ? null
       : summaryStartPrice ?? null;
     primaryLabel = shouldShowPublicOfferCurrentPrice
       ? "Текущая цена"
@@ -854,6 +859,8 @@ export default function ListingCard({
   }
 
   const numericDeposit = useMemo(() => {
+    if (shouldShowOnlyMinimalPublicOfferPrice) return null;
+
     const periodDeposit = depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber;
     const explicitDeposit = normalizeNumber(
       pickDetailValue(l, [
@@ -915,6 +922,9 @@ export default function ListingCard({
     : null;
   const depositPriceLabel =
     numericDeposit != null ? formatPrice(numericDeposit, currency) : "—";
+
+  const showPrimaryPriceBlock = !shouldShowOnlyMinimalPublicOfferPrice;
+  const showDepositBlock = !shouldShowOnlyMinimalPublicOfferPrice;
 
   // eyebrow
 
@@ -1383,14 +1393,16 @@ const articleHoverStyle = {
           ) : null}
 
           <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
-            <div style={{ display: "grid", gap: 4 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                {primaryLabel}
+            {showPrimaryPriceBlock ? (
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                  {primaryLabel}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#1d4ed8" }}>
+                  {priceLabel}
+                </div>
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#1d4ed8" }}>
-                {priceLabel}
-              </div>
-            </div>
+            ) : null}
             {secondaryPriceLabel && secondaryLabel ? (
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
@@ -1403,12 +1415,14 @@ const articleHoverStyle = {
                 </div>
               </div>
             ) : null}
-            <div style={{ display: "grid", gap: 4 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Задаток</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                {depositPriceLabel}
+            {showDepositBlock ? (
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Задаток</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                  {depositPriceLabel}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           </div>
@@ -1831,6 +1845,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
