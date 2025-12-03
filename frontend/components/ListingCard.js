@@ -647,6 +647,20 @@ export default function ListingCard({
     timing?.periods?.[0]?.priceNumber ??
     timing?.periods?.[0]?.minPriceNumber ??
     null;
+  const firstPeriodPrice =
+    timing?.periods?.[0]?.priceNumber ??
+    timing?.periods?.[0]?.minPriceNumber ??
+    null;
+  const firstPeriodMinPrice =
+    timing?.periods?.[0]?.minPriceNumber ??
+    timing?.periods?.[0]?.priceNumber ??
+    null;
+  const minimalPeriodPrice = (timing?.periods || []).reduce((min, entry) => {
+    const candidate = entry?.minPriceNumber ?? entry?.priceNumber ?? null;
+    if (candidate == null || !Number.isFinite(candidate)) return min;
+    if (min == null || candidate < min) return candidate;
+    return min;
+  }, null);
 
   const priceHistoryEntries = useMemo(() => {
     const details = l?.details && typeof l.details === "object" ? l.details : {};
@@ -837,28 +851,13 @@ export default function ListingCard({
     numericStart ??
     null;
 
-  const shouldShowPublicOfferCurrentPrice = (() => {
-    if (listingKind !== "public_offer") return true;
-    if (!hasActivePublicOfferPeriod) return false;
-    const explicitStartTs = timing?.startDate?.getTime();
-    if (explicitStartTs != null) return nowTs >= explicitStartTs;
-    const upcomingStartTs = timing?.upcomingPeriod?.start?.getTime();
-    if (upcomingStartTs != null && !timing?.currentPeriod) {
-      return nowTs >= upcomingStartTs;
-    }
-    return true;
-  })();
-
-  const shouldShowOnlyMinimalPublicOfferPrice =
-    listingKind === "public_offer" && !hasActivePublicOfferPeriod;
+  const resolvedPublicOfferCurrentPrice = hasActivePublicOfferPeriod
+    ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? firstPeriodPrice
+    : firstPeriodPrice ?? summaryStartPrice ?? minimalPeriodPrice ?? null;
 
   const resolvedCurrentPrice =
-    listingKind === "public_offer" && shouldShowPublicOfferCurrentPrice
-      ? hasActivePublicOfferPeriod
-        ? currentPriceFromHistory ?? summaryCurrentPrice ?? summaryStartPrice ?? null
-        : null
-      : listingKind === "public_offer"
-      ? null
+    listingKind === "public_offer"
+      ? resolvedPublicOfferCurrentPrice
       : summaryCurrentPrice;
 
   let primaryValue = null;
@@ -867,17 +866,11 @@ export default function ListingCard({
   let secondaryLabel = null;
 
   if (listingKind === "public_offer") {
-    primaryValue = shouldShowPublicOfferCurrentPrice && !shouldShowOnlyMinimalPublicOfferPrice
-      ? resolvedCurrentPrice
-      : shouldShowOnlyMinimalPublicOfferPrice
-      ? null
-      : summaryStartPrice ?? null;
-    primaryLabel = shouldShowPublicOfferCurrentPrice
-      ? "Текущая цена"
-      : "Начальная цена";
-    secondaryValue = hasActivePublicOfferPeriod
-      ? minPriceFromHistory ?? summaryStartPrice
-      : null;
+    primaryValue = resolvedCurrentPrice;
+    primaryLabel = hasActivePublicOfferPeriod ? "Текущая цена" : "Начальная цена";
+    const publicOfferMinimalPrice =
+      minimalPeriodPrice ?? minPriceFromHistory ?? firstPeriodMinPrice ?? null;
+    secondaryValue = publicOfferMinimalPrice;
     secondaryLabel = "Минимальная цена";
   } else if (listingKind === "open_auction") {
     primaryValue = summaryStartPrice;
@@ -892,8 +885,6 @@ export default function ListingCard({
   }
 
   const numericDeposit = useMemo(() => {
-    if (shouldShowOnlyMinimalPublicOfferPrice) return null;
-
     const periodDeposit = depositFromCurrentPeriod ?? timing?.currentPeriod?.depositNumber;
     const explicitDeposit = normalizeNumber(
       pickDetailValue(l, [
@@ -956,8 +947,10 @@ export default function ListingCard({
   const depositPriceLabel =
     numericDeposit != null ? formatPrice(numericDeposit, currency) : "—";
 
-  const showPrimaryPriceBlock = !shouldShowOnlyMinimalPublicOfferPrice;
-  const showDepositBlock = !shouldShowOnlyMinimalPublicOfferPrice;
+  const showPrimaryPriceBlock =
+    listingKind !== "public_offer" ? true : primaryValue != null;
+  const showDepositBlock = listingKind !== "public_offer" ? true : primaryValue != null;
+
 
   // eyebrow
 
@@ -1878,6 +1871,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
