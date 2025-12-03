@@ -2387,13 +2387,8 @@ export default function AdminParserTradeCard() {
       return;
     }
 
-    if (item?.waiting_at) {
-      void publishTrade();
-      return;
-    }
-
-    void sendToWaiting();
-  }, [item?.published_at, item?.waiting_at, saveAndPublish, publishTrade, sendToWaiting]);
+    void publishTrade();
+  }, [item?.published_at, saveAndPublish, publishTrade]);
 
   const unpublishTrade = useCallback(async () => {
     if (!id) return;
@@ -2487,13 +2482,15 @@ export default function AdminParserTradeCard() {
     ? updatingPublication || saving || publishing
       ? 'Обновляем…'
       : 'Сохранить и обновить публикацию'
+    : publishing
+      ? 'Публикуем…'
+      : 'Опубликовать';
+
+  const waitingButtonLabel = sendingToWaiting
+    ? 'Отправляем…'
     : item.waiting_at
-      ? publishing
-        ? 'Публикуем…'
-        : 'Опубликовать'
-      : sendingToWaiting
-        ? 'Отправляем…'
-        : 'Ожидание';
+      ? 'В ожидании'
+      : 'Отправить в ожидание';
 
   const actionButtonsDisabled = saving || publishing || updatingPublication || unpublishing || sendingToWaiting;
   const sectionCardStyle = {
@@ -3203,6 +3200,16 @@ export default function AdminParserTradeCard() {
           <button type="button" className="button outline" onClick={resetChanges} disabled={actionButtonsDisabled}>
             Сбросить изменения
           </button>
+          {!item.published_at ? (
+            <button
+              type="button"
+              className="button outline"
+              onClick={sendToWaiting}
+              disabled={actionButtonsDisabled || item.waiting_at}
+            >
+              {waitingButtonLabel}
+            </button>
+          ) : null}
           <button type="button" className="button" onClick={handlePublishClick} disabled={actionButtonsDisabled}>
             {publishButtonLabel}
           </button>
@@ -3449,6 +3456,7 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
+
 
 
 
