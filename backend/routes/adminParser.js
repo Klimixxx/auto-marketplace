@@ -11,6 +11,7 @@ import {
 } from '../../shared/regions.js';
 import parserClient from '../src/services/parserClient.js';
 
+
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
