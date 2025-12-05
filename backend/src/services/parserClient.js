@@ -58,4 +58,23 @@ async function parseFedresursTrades({ search_string = 'vin', start_date, end_dat
   return normalizeParserPayload(data);
 }
 
+async function parseFedresursTradesAll({
+  search_string = 'vin',
+  start_date,
+  end_date,
+  limit = 15,
+  region_code,
+  only_available = true,
+}) {
+  const params = { search_string, start_date, end_date, limit, only_available };
+  if (region_code) {
+    params.region_code = region_code;
+  }
+
+  const { data } = await client.get('/parse-fedresurs-trades-all', { params });
+  return data;
+}
+
+module.exports = { parseFedresursTrades, normalizeParserPayload, parseFedresursTradesAll };
+
 module.exports = { parseFedresursTrades, normalizeParserPayload };
