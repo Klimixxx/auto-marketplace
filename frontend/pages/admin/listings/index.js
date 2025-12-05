@@ -192,6 +192,12 @@ export default function AdminParserTradesPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [parsingAll, setParsingAll] = useState(false);
+  const [publishingId, setPublishingId] = useState(null);
+  const [waitingId, setWaitingId] = useState(null);
+  const [unpublishingId, setUnpublishingId] = useState(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
   const [waitingId, setWaitingId] = useState(null);
   const [unpublishingId, setUnpublishingId] = useState(null);
@@ -439,6 +445,72 @@ export default function AdminParserTradesPage() {
     },
     [loadPage],
   );
+
+  const runParseAll = useCallback(async () => {
+    if (view !== 'drafts') return;
+    if (!API_BASE) {
+      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно запустить полный парсинг.');
+      return;
+    }
+
+    const token = readToken();
+    if (!token) {
+      alert('Сначала войдите в админ-аккаунт.');
+      return;
+    }
+
+    const searchTerm = resolveSearchTerm(filters.q || '');
+    let primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
+    if (!primaryRegionCode && filters.region) {
+      primaryRegionCode = pickPrimaryRegionCode(filters.region);
+    }
+
+    if (!primaryRegionCode) {
+      alert('Выберите регион для полного парсинга.');
+      return;
+    }
+
+    setParsingAll(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/actions/parse-all`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          search: searchTerm,
+          region_code: primaryRegionCode,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error((data && data.error) || 'Не удалось выполнить полный парсинг');
+      }
+
+      const payload = data.data || {};
+      const totalFound = Number.isFinite(Number(payload.total_found)) ? Number(payload.total_found) : null;
+      const parsedCount = Number.isFinite(Number(payload.parsed))
+        ? Number(payload.parsed)
+        : Array.isArray(payload.results)
+          ? payload.results.length
+          : null;
+      const summaryParts = [
+        `Запрос: ${searchTerm}`,
+        `Регион: ${primaryRegionCode}`,
+        totalFound != null ? `Найдено: ${totalFound}` : null,
+        parsedCount != null ? `Распарсено: ${parsedCount}` : null,
+      ].filter(Boolean);
+      alert(summaryParts.join('\n'));
+    } catch (error) {
+      console.error('parse-all error:', error);
+      alert(`Ошибка: ${error.message || 'parse-all failed'}`);
+    } finally {
+      setParsingAll(false);
+    }
+  }, [filters, view]);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -715,7 +787,8 @@ export default function AdminParserTradesPage() {
   const canGoNext = page < pageCount;
   const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые с Федресурса';
   const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё с парсера';
-  const ingestDisabled = ingesting;
+  const parseAllLabel = parsingAll ? 'Парсим все…' : 'СПАРСИТЬ ВСЕ';
+  const ingestDisabled = ingesting || parsingAll;
   const filterInitial = useMemo(() => ({ ...filters }), [filters]);
 
   return (
@@ -804,6 +877,14 @@ export default function AdminParserTradesPage() {
               disabled={ingestDisabled}
             >
               {ingestMoreLabel}
+            </button>
+            <button
+              type="button"
+              className="button button-small button-outline"
+              onClick={runParseAll}
+              disabled={ingestDisabled}
+            >
+              {parseAllLabel}
             </button>
           </div>
         ) : null}
@@ -1054,5 +1135,6 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
