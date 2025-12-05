@@ -9,6 +9,7 @@ import {
   normalizeRegionCode,
   findRegionCodeByName,
 } from '../../shared/regions.js';
+import parserClient from '../src/services/parserClient.js';
 
 const router = express.Router();
 
@@ -651,6 +652,20 @@ async function ingestRegionRequest({
   };
 }
 
+async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDate, endDate, onlyAvailable = true }) {
+  const search_string = resolveSearchTerm(searchTerm);
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+
+  return parserClient.parseFedresursTradesAll({
+    search_string,
+    region_code: regionCode,
+    limit: safeLimit,
+    start_date: startDate,
+    end_date: endDate,
+    only_available: onlyAvailable,
+  });
+}
+
 /* =========================
    ROUTES
    ========================= */
@@ -889,6 +904,39 @@ router.get('/parser-progress', async (req, res) => {
   } catch (error) {
     console.error('parser progress fetch error:', error);
     res.status(500).json({ error: 'failed' });
+  }
+});
+
+router.post('/actions/parse-all', async (req, res) => {
+  try {
+    const {
+      search,
+      start_date,
+      end_date,
+      limit = DEFAULT_LIMIT,
+      region_code,
+      only_available = true,
+    } = req.body || {};
+
+    const normalizedRegionCode = normalizeRegionCode(region_code);
+    if (!normalizedRegionCode) {
+      return res.status(400).json({ error: 'region_code is required' });
+    }
+
+    const searchTerm = resolveSearchTerm(search);
+    const data = await parseAllFedresursTrades({
+      searchTerm,
+      regionCode: normalizedRegionCode,
+      limit,
+      startDate: start_date,
+      endDate: end_date,
+      onlyAvailable: Boolean(only_available),
+    });
+
+    return res.json({ ok: true, search: searchTerm, region_code: normalizedRegionCode, data });
+  } catch (error) {
+    console.error('parse-all error:', error);
+    res.status(500).json({ error: 'failed', message: error?.message });
   }
 });
 
