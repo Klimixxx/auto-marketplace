@@ -2,7 +2,6 @@
 
 const BASE_URL =
   process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
-const TIMEOUT_MS = Number(process.env.PARSER_API_TIMEOUT || 30000);
 
 function toFinite(value) {
   if (value === undefined || value === null) return undefined;
@@ -73,35 +72,27 @@ async function fetchJson(path, params = {}) {
     }
   });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+    },
+  });
 
-  try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-      },
-      signal: controller.signal,
-    });
+  const data = await response.json().catch(() => null);
 
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const err = new Error(`Parser request failed with status ${response.status}`);
-      err.status = response.status;
-      err.payload = data;
-      throw err;
-    }
-
-    if (data == null) {
-      throw new Error('Parser returned empty response');
-    }
-
-    return data;
-  } finally {
-    clearTimeout(timeout);
+  if (!response.ok) {
+    const err = new Error(`Parser request failed with status ${response.status}`);
+    err.status = response.status;
+    err.payload = data;
+    throw err;
   }
+
+  if (data == null) {
+    throw new Error('Parser returned empty response');
+  }
+
+  return data;
 }
 
 export async function parseFedresursTrades({
@@ -135,7 +126,7 @@ export async function parseFedresursTradesAll({
   }
 
   const data = await fetchJson('/parse-fedresurs-trades-all', params);
-  // тут возвращаем «сырые» данные, как и раньше
+  // "parse-all" в adminParser ожидает "сырые" данные
   return data;
 }
 
