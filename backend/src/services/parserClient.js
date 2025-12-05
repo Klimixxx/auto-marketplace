@@ -1,5 +1,5 @@
 // backend/src/services/parserClient.js
-const axios = require('axios');
+import axios from 'axios';
 
 const client = axios.create({
   baseURL: process.env.PARSER_BASE_URL,
@@ -21,7 +21,7 @@ function pickResultsArray(payload) {
   return null;
 }
 
-function normalizeParserPayload(payload) {
+export function normalizeParserPayload(payload) {
   if (Array.isArray(payload)) {
     return { items: payload, meta: { total_found: payload.length } };
   }
@@ -49,7 +49,14 @@ function normalizeParserPayload(payload) {
   throw new Error(`Unexpected parser payload type: ${typeof payload}`);
 }
 
-async function parseFedresursTrades({ search_string = 'vin', start_date, end_date, limit = 15, offset = 0, region_code }) {
+export async function parseFedresursTrades({
+  search_string = 'vin',
+  start_date,
+  end_date,
+  limit = 15,
+  offset = 0,
+  region_code,
+}) {
   const params = { search_string, start_date, end_date, limit, offset };
   if (region_code) {
     params.region_code = region_code;
@@ -58,7 +65,7 @@ async function parseFedresursTrades({ search_string = 'vin', start_date, end_dat
   return normalizeParserPayload(data);
 }
 
-async function parseFedresursTradesAll({
+export async function parseFedresursTradesAll({
   search_string = 'vin',
   start_date,
   end_date,
@@ -75,6 +82,11 @@ async function parseFedresursTradesAll({
   return data;
 }
 
-module.exports = { parseFedresursTrades, normalizeParserPayload, parseFedresursTradesAll };
+// опционально — чтобы можно было импортировать как default-объект
+const parserClient = {
+  parseFedresursTrades,
+  normalizeParserPayload,
+  parseFedresursTradesAll,
+};
 
-module.exports = { parseFedresursTrades, normalizeParserPayload };
+export default parserClient;
