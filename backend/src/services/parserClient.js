@@ -67,7 +67,18 @@ async function fetchJson(path, params = {}) {
   const url = new URL(path, BASE_URL);
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value === undefined || value === null) return;
+
+    if (Array.isArray(value)) {
+      value
+        .filter((entry) => entry !== undefined && entry !== null && entry !== '')
+        .forEach((entry) => {
+          url.searchParams.append(key, String(entry));
+        });
+      return;
+    }
+
+    if (value !== '') {
       url.searchParams.set(key, String(value));
     }
   });
@@ -118,10 +129,13 @@ export async function parseFedresursTradesAll({
   end_date,
   limit = 15,
   region_code,
+  region_codes,
   only_available = true,
 }) {
   const params = { search_string, start_date, end_date, limit, only_available };
-  if (region_code) {
+  if (Array.isArray(region_codes) && region_codes.length) {
+    params.region_codes = region_codes;
+  } else if (region_code) {
     params.region_code = region_code;
   }
 
