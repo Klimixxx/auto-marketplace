@@ -58,7 +58,7 @@ const listingDocumentUpload = multer({
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 15;
 const DEFAULT_OFFSET = 0;
-const PARSER_FALLBACK_BASE = 'http://91.135.156.232:8000';
+const PARSER_FALLBACK_BASE = 'http://5.129.250.178:8000';
 const DEFAULT_SEARCH_TERM = 'vin';
 
 function parseJson(value, label = 'value') {
