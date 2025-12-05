@@ -653,18 +653,39 @@ async function ingestRegionRequest({
   };
 }
 
-async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDate, endDate, onlyAvailable = true }) {
+async function parseAllFedresursTrades({
+  searchTerm,
+  regionCode,
+  regionCodes,
+  limit,
+  startDate,
+  endDate,
+  onlyAvailable = true,
+}) {
   const search_string = resolveSearchTerm(searchTerm);
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
 
-  const data = await parserClient.parseFedresursTradesAll({
+  const regionList = parseRegionCodeList([regionCodes, regionCode]);
+  if (!regionList.length) {
+    throw new Error('region_code is required');
+  }
+
+  const parserParams = {
     search_string,
     region_code: regionCode,
     limit: safeLimit,
     start_date: startDate,
     end_date: endDate,
     only_available: onlyAvailable,
-  });
+  };
+
+  if (regionList.length === 1) {
+    parserParams.region_code = regionList[0];
+  } else {
+    parserParams.region_codes = regionList;
+  }
+
+  const data = await parserClient.parseFedresursTradesAll(parserParams);
 
   const items = Array.isArray(data)
     ? data
@@ -682,6 +703,10 @@ async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDat
 
   const totalFound = toFinite(data?.total_found ?? data?.total ?? data?.count ?? data?.totalCount);
   const parsedCount = toFinite(data?.parsed);
+  const regionSummary = regionList.length === 1
+    ? { region_code: regionList[0] }
+    : { region_codes: regionList };
+  
   const summary = {
     results: items,
     total_found: totalFound ?? items.length,
@@ -691,7 +716,7 @@ async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDat
   };
 
   if (data && typeof data === 'object' && !Array.isArray(data)) {
-    return { ...data, ...summary };
+    return { ...regionSummary, ...data, ...summary };
   }
 
   return summary;
@@ -946,25 +971,37 @@ router.post('/actions/parse-all', async (req, res) => {
       end_date,
       limit = DEFAULT_LIMIT,
       region_code,
+      region_codes,
       only_available = true,
     } = req.body || {};
 
-    const normalizedRegionCode = normalizeRegionCode(region_code);
-    if (!normalizedRegionCode) {
+    const regionInputs = [
+      parseJsonArray(region_codes, 'region_codes'),
+      parseJsonArray(region_code, 'region_code'),
+      region_codes,
+      region_code,
+    ];
+    const regionList = parseRegionCodeList(regionInputs);
+
+    if (!regionList.length) {
       return res.status(400).json({ error: 'region_code is required' });
     }
 
     const searchTerm = resolveSearchTerm(search);
     const data = await parseAllFedresursTrades({
       searchTerm,
-      regionCode: normalizedRegionCode,
+      regionCodes: regionList,
       limit,
       startDate: start_date,
       endDate: end_date,
       onlyAvailable: Boolean(only_available),
     });
 
-    return res.json({ ok: true, search: searchTerm, region_code: normalizedRegionCode, data });
+    const regionResponse = regionList.length === 1
+      ? { region_code: regionList[0] }
+      : { region_codes: regionList };
+
+    return res.json({ ok: true, search: searchTerm, ...regionResponse, data });
   } catch (error) {
     console.error('parse-all error:', error);
     res.status(500).json({ error: 'failed', message: error?.message });
