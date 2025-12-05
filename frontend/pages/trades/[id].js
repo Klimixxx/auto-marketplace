@@ -1814,14 +1814,15 @@ export default function ListingPage({ item }) {
                 <table>
                   <thead>
                     <tr>
-                      <th style={PRICE_HEADER_STYLE}>Цена</th>
-                      <th style={PRICE_HEADER_STYLE}>Задаток</th>
-                      <th style={PRICE_HEADER_STYLE}>Начало периода</th>
-                      <th style={PRICE_HEADER_STYLE}>Конец периода</th>
+                      <th style={{ ...PRICE_HEADER_STYLE, width: 60 }}>№</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата начала</th>
+                      <th style={PRICE_HEADER_STYLE}>Дата окончания</th>
+                      <th style={PRICE_HEADER_STYLE}>Цена, руб.</th>
+                      <th style={PRICE_HEADER_STYLE}>Задаток, руб.</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {priceHistoryEntries.map((entry) => {
+                    {priceHistoryEntries.map((entry, index) => {
                       const rowStyle = { ...PRICE_CELL_STYLE };
                       let rowBackground;
                       let chip;
@@ -1877,8 +1878,17 @@ export default function ListingPage({ item }) {
                               : null),
                           }}
                         >
-                          <td style={rowStyle}>{entry.priceText}</td>
-                          <td style={rowStyle}>{entry.depositText}</td>
+                          <td style={rowStyle}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "center",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {index + 1}
+                            </div>
+                          </td>
                           <td style={rowStyle}>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               <span>{entry.startText}</span>
@@ -1886,6 +1896,8 @@ export default function ListingPage({ item }) {
                             </div>
                           </td>
                           <td style={rowStyle}>{entry.endText}</td>
+                          <td style={rowStyle}>{entry.priceText}</td>
+                          <td style={rowStyle}>{entry.depositText}</td>
                         </tr>
                       );
                     })}
@@ -1962,6 +1974,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
