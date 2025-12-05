@@ -657,7 +657,7 @@ async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDat
   const search_string = resolveSearchTerm(searchTerm);
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
 
-  return parserClient.parseFedresursTradesAll({
+  const data = await parserClient.parseFedresursTradesAll({
     search_string,
     region_code: regionCode,
     limit: safeLimit,
@@ -665,6 +665,36 @@ async function parseAllFedresursTrades({ searchTerm, regionCode, limit, startDat
     end_date: endDate,
     only_available: onlyAvailable,
   });
+
+  const items = Array.isArray(data)
+    ? data
+    : pickResultsArray(data) || [];
+
+  let upserted = 0;
+  for (const item of items) {
+    try {
+      await upsertParserTrade(item);
+      upserted += 1;
+    } catch (error) {
+      console.error('UPSERT parse-all parser_trades error:', error?.message);
+    }
+  }
+
+  const totalFound = toFinite(data?.total_found ?? data?.total ?? data?.count ?? data?.totalCount);
+  const parsedCount = toFinite(data?.parsed);
+  const summary = {
+    results: items,
+    total_found: totalFound ?? items.length,
+    parsed: parsedCount ?? items.length,
+    received: items.length,
+    upserted,
+  };
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return { ...data, ...summary };
+  }
+
+  return summary;
 }
 
 /* =========================
