@@ -149,6 +149,25 @@ function formatPrice(value, currency = "RUB") {
   }
 }
 
+function PriceDirectionArrow({ direction, size = 22, color = "#2A65F7" }) {
+  const isDown = direction === "down";
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+      style={{ transform: isDown ? "rotate(180deg)" : undefined }}
+    >
+      <path
+        d="M12 5l5.5 5.5a.75.75 0 01-1.06 1.06L12.75 8.87V19a.75.75 0 01-1.5 0V8.87L7.56 11.56a.75.75 0 01-1.06-1.06L12 5z"
+        fill={color}
+      />
+    </svg>
+  );
+}
 function tradeTypeLabel(type) {
   const mapped = formatTradeTypeLabel(type);
   if (mapped) return mapped;
@@ -620,6 +639,12 @@ export default function ListingCard({
     l?.trade_type_resolved ?? l?.trade_type ?? tradeTypeInfo?.kind,
   );
   const listingKind = tradeTypeInfo?.kind || normalizedTradeType || null;
+  const tradePriceDirection =
+    listingKind === "public_offer"
+      ? "up"
+      : listingKind === "open_auction"
+        ? "down"
+        : null;
   const nowTs = Date.now();
 
   const currency = l.currency || "RUB";
@@ -1473,8 +1498,23 @@ const articleHoverStyle = {
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
                   {primaryLabel}
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#1d4ed8" }}>
-                  {priceLabel}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "#1d4ed8",
+                  }}
+                >
+                  <span>{priceLabel}</span>
+                  {tradePriceDirection ? (
+                    <PriceDirectionArrow
+                      direction={tradePriceDirection}
+                      size={18}
+                    />
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1836,13 +1876,22 @@ const articleHoverStyle = {
           <div style={{ textAlign: "right" }}>
             <div
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
                 ...resetPill,
                 fontSize: 18,
                 fontWeight: 800,
                 color: "#1d4ed8",
               }}
             >
-              {priceLabel}
+              <span>{priceLabel}</span>
+              {tradePriceDirection ? (
+                <PriceDirectionArrow
+                  direction={tradePriceDirection}
+                  size={18}
+                />
+              ) : null}
             </div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
               {primaryLabel}
@@ -1920,6 +1969,7 @@ const articleHoverStyle = {
     </article>
   );
 }
+
 
 
 
