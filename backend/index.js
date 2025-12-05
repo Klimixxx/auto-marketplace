@@ -2207,7 +2207,7 @@ app.post('/api/ingest', async (req, res) => {
 // ==================== НОВОЕ: Интеграция с Trade Parser API ====================
 
 // Базовый URL парсера и таймаут
-const PARSER_BASE = process.env.PARSER_BASE_URL || 'http://91.135.156.232:8000';
+const PARSER_BASE = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 const PARSER_TIMEOUT = Number(process.env.PARSER_API_TIMEOUT || 30000);
 
 // Безопасный парсинг числа (с пробелами/запятыми)
