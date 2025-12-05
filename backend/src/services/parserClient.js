@@ -1,10 +1,8 @@
 // backend/src/services/parserClient.js
-import axios from 'axios';
 
-const client = axios.create({
-  baseURL: process.env.PARSER_BASE_URL,
-  timeout: Number(process.env.PARSER_API_TIMEOUT || 30000),
-});
+const BASE_URL =
+  process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
+const TIMEOUT_MS = Number(process.env.PARSER_API_TIMEOUT || 30000);
 
 function toFinite(value) {
   if (value === undefined || value === null) return undefined;
@@ -33,13 +31,30 @@ export function normalizeParserPayload(payload) {
     }
 
     const meta = {};
-    const total = toFinite(payload.total_found ?? payload.total ?? payload.count ?? payload.totalCount);
+    const total = toFinite(
+      payload.total_found ??
+        payload.total ??
+        payload.count ??
+        payload.totalCount,
+    );
     if (total !== undefined) meta.total_found = total;
-    const limit = toFinite(payload.limit ?? payload.page_size ?? payload.per_page ?? payload.size);
+    const limit = toFinite(
+      payload.limit ??
+        payload.page_size ??
+        payload.per_page ??
+        payload.size,
+    );
     if (limit !== undefined) meta.limit = limit;
-    const offset = toFinite(payload.offset ?? payload.page ?? payload.page_number ?? payload.start);
+    const offset = toFinite(
+      payload.offset ??
+        payload.page ??
+        payload.page_number ??
+        payload.start,
+    );
     if (offset !== undefined) meta.offset = offset;
-    if (typeof payload.has_more === 'boolean') meta.has_more = payload.has_more;
+    if (typeof payload.has_more === 'boolean') {
+      meta.has_more = payload.has_more;
+    }
 
     if (meta.total_found === undefined) meta.total_found = items.length;
 
@@ -47,6 +62,46 @@ export function normalizeParserPayload(payload) {
   }
 
   throw new Error(`Unexpected parser payload type: ${typeof payload}`);
+}
+
+async function fetchJson(path, params = {}) {
+  const url = new URL(path, BASE_URL);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const err = new Error(`Parser request failed with status ${response.status}`);
+      err.status = response.status;
+      err.payload = data;
+      throw err;
+    }
+
+    if (data == null) {
+      throw new Error('Parser returned empty response');
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function parseFedresursTrades({
@@ -61,7 +116,8 @@ export async function parseFedresursTrades({
   if (region_code) {
     params.region_code = region_code;
   }
-  const { data } = await client.get('/parse-fedresurs-trades', { params });
+
+  const data = await fetchJson('/parse-fedresurs-trades', params);
   return normalizeParserPayload(data);
 }
 
@@ -78,11 +134,11 @@ export async function parseFedresursTradesAll({
     params.region_code = region_code;
   }
 
-  const { data } = await client.get('/parse-fedresurs-trades-all', { params });
+  const data = await fetchJson('/parse-fedresurs-trades-all', params);
+  // тут возвращаем «сырые» данные, как и раньше
   return data;
 }
 
-// опционально — чтобы можно было импортировать как default-объект
 const parserClient = {
   parseFedresursTrades,
   normalizeParserPayload,
