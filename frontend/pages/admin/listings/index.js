@@ -466,13 +466,13 @@ export default function AdminParserTradesPage() {
     }
 
     const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
-    const payload = {
+    const requestPayload = {
       search: searchTerm,
       region_codes: selectedRegions,
     };
 
     if (selectedRegions.length === 1) {
-      payload.region_code = selectedRegions[0];
+      requestPayload.region_code = selectedRegions[0];
     }
 
     setParsingAll(true);
@@ -484,7 +484,7 @@ export default function AdminParserTradesPage() {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
       });
 
       const data = await res.json().catch(() => null);
@@ -492,12 +492,14 @@ export default function AdminParserTradesPage() {
         throw new Error((data && data.error) || 'Не удалось выполнить полный парсинг');
       }
 
-      const payload = data.data || {};
-      const totalFound = Number.isFinite(Number(payload.total_found)) ? Number(payload.total_found) : null;
-      const parsedCount = Number.isFinite(Number(payload.parsed))
-        ? Number(payload.parsed)
-        : Array.isArray(payload.results)
-          ? payload.results.length
+      const responsePayload = data.data || {};
+      const totalFound = Number.isFinite(Number(responsePayload.total_found))
+        ? Number(responsePayload.total_found)
+        : null;
+      const parsedCount = Number.isFinite(Number(responsePayload.parsed))
+        ? Number(responsePayload.parsed)
+        : Array.isArray(responsePayload.results)
+          ? responsePayload.results.length
           : null;
       const summaryParts = [
         `Запрос: ${searchTerm}`,
@@ -1139,4 +1141,5 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
