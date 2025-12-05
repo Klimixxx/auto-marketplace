@@ -455,14 +455,24 @@ export default function AdminParserTradesPage() {
     }
 
     const searchTerm = resolveSearchTerm(filters.q || '');
-    let primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
-    if (!primaryRegionCode && filters.region) {
-      primaryRegionCode = pickPrimaryRegionCode(filters.region);
+    let selectedRegions = extractRegionCodes(filters.region_code);
+    if (!selectedRegions.length && filters.region) {
+      selectedRegions = extractRegionCodes(filters.region);
     }
 
-    if (!primaryRegionCode) {
+    if (!selectedRegions.length) {
       alert('Выберите регион для полного парсинга.');
       return;
+    }
+
+    const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
+    const payload = {
+      search: searchTerm,
+      region_codes: selectedRegions,
+    };
+
+    if (selectedRegions.length === 1) {
+      payload.region_code = selectedRegions[0];
     }
 
     setParsingAll(true);
@@ -474,10 +484,7 @@ export default function AdminParserTradesPage() {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          search: searchTerm,
-          region_code: primaryRegionCode,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => null);
@@ -494,7 +501,9 @@ export default function AdminParserTradesPage() {
           : null;
       const summaryParts = [
         `Запрос: ${searchTerm}`,
-        `Регион: ${primaryRegionCode}`,
+        selectedRegions.length > 1
+          ? `Регионы: ${selectedRegions.join(', ')}`
+          : `Регион: ${primaryRegionCode}`,
         totalFound != null ? `Найдено: ${totalFound}` : null,
         parsedCount != null ? `Распарсено: ${parsedCount}` : null,
       ].filter(Boolean);
@@ -1130,3 +1139,4 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
