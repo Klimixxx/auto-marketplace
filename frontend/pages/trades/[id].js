@@ -323,10 +323,31 @@ function buildKeyValueEntries(source) {
       rawValue: value,
     });
   });
-
+  
   return result;
 }
 
+function normalizeEntryKey(value) {
+  if (value === undefined || value === null) return "";
+  const text = typeof value === "string" ? value : String(value);
+  return text.trim().toLowerCase();
+}
+
+const LOT_INFO_EXCLUDED_RAW_KEYS = new Set([
+  "start_price",
+  "startprice",
+  "deposit_amount",
+  "region_code",
+  "inspection_procedure",
+]);
+
+const LOT_INFO_EXCLUDED_LABELS = new Set([
+  "начальная цена",
+  "сумма задатка",
+  "регион code",
+  "код региона",
+  "порядок осмотра",
+]);
 function partitionLotAndVehicleEntries(entries) {
   const lotInfoEntries = [];
   const vehicleEntries = [];
@@ -1312,10 +1333,19 @@ export default function ListingPage({ item }) {
   }
 
   const lotEntries = buildKeyValueEntries(details?.lot_details);
-  const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(
-    lotEntries,
-  );
-  const filteredLotInfoEntries = lotInfoEntries;
+  const { lotInfoEntries } = partitionLotAndVehicleEntries(lotEntries);
+  const filteredLotInfoEntries = lotInfoEntries.filter((entry) => {
+    const rawKeyNormalized = normalizeEntryKey(entry?.rawKey);
+    if (rawKeyNormalized && LOT_INFO_EXCLUDED_RAW_KEYS.has(rawKeyNormalized)) {
+      return false;
+    }
+    const labelNormalized = normalizeEntryKey(entry?.key);
+    if (labelNormalized && LOT_INFO_EXCLUDED_LABELS.has(labelNormalized)) {
+      return false;
+    }
+    return true;
+  });
+  const vehicleEntries = [];
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const documents = normalizeDocuments(
@@ -1707,13 +1737,6 @@ export default function ListingPage({ item }) {
             </section>
           )}
 
-          {vehicleEntries.length > 0 && (
-            <section className="detail-section">
-              <h2>Характеристики автомобиля</h2>
-              <KeyValueGrid entries={vehicleEntries} />
-            </section>
-          )}
-
           {debtorEntries.length > 0 && (
             <section className="detail-section">
               <h2>Информация о должнике</h2>
@@ -1974,6 +1997,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
