@@ -349,7 +349,6 @@ const LOT_INFO_EXCLUDED_LABELS = new Set([
 ]);
 
 const LOT_INFO_ALLOWED_RAW_KEYS = new Set([
-  "region_code",
   "brand",
   "model",
   "year",
@@ -368,7 +367,6 @@ const LOT_INFO_ALLOWED_RAW_KEYS = new Set([
 ]);
 
 const LOT_INFO_ALLOWED_LABELS = new Set([
-  "код региона",
   "марка",
   "модель",
   "год выпуска",
@@ -1371,8 +1369,8 @@ export default function ListingPage({ item }) {
   }
 
   const lotEntries = buildKeyValueEntries(details?.lot_details);
-  const { lotInfoEntries } = partitionLotAndVehicleEntries(lotEntries);
-  const filteredLotInfoEntries = lotInfoEntries.filter((entry) => {
+  const { lotInfoEntries, vehicleEntries } = partitionLotAndVehicleEntries(lotEntries);
+  const filteredLotInfoEntries = [...lotInfoEntries, ...vehicleEntries].filter((entry) => {
     const rawKeyNormalized = normalizeEntryKey(entry?.rawKey);
     const labelNormalized = normalizeEntryKey(entry?.key);
     const isAllowedRawKey =
@@ -1393,7 +1391,6 @@ export default function ListingPage({ item }) {
     }
     return true;
   });
-  const vehicleEntries = [];
   const contactEntries = buildKeyValueEntries(details?.contact_details);
   const filteredContactEntries = contactEntries.filter((entry) => {
     const rawKey = normalizeEntryKey(entry?.rawKey);
@@ -2050,6 +2047,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
