@@ -1347,6 +1347,11 @@ export default function ListingPage({ item }) {
   });
   const vehicleEntries = [];
   const contactEntries = buildKeyValueEntries(details?.contact_details);
+  const filteredContactEntries = contactEntries.filter((entry) => {
+    const rawKey = normalizeEntryKey(entry?.rawKey);
+    const label = normalizeEntryKey(entry?.key);
+    return rawKey !== "inspection_procedure" && label !== "порядок осмотра";
+  });
   const debtorEntries = buildKeyValueEntries(details?.debtor_details);
   const documents = normalizeDocuments(
     Array.isArray(details?.documents) ? details.documents : [],
@@ -1747,7 +1752,7 @@ export default function ListingPage({ item }) {
           {contactEntries.length > 0 && (
             <section className="detail-section">
               <h2>Информация об организаторе</h2>
-              <KeyValueGrid entries={contactEntries} />
+              <KeyValueGrid entries={filteredContactEntries} />
             </section>
           )}
 
@@ -1997,6 +2002,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
