@@ -85,6 +85,7 @@ const EXACT_FIELD_LABELS = {
   tax: 'Налог',
   nds: 'НДС',
   region: 'Регион',
+  region_code: 'Код региона',
   city: 'Город',
   location: 'Локация',
   address: 'Адрес',
@@ -654,6 +655,7 @@ export function localizeListingBadge(value) {
   const translated = translateValueByKey('status', value);
   return typeof translated === 'string' ? translated : value;
 }
+
 
 
 
