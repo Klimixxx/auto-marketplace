@@ -23,6 +23,7 @@ import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
 import { loadAutotekaSettings } from './services/autotekaSettings.js';
 import { loadInspectionSettings } from './services/inspectionSettings.js';
+import { loadAvitoBrands } from './services/avitoBrands.js';
 import supportRouter from './routes/support.js';
 import adminSupportRouter from './routes/adminSupport.js';
 import { setSocketInstance } from './services/socket.js';
@@ -1109,7 +1110,7 @@ app.get('/api/listings', async (req, res) => {
 
 app.get('/api/listings/meta', async (_req, res) => {
   try {
-    const [cities, brands, tradeTypes] = await Promise.all([
+    const [cities, brands, tradeTypes, avitoBrands] = await Promise.all([
       query(`
         SELECT DISTINCT city
           FROM listings
@@ -1127,7 +1128,17 @@ app.get('/api/listings/meta', async (_req, res) => {
           FROM listings
          WHERE published = TRUE
       `),
+      loadAvitoBrands().catch(() => []),
     ]);
+
+    const brandValues = Array.isArray(avitoBrands) ? avitoBrands : [];
+    const dbBrandValues = brands.rows.map((r) => r.brand).filter(Boolean);
+    const brandSet = new Set();
+    [...brandValues, ...dbBrandValues].forEach((brand) => {
+      if (!brand) return;
+      const text = typeof brand === 'string' ? brand.trim() : String(brand);
+      if (text) brandSet.add(text);
+    });
 
     const tradeTypeSet = new Set();
     for (const row of tradeTypes.rows) {
@@ -1148,7 +1159,7 @@ app.get('/api/listings/meta', async (_req, res) => {
     res.json({
       regions: RUSSIAN_REGIONS,
       cities: cities.rows.map((r) => r.city),
-      brands: brands.rows.map((r) => r.brand),
+      brands: Array.from(brandSet.values()).sort((a, b) => a.localeCompare(b, 'ru')),
       tradeTypes: tradeTypeList,
     });
   } catch (e) {
