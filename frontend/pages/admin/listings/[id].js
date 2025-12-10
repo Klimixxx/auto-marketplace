@@ -1455,6 +1455,7 @@ export default function AdminParserTradeCard() {
   });
   const [publicOfferPeriods, setPublicOfferPeriods] = useState([]);
   const [publicOfferPriceMode, setPublicOfferPriceMode] = useState('start_price');
+  const [brandOptions, setBrandOptions] = useState([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const singleFileInputRef = useRef(null);
@@ -1576,6 +1577,39 @@ export default function AdminParserTradeCard() {
       aborted = true;
     };
   }, [id, applyTrade]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBrandOptions() {
+      try {
+        const url = API_BASE ? `${API_BASE}/api/listings/meta` : '/api/listings/meta';
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json().catch(() => null);
+        if (!cancelled) {
+          const brands = Array.isArray(data?.brands) ? data.brands : [];
+          const unique = Array.from(
+            new Set(
+              brands
+                .filter(Boolean)
+                .map((entry) => (typeof entry === 'string' ? entry : String(entry)))
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            ),
+          );
+          setBrandOptions(unique);
+        }
+      } catch (error) {
+        console.warn('Failed to load brand options', error);
+        if (!cancelled) setBrandOptions([]);
+      }
+    }
+
+    loadBrandOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const triggerSingleUpload = useCallback(() => {
     setUploadError(null);
@@ -2070,7 +2104,7 @@ export default function AdminParserTradeCard() {
   const isAuction = isOpenAuction || normalizedTradeType === 'auction';
   const shouldUseStartPrice = !isPublicOffer || publicOfferPriceMode === 'start_price';
   const shouldIncludePeriods = isPublicOffer && publicOfferPriceMode === 'period_price';
-  const shouldIncludeAuctionExtras = true;
+  const shouldIncludeAuctionExtras = isAuction;
 
   useEffect(() => {
     if (!isPublicOffer && publicOfferPriceMode === 'period_price') {
@@ -2499,6 +2533,7 @@ export default function AdminParserTradeCard() {
     borderRadius: 12,
     padding: 12,
   };
+  const brandDatalistId = useMemo(() => `brand-options-${id || 'new'}`, [id]);
 
   return (
     <div className="container" style={{ gap: 16 }}>
@@ -2527,7 +2562,7 @@ export default function AdminParserTradeCard() {
       {error ? <div className="panel" style={{ color: '#ff6b6b' }}>{error}</div> : null}
 
       <form onSubmit={onSubmit} className="panel" style={{ display: 'grid', gap: 12 }}>
-        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
+          <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div>
             <h3 style={{ margin: 0 }}>Сведения по лоту</h3>
           </div>
@@ -2557,7 +2592,19 @@ export default function AdminParserTradeCard() {
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Марка</span>
-              <input className="input" value={form.brand} onChange={updateFormField('brand')} />
+              <input
+                className="input"
+                value={form.brand}
+                onChange={updateFormField('brand')}
+                list={brandOptions.length ? brandDatalistId : undefined}
+              />
+              {brandOptions.length ? (
+                <datalist id={brandDatalistId}>
+                  {brandOptions.map((brand) => (
+                    <option key={brand} value={brand} />
+                  ))}
+                </datalist>
+              ) : null}
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span className="muted">Модель</span>
@@ -2640,7 +2687,7 @@ export default function AdminParserTradeCard() {
           </label>
         </section>
 
-        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
+          <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h3 style={{ margin: 0 }}>Контакты организатора</h3>
@@ -2716,7 +2763,7 @@ export default function AdminParserTradeCard() {
               })}
             </div>
           ) : null}
-        </section>
+          </section>
 
         <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
@@ -3075,123 +3122,125 @@ export default function AdminParserTradeCard() {
         </section>
         ) : null}
 
-        <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h3 style={{ margin: 0 }}>Цены для открытого аукциона</h3>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              Укажите стартовую цену и дополнительные параметры аукциона при необходимости.
-            </p>
-          </div>
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Начальная цена</span>
-              <input
-                className="input"
-                value={auctionPricing.start_price || ''}
-                onChange={updateAuctionField('start_price')}
-                placeholder="Например, 1500000"
-                inputMode="numeric"
-              />
-            </label>
-            {isOpenAuction ? (
-              <>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Шаг аукциона</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.step || ''}
-                    onChange={updateAuctionField('step')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Задаток</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.deposit || ''}
-                    onChange={updateAuctionField('deposit')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Валюта</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.currency || ''}
-                    onChange={updateAuctionField('currency')}
-                    placeholder="Например, RUB"
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Текущая цена</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.current_price || ''}
-                    onChange={updateAuctionField('current_price')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Минимальная цена</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.min_price || ''}
-                    onChange={updateAuctionField('min_price')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Максимальная цена</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.max_price || ''}
-                    onChange={updateAuctionField('max_price')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Шаг аукциона</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.step || ''}
-                    onChange={updateAuctionField('step')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Задаток</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.deposit || ''}
-                    onChange={updateAuctionField('deposit')}
-                    inputMode="numeric"
-                  />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span className="muted">Валюта</span>
-                  <input
-                    className="input"
-                    value={auctionPricing.currency || ''}
-                    onChange={updateAuctionField('currency')}
-                    placeholder="Например, RUB"
-                  />
-                </label>
-              </>
-            )}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="muted">Крайний срок подачи заявок</span>
-              <input
-                className="input"
-                type="datetime-local"
-                value={auctionPricing.application_deadline || ''}
-                onChange={updateAuctionField('application_deadline')}
-              />
-            </label>
-          </div>
-        </section>
+        {!isPublicOffer && (
+          <section style={{ ...sectionCardStyle, display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <h3 style={{ margin: 0 }}>Цены для открытого аукциона</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                Укажите стартовую цену и дополнительные параметры аукциона при необходимости.
+              </p>
+            </div>
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted">Начальная цена</span>
+                <input
+                  className="input"
+                  value={auctionPricing.start_price || ''}
+                  onChange={updateAuctionField('start_price')}
+                  placeholder="Например, 1500000"
+                  inputMode="numeric"
+                />
+              </label>
+              {isOpenAuction ? (
+                <>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Шаг аукциона</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.step || ''}
+                      onChange={updateAuctionField('step')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Задаток</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.deposit || ''}
+                      onChange={updateAuctionField('deposit')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Валюта</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.currency || ''}
+                      onChange={updateAuctionField('currency')}
+                      placeholder="Например, RUB"
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Текущая цена</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.current_price || ''}
+                      onChange={updateAuctionField('current_price')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Минимальная цена</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.min_price || ''}
+                      onChange={updateAuctionField('min_price')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Максимальная цена</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.max_price || ''}
+                      onChange={updateAuctionField('max_price')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Шаг аукциона</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.step || ''}
+                      onChange={updateAuctionField('step')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Задаток</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.deposit || ''}
+                      onChange={updateAuctionField('deposit')}
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span className="muted">Валюта</span>
+                    <input
+                      className="input"
+                      value={auctionPricing.currency || ''}
+                      onChange={updateAuctionField('currency')}
+                      placeholder="Например, RUB"
+                    />
+                  </label>
+                </>
+              )}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted">Крайний срок подачи заявок</span>
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={auctionPricing.application_deadline || ''}
+                  onChange={updateAuctionField('application_deadline')}
+                />
+              </label>
+            </div>
+          </section>
+        )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <button type="submit" className="button primary" disabled={actionButtonsDisabled}>
@@ -3456,27 +3505,3 @@ export default function AdminParserTradeCard() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
