@@ -132,7 +132,8 @@ function normalizeTradeTypeCode(value) {
 }
 
 function addTradeTypeFilter(whereClauses, params, rawValue) {
-  const normalized = normalizeTradeTypeCode(rawValue);
+  const candidateValue = Array.isArray(rawValue) ? rawValue.find((value) => cleanText(value)) : rawValue;
+  const normalized = normalizeTradeTypeCode(candidateValue);
   if (!normalized) return;
 
   const lowerFields = [
