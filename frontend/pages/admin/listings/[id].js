@@ -376,6 +376,7 @@ const LOT_FIELDS_EXCLUDE = new Set([
   'price_schedule',
   'priceSchedule',
   'offer_schedule',
+  'offerSchedule',
   'price_graph',
   'price_schedule_text',
   'schedule',
@@ -2091,6 +2092,7 @@ export default function AdminParserTradeCard() {
     
     return null;
   }, [item, lotPreserved, tradeType]);
+  
   const tradeTypeLabel = useMemo(() => {
     const normalizedLabel = normalizedTradeType ? TRADE_TYPE_LABELS[normalizedTradeType] : null;
     if (normalizedLabel) return normalizedLabel;
@@ -2112,57 +2114,33 @@ export default function AdminParserTradeCard() {
     }
   }, [isPublicOffer, publicOfferPriceMode]);
 
-  const d = useMemo(() => {
-    const lot = buildLotDetailsFromState(
-      lotFields,
-      lotPreserved,
-      form,
-      auctionPricing,
-      publicOfferPeriods,
-      {
-        includeStartPrice: shouldUseStartPrice,
-        includePeriodPrices: shouldIncludePeriods,
-        includeAuctionExtras: shouldIncludeAuctionExtras,
-      },
-    );
-    const contact = sectionStateToObject(contactState);
-    const debtor = sectionStateToObject(debtorState);
-    const pricesPayload = isOpenAuction ? [] : buildPriceHistoryPayload(priceHistory);
-    const documentsPayload = buildDocumentsPayload(documents);
-    const photosPayload = buildPhotosPayload(photos);
-
-    const merged = {
-      ...(item || {}),
-      ...form,
-      lot_details: lot,
-      contact_details: contact,
-      debtor_details: debtor,
-      prices: pricesPayload,
-      documents: documentsPayload,
-      photos: photosPayload,
+  // Исправление: используем конкретные поля вместо объекта d
+  const fedresursUrl = useMemo(() => {
+    if (!item) return null;
+    
+    // Создаем объект с минимально необходимыми полями
+    const tradeData = {
+      raw_payload: item.raw_payload,
+      fedresurs_meta: item.fedresurs_meta,
+      fedresurs_url: form?.source_url || item.fedresurs_url,
+      source_url: form?.source_url || item.source_url,
+      fedresurs_id: item.fedresurs_id,
+      lot_details: item.lot_details,
     };
-
-    if (item?.raw_payload) merged.raw_payload = item.raw_payload;
-
-    return merged;
+    
+    return resolveFedresursUrl(tradeData);
   }, [
-    item,
-    form,
-    lotFields,
-    lotPreserved,
-    contactState,
-    debtorState,
-    priceHistory,
-    documents,
-    photos,
-    auctionPricing,
-    publicOfferPeriods,
-    shouldUseStartPrice,
-    shouldIncludePeriods,
-    shouldIncludeAuctionExtras,
+    item?.id,
+    item?.raw_payload,
+    item?.fedresurs_meta,
+    item?.fedresurs_url,
+    item?.source_url,
+    item?.fedresurs_id,
+    item?.lot_details,
+    form?.source_url,
   ]);
 
-  const fedresursUrl = useMemo(() => resolveFedresursUrl(d || item), [d, item]);
+  const brandDatalistId = useMemo(() => `brand-options-${id || 'new'}`, [id]);
 
   const saveTrade = useCallback(
     async ({ showAlert = true } = {}) => {
@@ -2213,7 +2191,6 @@ export default function AdminParserTradeCard() {
             : Number(form.applications_count);
 
         const payload = {
-          ...d,
           title: trimOrNull(form?.title),
           description: trimOrNull(form?.description),
           category: trimOrNull(form?.category),
@@ -2237,6 +2214,11 @@ export default function AdminParserTradeCard() {
           documents: documentsPayload,
           photos: photosPayload,
         };
+
+        // Сохраняем raw_payload если он есть
+        if (item?.raw_payload) {
+          payload.raw_payload = item.raw_payload;
+        }
 
         if (!API_BASE) {
           throw new Error('NEXT_PUBLIC_API_BASE не задан.');
@@ -2276,7 +2258,7 @@ export default function AdminParserTradeCard() {
     [
       id,
       form,
-      d,
+      item?.raw_payload,
       lotFields,
       lotPreserved,
       contactState,
@@ -2512,6 +2494,7 @@ export default function AdminParserTradeCard() {
       </div>
     );
   }
+  
   const publishButtonLabel = item.published_at
     ? updatingPublication || saving || publishing
       ? 'Обновляем…'
@@ -2533,7 +2516,6 @@ export default function AdminParserTradeCard() {
     borderRadius: 12,
     padding: 12,
   };
-  const brandDatalistId = useMemo(() => `brand-options-${id || 'new'}`, [id]);
 
   return (
     <div className="container" style={{ gap: 16 }}>
@@ -3276,228 +3258,23 @@ export default function AdminParserTradeCard() {
         </div>
       </form>
 
-      {/* {descriptionPreview && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Описание</h2>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{descriptionPreview}</div>
-        </section>
-      )} */}
-{/* 
-      {d.lot_details && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Характеристики</h2>
-          <KeyValueList data={d.lot_details} />
-        </section>
-      )}
-
-      <ContactSection contact={d.contact_details} />
-
-      {d.debtor_details && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Данные должника</h2>
-          <KeyValueList data={d.debtor_details} />
-        </section>
-      )}
-
-      {Array.isArray(d.photos) && d.photos.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Фотографии (сохранённые)</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-            {d.photos.map((photo, index) => {
-              const normalized = normalizePhotoInput(photo);
-              if (!normalized) return null;
-              return (
-                <div key={normalized.url || index} className="panel" style={{ padding: 8 }}>
-                  <img
-                    src={normalized.url}
-                    alt={normalized.title || `Фото ${index + 1}`}
-                    style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 6 }}
-                  />
-                  <div className="muted" style={{ marginTop: 6, fontSize: 12, wordBreak: 'break-word' }}>
-                    {normalized.title || normalized.url}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {!isOpenAuction && Array.isArray(d.prices) && d.prices.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-        <h2>История цен</h2>
-        <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-            <thead>
-              <tr>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Этап</th>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Цена</th>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Начало периода</th>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Конец периода</th>
-                <th style={{ ...PRICE_TABLE_HEADER_STYLE, color: '#111827 !important' }}>Комментарий</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.prices.map((entry, index) => {
-                const baseCellStyle = { ...PRICE_TABLE_CELL_STYLE, color: '#111827 !important' };
-                const stage =
-                  entry.stage ||
-                  entry.stage_name ||
-                  entry.stageName ||
-                  entry.round ||
-                  entry.type ||
-                  entry.name ||
-                  entry.title ||
-                  `Запись ${index + 1}`;
-                const stageText = translateValueByKey('stage', stage) || stage;
-                const rawPrice =
-                  entry.price ||
-                  entry.currentPrice ||
-                  entry.current_price ||
-                  entry.startPrice ||
-                  entry.start_price ||
-                  entry.value ||
-                  entry.amount ||
-                  null;
-                const numericPrice =
-                  rawPrice != null ? Number(String(rawPrice).replace(/\s/g, '').replace(',', '.')) : null;
-                const priceText =
-                  Number.isFinite(numericPrice)
-                    ? fmtPrice(numericPrice)
-                    : rawPrice != null
-                    ? String(rawPrice)
-                    : '—';
-                const rawStartDate =
-                  entry.date_start ||
-                  entry.dateStart ||
-                  entry.start_date ||
-                  entry.period_start ||
-                  entry.dateBegin ||
-                  entry.date_from ||
-                  entry.begin ||
-                  entry.start ||
-                  entry.date ||
-                  entry.updated_at ||
-                  entry.updatedAt ||
-                  null;
-                const rawEndDate =
-                  entry.date_finish ||
-                  entry.dateFinish ||
-                  entry.end_date ||
-                  entry.date_end ||
-                  entry.period_end ||
-                  entry.date_to ||
-                  entry.finish ||
-                  entry.end ||
-                  rawStartDate;
-                const startDate = parseDateLike(rawStartDate);
-                const endDate = parseDateLike(rawEndDate);
-                const startText = startDate ? formatDateTime(startDate) : '—';
-                const endText = endDate ? formatDateTime(endDate) : '—';
-                const nowTs = Date.now();
-                const startTs = startDate ? startDate.getTime() : null;
-                const endTs = endDate ? endDate.getTime() : null;
-
-                let rowStyle = baseCellStyle;
-                let rowBackground;
-                if (startTs != null && nowTs >= startTs && (endTs == null || nowTs < endTs)) {
-                  rowStyle = { ...rowStyle, fontWeight: 700 };
-                  rowBackground = 'rgba(37,99,235,0.12)';
-                } else if (endTs != null && nowTs >= endTs) {
-                  rowStyle = { ...rowStyle, color: '#94a3b8' };
-                  rowBackground = 'rgba(148,163,184,0.08)';
-                }
-
-                const comment =
-                  entry.comment ||
-                  entry.description ||
-                  entry.note ||
-                  entry.status ||
-                  entry.info ||
-                  null;
-                const commentText =
-                  comment && typeof comment === 'object'
-                    ? JSON.stringify(comment, null, 2)
-                    : comment
-                    ? String(comment)
-                    : '—';
-                const commentMultiline = commentText.includes('\n');
-                return (
-                  <tr
-                    key={entry.id || `${stage}-${index}`}
-                    style={rowBackground ? { background: rowBackground } : undefined}
-                  >
-                    <td style={rowStyle}>{stageText}</td>
-                    <td style={rowStyle}>{priceText}</td>
-                    <td style={rowStyle}>{startText}</td>
-                    <td style={rowStyle}>{endText}</td>
-                    <td style={rowStyle}>
-                      {commentMultiline ? (
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: rowStyle.color }}>{commentText}</pre>
-                      ) : (
-                        commentText
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      
-      )}
-
-      {Array.isArray(d.documents) && d.documents.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2>Документы</h2>
-          <div className="panel" style={{ display: 'grid', gap: 8 }}>
-            {d.documents.map((doc, index) => {
-              const url = doc?.url || doc?.href || doc?.link || doc?.download_url || null;
-              const title = doc?.title || doc?.name || doc?.filename || `Документ ${index + 1}`;
-              const description = doc?.description || doc?.comment || doc?.note || null;
-              const date = doc?.date || doc?.created_at || doc?.updated_at || null;
-              return (
-                <div key={url || `${title}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {url ? (
-                    <a href={url} target="_blank" rel="noreferrer" className="link">
-                      {title}
-                    </a>
-                  ) : (
-                    <div>{title}</div>
-                  )}
-                  {date ? (
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      Дата: {formatDateTime(date)}
-                    </div>
-                  ) : null}
-                  {description ? (
-                    <div className="muted" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{description}</div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )} */}
-
-      {d.raw_payload && (
+      {item.raw_payload && (
         <section style={{ marginTop: 24 }}>
           <h2>Исходные данные парсера</h2>
           <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
             <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(d.raw_payload, null, 2)}
+              {JSON.stringify(item.raw_payload, null, 2)}
             </pre>
           </div>
         </section>
       )}
 
-      {d.raw_payload?.fedresurs_data && !d.fedresurs_meta && (
+      {item.raw_payload?.fedresurs_data && !item.fedresurs_meta && (
         <section style={{ marginTop: 24 }}>
           <h2>Данные Федресурса</h2>
           <div className="panel" style={{ padding: 12, overflowX: 'auto' }}>
             <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(d.raw_payload.fedresurs_data, null, 2)}
+              {JSON.stringify(item.raw_payload.fedresurs_data, null, 2)}
             </pre>
           </div>
         </section>
