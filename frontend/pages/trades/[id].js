@@ -863,6 +863,11 @@ export default function ListingPage({ item }) {
         adjustedEndDate = nextStartDate;
       }
 
+      const isLastEntry = index === sorted.length - 1;
+      if (isLastEntry && isPublicOffer && applicationDeadlineDate) {
+        adjustedEndDate = applicationDeadlineDate;
+      }
+
       return {
         ...entry,
         endDate: adjustedEndDate,
@@ -2000,6 +2005,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
