@@ -338,6 +338,8 @@ const LOT_INFO_EXCLUDED_RAW_KEYS = new Set([
   "startprice",
   "deposit_amount",
   "region_code",
+  "trade_type",
+  "auction_type",
 ]);
 
 const LOT_INFO_EXCLUDED_LABELS = new Set([
@@ -345,6 +347,7 @@ const LOT_INFO_EXCLUDED_LABELS = new Set([
   "сумма задатка",
   "регион code",
   "код региона",
+  "публичка/аукцион",
 ]);
 function partitionLotAndVehicleEntries(entries) {
   const lotInfoEntries = [];
@@ -2005,6 +2008,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
