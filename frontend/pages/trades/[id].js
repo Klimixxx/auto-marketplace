@@ -337,7 +337,6 @@ const LOT_INFO_EXCLUDED_RAW_KEYS = new Set([
   "start_price",
   "startprice",
   "deposit_amount",
-  "region_code",
   "trade_type",
   "auction_type",
 ]);
@@ -346,8 +345,41 @@ const LOT_INFO_EXCLUDED_LABELS = new Set([
   "начальная цена",
   "сумма задатка",
   "регион code",
-  "код региона",
   "публичка/аукцион",
+]);
+
+const LOT_INFO_ALLOWED_RAW_KEYS = new Set([
+  "region_code",
+  "brand",
+  "model",
+  "year",
+  "production_year",
+  "manufacture_year",
+  "release_year",
+  "vin",
+  "vin_number",
+  "applications_count",
+  "application_count",
+  "start_date",
+  "date_start",
+  "finish_date",
+  "date_finish",
+  "end_date",
+]);
+
+const LOT_INFO_ALLOWED_LABELS = new Set([
+  "код региона",
+  "марка",
+  "модель",
+  "год выпуска",
+  "год",
+  "vin",
+  "количество заявок",
+  "кол-во заявок",
+  "дата начала торгов",
+  "дата начала",
+  "дата окончания торгов",
+  "дата окончания",
 ]);
 function partitionLotAndVehicleEntries(entries) {
   const lotInfoEntries = [];
@@ -1342,10 +1374,20 @@ export default function ListingPage({ item }) {
   const { lotInfoEntries } = partitionLotAndVehicleEntries(lotEntries);
   const filteredLotInfoEntries = lotInfoEntries.filter((entry) => {
     const rawKeyNormalized = normalizeEntryKey(entry?.rawKey);
+    const labelNormalized = normalizeEntryKey(entry?.key);
+    const isAllowedRawKey =
+      rawKeyNormalized && LOT_INFO_ALLOWED_RAW_KEYS.has(rawKeyNormalized);
+    const isAllowedLabel =
+      labelNormalized && LOT_INFO_ALLOWED_LABELS.has(labelNormalized);
+
+    if (!isAllowedRawKey && !isAllowedLabel) {
+      return false;
+    }
+
     if (rawKeyNormalized && LOT_INFO_EXCLUDED_RAW_KEYS.has(rawKeyNormalized)) {
       return false;
     }
-    const labelNormalized = normalizeEntryKey(entry?.key);
+
     if (labelNormalized && LOT_INFO_EXCLUDED_LABELS.has(labelNormalized)) {
       return false;
     }
@@ -2008,6 +2050,7 @@ export default function ListingPage({ item }) {
     </div>
   );
 }
+
 
 
 
