@@ -4,6 +4,7 @@ import { upsertParserTrade } from '../services/parserTrades.js';
 const router = express.Router();
 
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
+const activeSessions = new Map();
 
 function isAbortLikeError(error) {
   if (!error) return false;
@@ -22,55 +23,21 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     else url.searchParams.set(k, String(v));
   }
 
-  res.status(200);
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
+  const sessionKey = `${url.pathname}?${url.searchParams.toString()}`;
 
-  res.flushHeaders?.();
+  const attachHeartbeat = (clientRes) => {
+    const heartbeatIntervalMs = 15_000;
+    const sendHeartbeat = () => {
+      try {
+        clientRes.write(':heartbeat\n\n');
+        clientRes.flush?.();
+      } catch (e) {
+        // ignore heartbeat failures
+      }
+    };
 
-  const heartbeatIntervalMs = 15_000;
-  const sendHeartbeat = () => {
-    try {
-      res.write(':heartbeat\n\n');
-      res.flush?.();
-    } catch (e) {
-      // ignore heartbeat failures
-    }
+  return setInterval(sendHeartbeat, heartbeatIntervalMs);
   };
-  const heartbeatTimer = setInterval(sendHeartbeat, heartbeatIntervalMs);
-
-  // таймер, который принудительно перезапускает подключение к апстриму,
-  // если долго нет данных (некоторые прокси/балансировщики рвут такие соединения).
-  const upstreamInactivityMs = 45_000 ;
-  let upstreamActivityTimer;
-
-  let closed = false;
-  let currentAbortController;
-  let currentReader;
-
-  const stopUpstream = async () => {
-    try { currentAbortController?.abort(); } catch {}
-    try { await currentReader?.cancel(); } catch {}
-    clearTimeout (upstreamActivityTimer);
-  };
-
-  const resetUpstreamWatchdog = ( ) => {
- 
-    clearTimeout (upstreamActivityTimer);
-    upstreamActivityTimer = setTimeout ( () => {
-      // прерываем текущее подключение; внешний цикл создаст новое
-      stopUpstream ();
-    }, upstreamInactivityMs);
-  };
-  resetUpstreamWatchdog ();
-
-  req.on('close', () => {
-    closed = true;
-    // отрубаем текущее подключение сразу, чтобы не ждать reader.read()
-    stopUpstream();
-  });
 
   const parseEventChunk = async (decoder, bufferRef, chunk) => {
     bufferRef.buffer += chunk;
@@ -108,79 +75,170 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     }
   };
 
-  const connectAndPipeStream = async () => {
-    const abortController = new AbortController();
-    currentAbortController = abortController;
-    let reader;
+  const ensureSession = () => {
+    if (activeSessions.has(sessionKey)) return activeSessions.get(sessionKey);
 
-  const cleanup = async () => {
-      try { abortController.abort(); } catch {}
-      try { await reader?.cancel(); } catch {}
-      currentAbortController = null;
-      currentReader = null;
+  const session = {
+      key: sessionKey,
+      url,
+      clients: new Set(),
+      stopRequested: false,
+      upstreamActivityTimer: null,
+      currentAbortController: null,
+      currentReader: null,
+      reconnectDelayMs: 1_000,
+      stopTimeout: null,
+      startPromise: null,
     };
 
-    try {
-      const upstream = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { accept: 'text/event-stream' },
-        signal: abortController.signal,
-      });
-
-      if (!upstream.ok || !upstream.body) {
-        const text = await upstream.text().catch(() => '');
-        throw new Error(text || `Upstream status ${upstream.status}`);
-      }
-
-      reader = upstream.body.getReader();
-      currentReader = reader;
-      const decoder = new TextDecoder();
-      const bufferRef = { buffer: '' };
-
-      while (!closed) {
-        const { value, done } = await reader.read();
-        if (done) {
-          try {
-            await parseEventChunk(decoder, bufferRef, decoder.decode());
-          } catch (error) {
-            console.error('Failed to flush SSE buffer:', error?.message || error);
-          }
-          throw new Error('Upstream stream ended');
-        }
-        if (value) {
-          resetUpstreamWatchdog();
-          res.write(Buffer.from(value));
-          try {
-            await parseEventChunk(decoder, bufferRef, decoder.decode(value, { stream: true }));
-          } catch (error) {
-            console.error('Failed to parse SSE chunk:', error?.message || error);
-          }
+    const broadcast = (chunk) => {
+      for (const client of session.clients) {
+        try {
+          client.res.write(chunk);
+          client.res.flush?.();
+        } catch (error) {
+          console.error('Failed to broadcast SSE chunk:', error?.message || error);
+          client.cleanup();
         }
       }
-      // если вышли из цикла из-за закрытия клиента — прерываемся без попытки переподключения
-      return { closedByClient: closed };
-    } finally {
-      await cleanup();
+    };
+
+    const broadcastEvent = (eventName, data) => {
+      broadcast(`event: ${eventName}\ndata: ${data}\n\n`);
+    };
+
+    const clearUpstreamWatchdog = () => {
+      clearTimeout(session.upstreamActivityTimer);
+      session.upstreamActivityTimer = null;
+    };
+
+    const stopUpstream = async () => {
+      try { session.currentAbortController?.abort(); } catch {}
+      try { await session.currentReader?.cancel(); } catch {}
+      clearUpstreamWatchdog();
+      session.currentAbortController = null;
+      session.currentReader = null;
+    };
+
+    const resetUpstreamWatchdog = () => {
+      clearUpstreamWatchdog();
+      const upstreamInactivityMs = 45_000;
+      session.upstreamActivityTimer = setTimeout(() => {
+        stopUpstream();
+      }, upstreamInactivityMs);
+    };
+
+    const connectAndPipeStream = async () => {
+      const abortController = new AbortController();
+      session.currentAbortController = abortController;
+      let reader;
+
+      const cleanup = async () => {
+        try { abortController.abort(); } catch {}
+        try { await reader?.cancel(); } catch {}
+        session.currentAbortController = null;
+        session.currentReader = null;
+      };
+
+      try {
+        const upstream = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { accept: 'text/event-stream' },
+          signal: abortController.signal,
+        });
+
+        if (!upstream.ok || !upstream.body) {
+          const text = await upstream.text().catch(() => '');
+          throw new Error(text || `Upstream status ${upstream.status}`);
+        }
+        reader = upstream.body.getReader();
+        session.currentReader = reader;
+        const decoder = new TextDecoder();
+        const bufferRef = { buffer: '' };
+
+        resetUpstreamWatchdog();
+
+        while (!session.stopRequested) {
+          const { value, done } = await reader.read();
+          if (done) {
+            try {
+              await parseEventChunk(decoder, bufferRef, decoder.decode());
+            } catch (error) {
+              console.error('Failed to flush SSE buffer:', error?.message || error);
+            }
+            throw new Error('Upstream stream ended');
+          }
+          if (value) {
+            resetUpstreamWatchdog();
+            broadcast(Buffer.from(value));
+            try {
+              await parseEventChunk(decoder, bufferRef, decoder.decode(value, { stream: true }));
+            } catch (error) {
+              console.error('Failed to parse SSE chunk:', error?.message || error);
+            }
+          }
+        }
+      } finally {
+        await cleanup();
+      }
+    };
+
+    const startLoop = async () => {
+      while (!session.stopRequested) {
+        try {
+          await connectAndPipeStream();
+          session.reconnectDelayMs = 1_000;
+        } catch (error) {
+          if (session.stopRequested) break;
+
+          const abortLike = isAbortLikeError(error);
+          if (!abortLike) {
+            console.error('Upstream stream error:', error?.message || error);
+            broadcastEvent('error', JSON.stringify({ detail: error?.message || 'Stream error' }));
+          }
+
+      await stopUpstream();
+      activeSessions.delete(session.key);
+      for (const client of session.clients) {
+        client.cleanup();
+          }
+    };
+
+    session.startPromise = startLoop();
+    activeSessions.set(sessionKey, session);
+    return session;
+  };
+
+  const session = ensureSession();
+
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  const heartbeatTimer = attachHeartbeat(res);
+
+  const cleanupClient = () => {
+    clearInterval(heartbeatTimer);
+    try { res.end(); } catch {}
+    session.clients.delete(clientRef);
+
+    if (session.clients.size === 0 && !session.stopTimeout) {
+      session.stopTimeout = setTimeout(() => {
+        session.stopRequested = true;
+        session.stopTimeout = null;
+      }, 30_000);
     }
- };
+  };
 
-  let reconnectDelayMs = 1_000;
-  while (!closed) {
-    try {
-      const result = await connectAndPipeStream();
-      if (result?.closedByClient) break;
+  const clientRef = { res, cleanup: cleanupClient };
+  session.clients.add(clientRef);
 
-      // если дошли сюда — соединение разорвалось, пробуем переподключиться
-      reconnectDelayMs = 1_000; // успешное подключение сбрасывает задержку
-    } catch (error) {
-      if (closed) break;
-
-      const abortLike = isAbortLikeError(error);
-      if (!abortLike) {
-        console.error('Upstream stream error:', error?.message || error);
-        res.write(`event: error\ndata: ${JSON.stringify({ detail: error?.message || 'Stream error' })}\n\n`);
-        res.flush?.();
-      }
+  if (session.stopTimeout) {
+    clearTimeout(session.stopTimeout);
+    session.stopTimeout = null;
 
       // ждём перед переподключением (но не тормозим намеренные перезапуски)
       const delay = abortLike ? 0 : reconnectDelayMs;
@@ -190,9 +248,8 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       }
     }
   }
-  clearInterval(heartbeatTimer);
-  await stopUpstream();
-  res.end();
+
+  req.on('close', cleanupClient);
 });
 
 export default router;
