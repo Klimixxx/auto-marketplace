@@ -90,17 +90,24 @@ async function fetchJson(path, params = {}) {
     },
   });
 
-  const data = await response.json().catch(() => null);
+  const responseText = await response.text();
+
+  let data = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch (error) {
+    data = null;
+  }
 
   if (!response.ok) {
     const err = new Error(`Parser request failed with status ${response.status}`);
     err.status = response.status;
-    err.payload = data;
+    err.payload = data ?? responseText;
     throw err;
   }
 
   if (data == null) {
-    throw new Error('Parser returned empty response');
+    return { results: [], total_found: 0 };
   }
 
   return data;
