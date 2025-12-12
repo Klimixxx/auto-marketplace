@@ -13,10 +13,6 @@ function isAbortLikeError(error) {
 }
 
 router.get('/fedresurs/all/stream', async (req, res) => {
-
-  // Отключаем серверные таймауты для долгоживущего SSE-потока
-  req.setTimeout(0);
-  res.setTimeout(0);
   
   const url = new URL('/parse-fedresurs-trades-all-stream', PARSER_BASE_URL);
 
