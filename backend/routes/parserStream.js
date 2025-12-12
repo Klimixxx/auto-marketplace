@@ -159,9 +159,10 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
-    clearInterval(heartbeatTimer);
-    res.end();
   }
+  clearInterval(heartbeatTimer);
+  await stopUpstream();
+  res.end();
 });
 
 export default router;
