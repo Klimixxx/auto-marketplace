@@ -703,6 +703,7 @@ export default function AdminParserTradesPage() {
         const next = [normalized, ...prev];
         return next.slice(0, MAX_STREAM_ITEMS);
       });
+    }); // ✅ ВОТ ЭТОГО ЗАКРЫТИЯ НЕ ХВАТАЛО
 
     es.addEventListener('done', (event) => {
       const data = safeJsonParse(event.data) || {};
@@ -1423,8 +1424,3 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
-
-
-
-
-
