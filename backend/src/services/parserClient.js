@@ -175,9 +175,144 @@ export async function parseFedresursTradesAll({
     params.region_code = region_code;
   }
 
-  const data = await fetchJson('/parse-fedresurs-trades-all', params);
-  // "parse-all" в adminParser ожидает "сырые" данные
-  return data;
+  const startUrl = new URL('/parse-fedresurs-trades-all-stream/start', BASE_URL);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error('Parser request timed out'));
+  }, FETCH_TIMEOUT_MS);
+
+  try {
+    const startResponse = await fetch(startUrl, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+
+    const startPayload = (await startResponse.json().catch(() => ({}))) || {};
+    if (!startResponse.ok) {
+      const err = new Error('Parser job start failed');
+      err.status = startResponse.status;
+      err.payload = startPayload;
+      throw err;
+    }
+
+    const { jobId } = startPayload;
+    if (!jobId) {
+      throw new Error('Parser jobId is missing in response');
+    }
+
+    const streamUrl = new URL(`/parse-fedresurs-trades-all-stream/${jobId}`, BASE_URL);
+    const streamResponse = await fetch(streamUrl, {
+      method: 'GET',
+      headers: {
+        accept: 'text/event-stream',
+      },
+      signal: controller.signal,
+    });
+
+    if (!streamResponse.ok || !streamResponse.body) {
+      const err = new Error(`Parser stream failed with status ${streamResponse.status}`);
+      err.status = streamResponse.status;
+      throw err;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    const items = [];
+    let totalFound;
+    let parsed;
+    let donePayload = null;
+
+    for await (const chunk of streamResponse.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const lines = part
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line);
+
+        if (!lines.length || lines[0].startsWith(':')) continue;
+
+        let eventName = 'message';
+        const dataLines = [];
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventName = line.replace('event:', '').trim() || 'message';
+          } else if (line.startsWith('data:')) {
+            dataLines.push(line.replace('data:', '').trim());
+          }
+        }
+
+        let payload = null;
+        const dataStr = dataLines.join('\n');
+        if (dataStr) {
+          try {
+            payload = JSON.parse(dataStr);
+          } catch (error) {
+            payload = dataStr;
+          }
+        }
+
+        if (eventName === 'error') {
+          const err = new Error(payload?.detail || 'Parser stream error');
+          err.status = 502;
+          throw err;
+        }
+
+        if (eventName === 'meta' && payload?.stage === 'collected') {
+          totalFound = payload.total_found ?? totalFound;
+        }
+
+        if (eventName === 'item' && payload?.item) {
+          items.push(payload.item);
+          parsed = payload.parsed ?? parsed;
+          totalFound = payload.total_found ?? totalFound;
+        }
+
+        if (eventName === 'done') {
+          donePayload = typeof payload === 'object' && payload !== null ? payload : null;
+          parsed = payload?.parsed ?? parsed;
+          totalFound = payload?.total_found ?? totalFound;
+          buffer = '';
+          break;
+        }
+      }
+
+      if (donePayload) break;
+    }
+
+    const summary = {
+      results: items,
+      total_found: totalFound ?? items.length,
+      parsed: parsed ?? items.length,
+    };
+
+    if (donePayload) {
+      return { ...donePayload, ...summary };
+    }
+
+    return summary;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const err = new Error('Parser request timed out');
+      err.status = 504;
+      throw err;
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 const parserClient = {
