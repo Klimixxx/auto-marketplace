@@ -5,6 +5,13 @@ const router = express.Router();
 
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 
+function isAbortLikeError(error) {
+  if (!error) return false;
+  if (error.name === 'AbortError') return true;
+  const message = String(error.message || '').toLowerCase();
+  return message.includes('aborted') || message.includes('abort');
+}
+
 router.get('/fedresurs/all/stream', async (req, res) => {
 
   // Отключаем серверные таймауты для долгоживущего SSE-потока
@@ -172,14 +179,19 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     } catch (error) {
       if (closed) break;
 
-      console.error('Upstream stream error:', error?.message || error);
-      res.write(`event: error\ndata: ${JSON.stringify({ detail: error?.message || 'Stream error' })}\n\n`);
-      res.flush?.();
+      const abortLike = isAbortLikeError(error);
+      if (!abortLike) {
+        console.error('Upstream stream error:', error?.message || error);
+        res.write(`event: error\ndata: ${JSON.stringify({ detail: error?.message || 'Stream error' })}\n\n`);
+        res.flush?.();
+      }
 
-      // ждём перед переподключением
-      const delay = reconnectDelayMs;
+      // ждём перед переподключением (но не тормозим намеренные перезапуски)
+      const delay = abortLike ? 0 : reconnectDelayMs;
       reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
   clearInterval(heartbeatTimer);
