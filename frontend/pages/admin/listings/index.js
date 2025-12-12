@@ -27,6 +27,7 @@ const DASH = '—';
 const ARROW_LEFT = '←';
 const ARROW_RIGHT = '→';
 const FILTER_STORAGE_KEY = 'adminListingsFilters';
+const PARSE_STREAM_STORAGE_KEY = 'adminParseStreamState';
 
 function readToken() {
   if (typeof window === 'undefined') return null;
@@ -34,6 +35,33 @@ function readToken() {
     return window.localStorage.getItem('token');
   } catch {
     return null;
+  }
+}
+
+function readStoredParseStreamState() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(PARSE_STREAM_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch (error) {
+    console.warn('Failed to read stored parse stream state', error);
+    return null;
+  }
+}
+
+function persistParseStreamState(nextState) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!nextState) {
+      window.localStorage.removeItem(PARSE_STREAM_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(PARSE_STREAM_STORAGE_KEY, JSON.stringify(nextState));
+  } catch (error) {
+    console.warn('Failed to persist parse stream state', error);
   }
 }
 
@@ -249,6 +277,7 @@ function loadStoredFilters() {
 
 export default function AdminParserTradesPage() {
   const router = useRouter();
+  const initialStreamState = useMemo(() => readStoredParseStreamState(), []);
   const [items, setItems] = useState([]);
   const [filters, setFilters] = useState(() => loadStoredFilters());
   const filtersRef = useRef(filters);
@@ -257,7 +286,7 @@ export default function AdminParserTradesPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
-  const [parsingAll, setParsingAll] = useState(false);
+  const [parsingAll, setParsingAll] = useState(Boolean(initialStreamState?.active));
   const [publishingId, setPublishingId] = useState(null);
   const [waitingId, setWaitingId] = useState(null);
   const [unpublishingId, setUnpublishingId] = useState(null);
@@ -267,9 +296,13 @@ export default function AdminParserTradesPage() {
   const [view, setView] = useState('drafts');
   const queryView = router.query?.view;
   const parseStreamRef = useRef(null);
-  const [parseStreamMeta, setParseStreamMeta] = useState(null);
-  const [parseStreamProgress, setParseStreamProgress] = useState(null);
-  const [parseStreamError, setParseStreamError] = useState(null);
+  const [parseStreamMeta, setParseStreamMeta] = useState(initialStreamState?.meta || null);
+  const [parseStreamProgress, setParseStreamProgress] = useState(initialStreamState?.progress || null);
+  const [parseStreamError, setParseStreamError] = useState(initialStreamState?.error || null);
+  const parseStreamMetaRef = useRef(parseStreamMeta);
+  const parseStreamProgressRef = useRef(parseStreamProgress);
+  const parseStreamErrorRef = useRef(parseStreamError);
+  const parsingAllRef = useRef(parsingAll);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -278,6 +311,64 @@ export default function AdminParserTradesPage() {
     const normalized = viewParam === 'published' || viewParam === 'waiting' ? viewParam : 'drafts';
     setView((prev) => (prev === normalized ? prev : normalized));
   }, [router.isReady, queryView]);
+
+  useEffect(() => {
+    parseStreamMetaRef.current = parseStreamMeta;
+  }, [parseStreamMeta]);
+
+  useEffect(() => {
+    parseStreamProgressRef.current = parseStreamProgress;
+  }, [parseStreamProgress]);
+
+  useEffect(() => {
+    parseStreamErrorRef.current = parseStreamError;
+  }, [parseStreamError]);
+
+  useEffect(() => {
+    parsingAllRef.current = parsingAll;
+  }, [parsingAll]);
+
+  const persistStreamState = useCallback(
+    (overrides = {}) => {
+      const meta = overrides.meta !== undefined ? overrides.meta : parseStreamMetaRef.current;
+      const progress = overrides.progress !== undefined ? overrides.progress : parseStreamProgressRef.current;
+      const error = overrides.error !== undefined ? overrides.error : parseStreamErrorRef.current;
+      const active = overrides.active !== undefined ? overrides.active : parsingAllRef.current;
+
+      if (!meta && !progress && !error && !active) {
+        persistParseStreamState(null);
+        return;
+      }
+
+      persistParseStreamState({
+        meta,
+        progress,
+        error,
+        active,
+        updated_at: new Date().toISOString(),
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    persistStreamState();
+  }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStorage = (event) => {
+      if (event.key && event.key !== PARSE_STREAM_STORAGE_KEY) return;
+      const stored = readStoredParseStreamState();
+      setParsingAll(Boolean(stored?.active));
+      setParseStreamMeta(stored?.meta || null);
+      setParseStreamProgress(stored?.progress || null);
+      setParseStreamError(stored?.error || null);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const changeView = useCallback(
     (nextView) => {
@@ -565,6 +656,10 @@ export default function AdminParserTradesPage() {
     const es = new EventSource(streamUrl);
     parseStreamRef.current = es;
 
+    es.onopen = () => {
+      setParseStreamError(null);
+    };
+
     es.addEventListener('meta', (event) => {
       const data = safeJsonParse(event.data);
       if (!data) return;
@@ -574,6 +669,7 @@ export default function AdminParserTradesPage() {
         stage: data.stage || prev?.stage,
         total_found: data.total_found ?? prev?.total_found,
       }));
+      persistStreamState({ meta: data, active: true });
     });
 
     es.addEventListener('progress', (event) => {
@@ -581,6 +677,7 @@ export default function AdminParserTradesPage() {
       if (!data) return;
       setParseStreamError(null);
       setParseStreamProgress(data);
+      persistStreamState({ progress: data, active: true, error: null });
     });
 
     es.addEventListener('item', (event) => {
@@ -593,12 +690,19 @@ export default function AdminParserTradesPage() {
         parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
         total_found: data.total_found ?? prev?.total_found,
       }));
+      persistStreamState({
+        progress: {
+          ...data,
+          parsed: data.parsed ?? ((parseStreamProgressRef.current?.parsed ?? 0) + 1),
+        },
+        active: true,
+        error: null,
+      });
       setItems((prev) => {
         const normalized = normalizeStreamItem(data.item);
         const next = [normalized, ...prev];
         return next.slice(0, MAX_STREAM_ITEMS);
       });
-    });
 
     es.addEventListener('done', (event) => {
       const data = safeJsonParse(event.data) || {};
@@ -606,6 +710,10 @@ export default function AdminParserTradesPage() {
       setParsingAll(false);
       stopParseStream();
       loadPage(1);
+      persistStreamState({
+        active: false,
+        progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
+      });
     });
 
     es.addEventListener('error', (event) => {
@@ -614,14 +722,15 @@ export default function AdminParserTradesPage() {
       setParseStreamError(detail);
       setParsingAll(false);
       stopParseStream();
+      persistStreamState({ error: detail, active: false });
     });
 
     es.onerror = () => {
-      setParseStreamError('Соединение потеряно');
-      setParsingAll(false);
-      stopParseStream();
+      setParseStreamError('Соединение потеряно. Переподключаемся…');
+      setParsingAll(true);
+      persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
     };
-  }, [filters, view, stopParseStream, loadPage]);
+  }, [filters, view, stopParseStream, loadPage, persistStreamState]);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -1314,6 +1423,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
