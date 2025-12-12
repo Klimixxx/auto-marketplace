@@ -21,6 +21,7 @@ function normalizeBase(value) {
 const API_BASE = normalizeBase(RAW_API_BASE);
 const PAGE_SIZE = 20;
 const PARSER_PAGE_SIZE = 50;
+const MAX_STREAM_ITEMS = 200;
 const DEFAULT_SEARCH_TERM = 'vin';
 const DASH = '—';
 const ARROW_LEFT = '←';
@@ -169,6 +170,70 @@ function formatNumber(value) {
   return String(value);
 }
 
+function safeJsonParse(payload) {
+  try {
+    return JSON.parse(payload);
+  } catch (error) {
+    console.warn('Failed to parse SSE payload', error);
+    return null;
+  }
+}
+
+function normalizeStreamItem(item) {
+  const parsed = item?.parsed_data ?? {};
+  const fedresurs = item?.fedresurs_data ?? {};
+
+  const idBase = parsed.id || parsed.guid || fedresurs.id || fedresurs.guid || fedresurs.number || Date.now();
+  const title = pickFirstText(parsed.title, parsed.name, fedresurs.title, fedresurs.name, 'Лот');
+  const region = pickFirstText(parsed.region, parsed.region_name, fedresurs.region, fedresurs.region_code);
+  const tradeType = pickFirstText(
+    parsed.trade_type,
+    parsed.tradeType,
+    parsed.trade_type_code,
+    fedresurs.trade_type,
+    fedresurs.tradeType,
+  );
+  const startPrice =
+    parsed.start_price
+    ?? parsed.price
+    ?? parsed.price_start
+    ?? parsed.startPrice
+    ?? fedresurs.start_price
+    ?? fedresurs.price
+    ?? fedresurs.price_start;
+  const finishDate = pickFirstText(
+    parsed.date_finish,
+    parsed.finish_date,
+    parsed.dateEnd,
+    parsed.close_date,
+    fedresurs.date_finish,
+    fedresurs.dateEnd,
+  );
+  const sourceUrl = pickFirstText(
+    parsed.source_url,
+    parsed.url,
+    parsed.lot_url,
+    fedresurs.source_url,
+    fedresurs.url,
+    fedresurs.lot_href,
+  );
+
+  return {
+    id: `stream-${idBase}`,
+    title,
+    region,
+    trade_type: tradeType,
+    start_price: startPrice,
+    date_finish: finishDate,
+    trade_place: parsed.trade_place || parsed.site || fedresurs.trade_place,
+    source_url: sourceUrl,
+    currency: parsed.currency || fedresurs.currency || 'RUB',
+    created_at: parsed.created_at || parsed.createdAt || new Date().toISOString(),
+    parsed_data: parsed,
+    fedresurs_data: fedresurs,
+  };
+}
+
 function loadStoredFilters() {
   if (typeof window === 'undefined') return {};
   try {
@@ -201,6 +266,10 @@ export default function AdminParserTradesPage() {
   const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
   const [view, setView] = useState('drafts');
   const queryView = router.query?.view;
+  const parseStreamRef = useRef(null);
+  const [parseStreamMeta, setParseStreamMeta] = useState(null);
+  const [parseStreamProgress, setParseStreamProgress] = useState(null);
+  const [parseStreamError, setParseStreamError] = useState(null);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -411,6 +480,10 @@ export default function AdminParserTradesPage() {
     loadPage(1);
   }, [loadPage]);
 
+  useEffect(() => () => {
+    stopParseStream();
+  }, [stopParseStream]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -441,6 +514,13 @@ export default function AdminParserTradesPage() {
     [loadPage],
   );
 
+  const stopParseStream = useCallback(() => {
+    if (parseStreamRef.current) {
+      parseStreamRef.current.close();
+      parseStreamRef.current = null;
+    }
+  }, []);
+
   const runParseAll = useCallback(async () => {
     if (view !== 'drafts') return;
     if (!API_BASE) {
@@ -465,58 +545,83 @@ export default function AdminParserTradesPage() {
       return;
     }
 
-    const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
-    const requestPayload = {
-      search: searchTerm,
-      region_codes: selectedRegions,
-    };
+    const params = new URLSearchParams();
+    params.set('search_string', searchTerm);
+    params.set('limit', String(PARSER_PAGE_SIZE));
+    params.set('only_available', 'true');
+    if (filters.start_date) params.set('start_date', filters.start_date);
+    if (filters.end_date) params.set('end_date', filters.end_date);
 
-    if (selectedRegions.length === 1) {
-      requestPayload.region_code = selectedRegions[0];
-    }
+    selectedRegions.forEach((code) => params.append('region_codes', code));
 
     setParsingAll(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/actions/parse-all`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
+    setParseStreamError(null);
+    setParseStreamMeta(null);
+    setParseStreamProgress(null);
+    stopParseStream();
+
+    const streamUrlBase = API_BASE ? `${API_BASE}/api/parser/fedresurs/all/stream` : '/api/parser/fedresurs/all/stream';
+    const streamUrl = `${streamUrlBase}?${params.toString()}`;
+    const es = new EventSource(streamUrl);
+    parseStreamRef.current = es;
+
+    es.addEventListener('meta', (event) => {
+      const data = safeJsonParse(event.data);
+      if (!data) return;
+      setParseStreamMeta(data);
+      setParseStreamProgress((prev) => ({
+        ...prev,
+        stage: data.stage || prev?.stage,
+        total_found: data.total_found ?? prev?.total_found,
+      }));
+    });
+
+    es.addEventListener('progress', (event) => {
+      const data = safeJsonParse(event.data);
+      if (!data) return;
+      setParseStreamError(null);
+      setParseStreamProgress(data);
+    });
+
+    es.addEventListener('item', (event) => {
+      const data = safeJsonParse(event.data);
+      if (!data?.item) return;
+      setParseStreamError(null);
+      setParseStreamProgress((prev) => ({
+        ...prev,
+        stage: data.stage || prev?.stage,
+        parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
+        total_found: data.total_found ?? prev?.total_found,
+      }));
+      setItems((prev) => {
+        const normalized = normalizeStreamItem(data.item);
+        const next = [normalized, ...prev];
+        return next.slice(0, MAX_STREAM_ITEMS);
       });
+    });
 
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) {
-        throw new Error((data && data.error) || 'Не удалось выполнить полный парсинг');
-      }
-
-      const responsePayload = data.data || {};
-      const totalFound = Number.isFinite(Number(responsePayload.total_found))
-        ? Number(responsePayload.total_found)
-        : null;
-      const parsedCount = Number.isFinite(Number(responsePayload.parsed))
-        ? Number(responsePayload.parsed)
-        : Array.isArray(responsePayload.results)
-          ? responsePayload.results.length
-          : null;
-      const summaryParts = [
-        `Запрос: ${searchTerm}`,
-        selectedRegions.length > 1
-          ? `Регионы: ${selectedRegions.join(', ')}`
-          : `Регион: ${primaryRegionCode}`,
-        totalFound != null ? `Найдено: ${totalFound}` : null,
-        parsedCount != null ? `Распарсено: ${parsedCount}` : null,
-      ].filter(Boolean);
-      alert(summaryParts.join('\n'));
-    } catch (error) {
-      console.error('parse-all error:', error);
-      alert(`Ошибка: ${error.message || 'parse-all failed'}`);
-    } finally {
+    es.addEventListener('done', (event) => {
+      const data = safeJsonParse(event.data) || {};
+      setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
       setParsingAll(false);
-    }
-  }, [filters, view]);
+      stopParseStream();
+      loadPage(1);
+    });
+
+    es.addEventListener('error', (event) => {
+      const data = event?.data ? safeJsonParse(event.data) : null;
+      const detail = data?.detail || data?.message || 'Ошибка соединения с парсером';
+      setParseStreamError(detail);
+      setParsingAll(false);
+      stopParseStream();
+    });
+
+    es.onerror = () => {
+      setParseStreamError('Соединение потеряно');
+      setParsingAll(false);
+      stopParseStream();
+    };
+  }, [filters, view, stopParseStream, loadPage]);
 
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
@@ -795,6 +900,26 @@ export default function AdminParserTradesPage() {
   const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё с парсера';
   const parseAllLabel = parsingAll ? 'Парсим все…' : 'СПАРСИТЬ ВСЕ';
   const ingestDisabled = ingesting || parsingAll;
+  const streamStage = parseStreamProgress?.stage || parseStreamMeta?.stage;
+  const streamParsed = Number.isFinite(Number(parseStreamProgress?.parsed))
+    ? Number(parseStreamProgress.parsed)
+    : null;
+  const streamTotalFound = Number.isFinite(Number(parseStreamProgress?.total_found))
+    ? Number(parseStreamProgress.total_found)
+    : Number.isFinite(Number(parseStreamMeta?.total_found))
+      ? Number(parseStreamMeta.total_found)
+      : null;
+  const streamCollected = Number.isFinite(Number(parseStreamProgress?.collected))
+    ? Number(parseStreamProgress.collected)
+    : null;
+  const streamOffset = Number.isFinite(Number(parseStreamProgress?.offset))
+    ? Number(parseStreamProgress.offset)
+    : null;
+  const streamRegions = Array.isArray(parseStreamMeta?.region_codes)
+    ? parseStreamMeta.region_codes
+    : parseStreamMeta?.region_code
+      ? [parseStreamMeta.region_code]
+      : null;
   const filterInitial = useMemo(() => ({ ...filters }), [filters]);
 
   return (
@@ -892,6 +1017,54 @@ export default function AdminParserTradesPage() {
             >
               {parseAllLabel}
             </button>
+          </div>
+        ) : null}
+
+        {isDraftsView && (parseStreamMeta || parseStreamProgress || parseStreamError) ? (
+          <div className="admin-hint-card" style={{ marginTop: 12 }}>
+            <div className="admin-hint-card__title">
+              {parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}
+            </div>
+            <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 6 }}>
+              <span>
+                Запрос: <strong>{parseStreamMeta?.search_string || progressSearchTerm}</strong>
+              </span>
+              {streamRegions ? (
+                <span>
+                  Регионы: <strong>{streamRegions.join(', ')}</strong>
+                </span>
+              ) : null}
+              {streamStage ? (
+                <span>
+                  Стадия: <strong>{streamStage}</strong>
+                </span>
+              ) : null}
+              {streamCollected != null ? (
+                <span>
+                  Собрано: <strong>{formatNumber(streamCollected)}</strong>
+                </span>
+              ) : null}
+              {streamOffset != null ? (
+                <span>
+                  Текущий offset: <strong>{formatNumber(streamOffset)}</strong>
+                </span>
+              ) : null}
+              {streamTotalFound != null ? (
+                <span>
+                  Найдено всего: <strong>{formatNumber(streamTotalFound)}</strong>
+                </span>
+              ) : null}
+              {streamParsed != null ? (
+                <span>
+                  Распарсено: <strong>{formatNumber(streamParsed)}</strong>
+                </span>
+              ) : null}
+            </div>
+            {parseStreamError ? (
+              <div className="admin-hint-card__meta" style={{ color: '#b91c1c' }}>
+                Ошибка: {parseStreamError}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1141,5 +1314,6 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
