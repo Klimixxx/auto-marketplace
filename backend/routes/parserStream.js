@@ -33,38 +33,26 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   };
   const heartbeatTimer = setInterval(sendHeartbeat, heartbeatIntervalMs);
 
-  const abortController = new AbortController();
-  let upstream;
-  try {
-    upstream = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { accept: 'text/event-stream' },
-      signal: abortController.signal,
-    });
-  } catch (e) {
-    res.write(`event: error\ndata: ${JSON.stringify({ detail: 'Upstream unavailable' })}\n\n`);
-    res.end();
-    return;
-  }
+  let closed = false;
+  let currentAbortController;
+  let currentReader;
 
-  if (!upstream.ok || !upstream.body) {
-    const text = await upstream.text().catch(() => '');
-    res.write(
-      `event: error\ndata: ${JSON.stringify({ detail: text || `Upstream status ${upstream.status}` })}\n\n`,
-    );
-    res.end();
-    return;
-  }
+  const stopUpstream = async () => {
+    try { currentAbortController?.abort(); } catch {}
+    try { await currentReader?.cancel(); } catch {}
+  };
 
-  const reader = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  req.on('close', () => {
+    closed = true;
+    // отрубаем текущее подключение сразу, чтобы не ждать reader.read()
+    stopUpstream();
+  });
 
-  const parseEventChunk = async (chunk) => {
-    buffer += chunk;
+  const parseEventChunk = async (decoder, bufferRef, chunk) => {
+    bufferRef.buffer += chunk;
 
-    const segments = buffer.split(/\n\n/);
-    buffer = segments.pop() ?? '';
+    const segments = bufferRef.buffer.split(/\n\n/);
+    bufferRef.buffer = segments.pop() ?? '';
 
     for (const segment of segments) {
       const lines = segment.split(/\n/);
@@ -96,34 +84,82 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     }
   };
 
-  req.on('close', async () => {
-    clearInterval(heartbeatTimer);
-    try { abortController.abort(); } catch {}
-    try { await reader.cancel(); } catch {}
-  });
+  const connectAndPipeStream = async () => {
+    const abortController = new AbortController();
+    currentAbortController = abortController;
+    let reader;
 
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) {
-        res.write(Buffer.from(value));
-        try {
-          await parseEventChunk(decoder.decode(value, { stream: true }));
-        } catch (error) {
-          console.error('Failed to parse SSE chunk:', error?.message || error);
+  const cleanup = async () => {
+      try { abortController.abort(); } catch {}
+      try { await reader?.cancel(); } catch {}
+      currentAbortController = null;
+      currentReader = null;
+    };
+
+    try {
+      const upstream = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { accept: 'text/event-stream' },
+        signal: abortController.signal,
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        const text = await upstream.text().catch(() => '');
+        throw new Error(text || `Upstream status ${upstream.status}`);
+      }
+
+      reader = upstream.body.getReader();
+      currentReader = reader;
+      const decoder = new TextDecoder();
+      const bufferRef = { buffer: '' };
+
+      while (!closed) {
+        const { value, done } = await reader.read();
+        if (done) {
+          try {
+            await parseEventChunk(decoder, bufferRef, decoder.decode());
+          } catch (error) {
+            console.error('Failed to flush SSE buffer:', error?.message || error);
+          }
+          throw new Error('Upstream stream ended');
+        }
+        if (value) {
+          res.write(Buffer.from(value));
+          try {
+            await parseEventChunk(decoder, bufferRef, decoder.decode(value, { stream: true }));
+          } catch (error) {
+            console.error('Failed to parse SSE chunk:', error?.message || error);
+          }
         }
       }
+      // если вышли из цикла из-за закрытия клиента — прерываемся без попытки переподключения
+      return { closedByClient: closed };
+    } finally {
+      await cleanup();
     }
-  } catch (e) {
-    // клиент мог закрыться — это нормально
-  } finally {
-    clearInterval(heartbeatTimer);
+ };
+
+  let reconnectDelayMs = 1_000;
+  while (!closed) {
     try {
-      await parseEventChunk(decoder.decode());
+      const result = await connectAndPipeStream();
+      if (result?.closedByClient) break;
+
+      // если дошли сюда — соединение разорвалось, пробуем переподключиться
+      reconnectDelayMs = 1_000; // успешное подключение сбрасывает задержку
     } catch (error) {
-      console.error('Failed to flush SSE buffer:', error?.message || error);
+      if (closed) break;
+
+      console.error('Upstream stream error:', error?.message || error);
+      res.write(`event: error\ndata: ${JSON.stringify({ detail: error?.message || 'Stream error' })}\n\n`);
+      res.flush?.();
+
+      // ждём перед переподключением
+      const delay = reconnectDelayMs;
+      reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
+    clearInterval(heartbeatTimer);
     res.end();
   }
 });
