@@ -21,6 +21,7 @@ import tradeOrdersRouter from './routes/tradeOrders.js';
 import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
 import tradePricingRouter from './routes/tradePricing.js';
 import adminTradePricingRouter from './routes/adminTradePricing.js';
+import parserStreamRouter from './routes/parserStream.js';
 import { loadAutotekaSettings } from './services/autotekaSettings.js';
 import { loadInspectionSettings } from './services/inspectionSettings.js';
 import { loadAvitoBrands } from './services/avitoBrands.js';
@@ -1492,6 +1493,7 @@ app.patch('/api/me', auth, async (req, res) => {
   res.json({ ok: true, user: u, token });
 });
 
+app.use('/api/parser', parserStreamRouter);
 app.use('/api/admin', auth, requireAdmin, adminParserRouter);
 app.get('/api/inspections/price', async (_req, res) => {
   try {
