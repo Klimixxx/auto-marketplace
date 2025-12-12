@@ -33,6 +33,11 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   };
   const heartbeatTimer = setInterval(sendHeartbeat, heartbeatIntervalMs);
 
+  // таймер, который принудительно перезапускает подключение к апстриму,
+  // если долго нет данных (некоторые прокси/балансировщики рвут такие соединения).
+  const upstreamInactivityMs = 45_000 ;
+  let upstreamActivityTimer;
+
   let closed = false;
   let currentAbortController;
   let currentReader;
@@ -40,7 +45,18 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   const stopUpstream = async () => {
     try { currentAbortController?.abort(); } catch {}
     try { await currentReader?.cancel(); } catch {}
+    clearTimeout (upstreamActivityTimer);
   };
+
+  const resetUpstreamWatchdog = ( ) => {
+ 
+    clearTimeout (upstreamActivityTimer);
+    upstreamActivityTimer = setTimeout ( () => {
+      // прерываем текущее подключение; внешний цикл создаст новое
+      stopUpstream ();
+    }, upstreamInactivityMs);
+  };
+  resetUpstreamWatchdog ();
 
   req.on('close', () => {
     closed = true;
@@ -124,6 +140,7 @@ router.get('/fedresurs/all/stream', async (req, res) => {
           throw new Error('Upstream stream ended');
         }
         if (value) {
+          resetUpstreamWatchdog();
           res.write(Buffer.from(value));
           try {
             await parseEventChunk(decoder, bufferRef, decoder.decode(value, { stream: true }));
