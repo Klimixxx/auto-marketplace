@@ -28,6 +28,7 @@ const ARROW_LEFT = '←';
 const ARROW_RIGHT = '→';
 const FILTER_STORAGE_KEY = 'adminListingsFilters';
 const PARSE_STREAM_STORAGE_KEY = 'adminParseStreamState';
+const PARSE_STREAM_STATE_TTL_MS = 10 * 60 * 1000;
 
 function readToken() {
   if (typeof window === 'undefined') return null;
@@ -587,6 +588,15 @@ export default function AdminParserTradesPage() {
     }
   }, []);
 
+  const resetParseStreamState = useCallback(() => {
+    setParsingAll(false);
+    setParseStreamMeta(null);
+    setParseStreamProgress(null);
+    setParseStreamError(null);
+    stopParseStream();
+    persistParseStreamState(null);
+  }, [stopParseStream, persistParseStreamState]);
+
   useEffect(() => () => {
     stopParseStream();
   }, [stopParseStream]);
@@ -600,6 +610,19 @@ export default function AdminParserTradesPage() {
       applyProgress(null);
     }
   }, [view, fetchProgress, applyProgress, filters.q, filters.region_code]);
+
+  useEffect(() => {
+    if (!initialStreamState?.active) return;
+
+    const updatedAtMs = initialStreamState?.updated_at ? Date.parse(initialStreamState.updated_at) : NaN;
+    const isStale = Number.isFinite(updatedAtMs)
+      ? Date.now() - updatedAtMs > PARSE_STREAM_STATE_TTL_MS
+      : false;
+
+    if (isStale) {
+      resetParseStreamState();
+    }
+  }, [initialStreamState, resetParseStreamState]);
 
   const handleFilterSearch = useCallback(
     (nextFilters) => {
@@ -1132,8 +1155,14 @@ export default function AdminParserTradesPage() {
 
         {isDraftsView && (parseStreamMeta || parseStreamProgress || parseStreamError) ? (
           <div className="admin-hint-card" style={{ marginTop: 12 }}>
-            <div className="admin-hint-card__title">
-              {parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}
+            <div
+              className="admin-hint-card__title"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
+            >
+              <span>{parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}</span>
+              <button type="button" className="button button-small button-ghost" onClick={resetParseStreamState}>
+                Сбросить статус
+              </button>
             </div>
             <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 6 }}>
               <span>
@@ -1424,3 +1453,4 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
