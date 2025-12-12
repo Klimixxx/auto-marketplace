@@ -6,6 +6,11 @@ const router = express.Router();
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 
 router.get('/fedresurs/all/stream', async (req, res) => {
+
+  // Отключаем серверные таймауты для долгоживущего SSE-потока
+  req.setTimeout(0);
+  res.setTimeout(0);
+  
   const url = new URL('/parse-fedresurs-trades-all-stream', PARSER_BASE_URL);
 
   for (const [k, v] of Object.entries(req.query)) {
