@@ -21,6 +21,17 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
   res.flushHeaders?.();
 
+  const heartbeatIntervalMs = 15_000;
+  const sendHeartbeat = () => {
+    try {
+      res.write(':heartbeat\n\n');
+      res.flush?.();
+    } catch (e) {
+      // ignore heartbeat failures
+    }
+  };
+  const heartbeatTimer = setInterval(sendHeartbeat, heartbeatIntervalMs);
+
   let upstream;
   try {
     upstream = await fetch(url.toString(), {
@@ -45,6 +56,7 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   const reader = upstream.body.getReader();
 
   req.on('close', async () => {
+    clearInterval(heartbeatTimer);
     try { await reader.cancel(); } catch {}
   });
 
@@ -57,6 +69,7 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   } catch (e) {
     // клиент мог закрыться — это нормально
   } finally {
+    clearInterval(heartbeatTimer);
     res.end();
   }
 });
