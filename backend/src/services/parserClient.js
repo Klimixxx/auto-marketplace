@@ -3,6 +3,16 @@
 const BASE_URL =
   process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 
+const DEFAULT_TIMEOUT_MS = 120_000;
+const FETCH_TIMEOUT_MS = (() => {
+  const value = Number(process.env.PARSER_FETCH_TIMEOUT_MS);
+  if (Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  return DEFAULT_TIMEOUT_MS;
+})();
+
 function toFinite(value) {
   if (value === undefined || value === null) return undefined;
   const num = Number(value);
@@ -83,13 +93,31 @@ async function fetchJson(path, params = {}) {
     }
   });
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error('Parser request timed out'));
+  }, FETCH_TIMEOUT_MS);
 
+  let response;
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const err = new Error('Parser request timed out');
+      err.status = 504;
+      throw err;
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const responseText = await response.text();
 
   let data = null;
