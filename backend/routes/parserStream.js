@@ -6,6 +6,7 @@ const router = express.Router();
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 
 /**
+ * LEGACY sessions (old mode without jobId):
  * sessions: key -> {
  *   key, url, clients:Set<{res, cleanup}>,
  *   stopRequested, stopTimeout,
@@ -24,7 +25,152 @@ function isAbortLikeError(error) {
   return message.includes('aborted') || message.includes('abort');
 }
 
+/**
+ * NEW: start job in FastAPI (jobId model)
+ * POST /api/parser/fedresurs/all/start
+ * Body: { search_string, start_date, end_date, limit, region_code, region_codes, only_available }
+ * Returns: { jobId }
+ */
+router.post('/fedresurs/all/start', express.json(), async (req, res) => {
+  try {
+    const upstreamUrl = new URL('/jobs/fedresurs/all/start', PARSER_BASE_URL);
+
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+
+    const data = await upstream.json().catch(() => null);
+
+    if (!upstream.ok || !data) {
+      return res.status(upstream.status || 500).json({
+        error: data?.detail || data?.error || 'start failed',
+      });
+    }
+
+    return res.json(data);
+  } catch (error) {
+    console.error('start job proxy error:', error?.message || error);
+    return res.status(500).json({ error: 'start job proxy error' });
+  }
+});
+
+/**
+ * Optional: stop job in FastAPI
+ * POST /api/parser/fedresurs/all/:jobId/stop
+ */
+router.post('/fedresurs/all/:jobId/stop', async (req, res) => {
+  const jobId = typeof req.params.jobId === 'string' ? req.params.jobId : '';
+  if (!jobId) return res.status(400).json({ error: 'jobId is required' });
+
+  try {
+    const upstreamUrl = new URL(`/jobs/fedresurs/all/${encodeURIComponent(jobId)}/stop`, PARSER_BASE_URL);
+
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await upstream.json().catch(() => null);
+    if (!upstream.ok) {
+      return res.status(upstream.status || 500).json({
+        error: data?.detail || data?.error || 'stop failed',
+      });
+    }
+
+    return res.json(data || { ok: true });
+  } catch (error) {
+    console.error('stop job proxy error:', error?.message || error);
+    return res.status(500).json({ error: 'stop job proxy error' });
+  }
+});
+
+/**
+ * STREAM endpoint:
+ * - If jobId is provided: proxy FastAPI job stream (recommended).
+ * - Else: legacy mode (your current multiplexer by query).
+ */
 router.get('/fedresurs/all/stream', async (req, res) => {
+  // ===== NEW MODE (jobId) =====
+  const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : '';
+  if (jobId) {
+    const upstreamUrl = new URL(
+      `/jobs/fedresurs/all/${encodeURIComponent(jobId)}/stream`,
+      PARSER_BASE_URL,
+    );
+
+    const abortController = new AbortController();
+    let reader = null;
+
+    req.on('close', async () => {
+      try { abortController.abort(); } catch {}
+      try { await reader?.cancel(); } catch {}
+    });
+
+    // SSE headers клиенту
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    try {
+      const headers = { accept: 'text/event-stream' };
+
+      // Resume support: пробрасываем Last-Event-ID в FastAPI
+      const lastEventId = req.headers['last-event-id'];
+      if (lastEventId) headers['last-event-id'] = String(lastEventId);
+
+      const upstream = await fetch(upstreamUrl.toString(), {
+        method: 'GET',
+        headers,
+        signal: abortController.signal,
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        const text = await upstream.text().catch(() => '');
+        res.write(
+          `event: error\ndata: ${JSON.stringify({
+            detail: text || `Upstream status ${upstream.status}`,
+          })}\n\n`,
+        );
+        res.end();
+        return;
+      }
+
+      reader = upstream.body.getReader();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        if (value) {
+          // просто прокидываем байты SSE дальше
+          res.write(Buffer.from(value));
+          res.flush?.();
+        }
+      }
+
+      res.end();
+    } catch (error) {
+      if (!isAbortLikeError(error)) {
+        const msg = error?.message || 'stream proxy error';
+        console.error('job stream proxy error:', msg);
+        try {
+          res.write(`event: error\ndata: ${JSON.stringify({ detail: msg })}\n\n`);
+        } catch {}
+      }
+      try { res.end(); } catch {}
+    }
+    return; // ✅ важно: не падать в legacy режим
+  }
+
+  // ===== LEGACY MODE (no jobId) =====
   const url = new URL('/parse-fedresurs-trades-all-stream', PARSER_BASE_URL);
 
   // пробрасываем query как есть
@@ -124,12 +270,8 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     };
 
     const stopUpstream = async () => {
-      try {
-        session.currentAbortController?.abort();
-      } catch {}
-      try {
-        await session.currentReader?.cancel();
-      } catch {}
+      try { session.currentAbortController?.abort(); } catch {}
+      try { await session.currentReader?.cancel(); } catch {}
       clearUpstreamWatchdog();
       session.currentAbortController = null;
       session.currentReader = null;
@@ -139,7 +281,6 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       clearUpstreamWatchdog();
       const upstreamInactivityMs = 45_000;
       session.upstreamActivityTimer = setTimeout(() => {
-        // если upstream “завис” — рвём и уходим в reconnect
         stopUpstream().catch(() => {});
       }, upstreamInactivityMs);
     };
@@ -150,12 +291,8 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       let reader = null;
 
       const cleanup = async () => {
-        try {
-          abortController.abort();
-        } catch {}
-        try {
-          await reader?.cancel();
-        } catch {}
+        try { abortController.abort(); } catch {}
+        try { await reader?.cancel(); } catch {}
         session.currentAbortController = null;
         session.currentReader = null;
       };
@@ -184,7 +321,6 @@ router.get('/fedresurs/all/stream', async (req, res) => {
           const { value, done } = await reader.read();
 
           if (done) {
-            // попробуем “допарсить” хвост
             try {
               if (bufferRef.buffer) await parseEventChunk(bufferRef, bufferRef.buffer);
             } catch (error) {
@@ -239,14 +375,10 @@ router.get('/fedresurs/all/stream', async (req, res) => {
         }
       }
 
-      // финальная остановка
       await stopUpstream();
 
-      // если сессия завершилась — закрываем клиентов
       for (const client of Array.from(session.clients)) {
-        try {
-          client.cleanup();
-        } catch {}
+        try { client.cleanup(); } catch {}
       }
 
       activeSessions.delete(session.key);
@@ -269,23 +401,15 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
   const heartbeatTimer = attachHeartbeat(res);
 
-  const clientRef = {
-    res,
-    cleanup: null,
-  };
+  const clientRef = { res, cleanup: null };
 
   const cleanupClient = () => {
     clearInterval(heartbeatTimer);
 
-    // убираем клиента
     session.clients.delete(clientRef);
 
-    // закрываем соединение
-    try {
-      res.end();
-    } catch {}
+    try { res.end(); } catch {}
 
-    // если клиентов нет — через 30 сек стопаем upstream
     if (session.clients.size === 0 && !session.stopTimeout) {
       session.stopTimeout = setTimeout(() => {
         session.stopRequested = true;
@@ -296,17 +420,14 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
   clientRef.cleanup = cleanupClient;
 
-  // добавляем клиента в сессию
   session.clients.add(clientRef);
 
-  // если уже был запланирован stop — отменяем
   if (session.stopTimeout) {
     clearTimeout(session.stopTimeout);
     session.stopTimeout = null;
     session.stopRequested = false;
   }
 
-  // закрытие вкладки/соединения
   req.on('close', cleanupClient);
 });
 
