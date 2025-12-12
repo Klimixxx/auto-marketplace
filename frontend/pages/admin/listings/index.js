@@ -480,10 +480,6 @@ export default function AdminParserTradesPage() {
     loadPage(1);
   }, [loadPage]);
 
-  useEffect(() => () => {
-    stopParseStream();
-  }, [stopParseStream]);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -492,6 +488,17 @@ export default function AdminParserTradesPage() {
       console.warn('Failed to persist admin filters', error);
     }
   }, [filters]);
+
+  const stopParseStream = useCallback(() => {
+    if (parseStreamRef.current) {
+      parseStreamRef.current.close();
+      parseStreamRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    stopParseStream();
+  }, [stopParseStream]);
 
   useEffect(() => {
     if (view === 'drafts') {
@@ -513,13 +520,6 @@ export default function AdminParserTradesPage() {
     },
     [loadPage],
   );
-
-  const stopParseStream = useCallback(() => {
-    if (parseStreamRef.current) {
-      parseStreamRef.current.close();
-      parseStreamRef.current = null;
-    }
-  }, []);
 
   const runParseAll = useCallback(async () => {
     if (view !== 'drafts') return;
@@ -1314,6 +1314,7 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
 
 
 
