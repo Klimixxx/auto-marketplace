@@ -1,5 +1,5 @@
 import { query } from '../db.js';
-import { getRegionNameByCode, normalizeRegionCode } from '../shared/regions.js';
+import { getRegionNameByCode, normalizeRegionCode } from "../../shared/regions.js"
 
 function normalizePhotoEntry(photo) {
   if (!photo) return null;
