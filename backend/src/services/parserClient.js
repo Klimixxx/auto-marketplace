@@ -3,7 +3,7 @@
 const BASE_URL =
   process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 40 * 60 * 1000; // 40 минут
 const FETCH_TIMEOUT_MS = (() => {
   const value = Number(process.env.PARSER_FETCH_TIMEOUT_MS);
   if (Number.isFinite(value) && value > 0) {
