@@ -29,6 +29,7 @@ const ARROW_RIGHT = '→';
 const FILTER_STORAGE_KEY = 'adminListingsFilters';
 const PARSE_STREAM_STORAGE_KEY = 'adminParseStreamState';
 const PARSE_STREAM_STATE_TTL_MS = 10 * 60 * 1000;
+const PARSE_JOB_ID_KEY = 'fedresurs_parse_job_id';
 
 function readToken() {
   if (typeof window === 'undefined') return null;
@@ -276,6 +277,136 @@ function loadStoredFilters() {
   }
 }
 
+// Функция для прикрепления обработчиков SSE
+function attachSseHandlers(es, {
+  setParseStreamError,
+  setParsingAll,
+  setParseStreamMeta,
+  setParseStreamProgress,
+  setItems,
+  stopParseStream,
+  loadPage,
+  persistStreamState,
+  parseStreamProgressRef,
+}) {
+  let reconnectNoticeTimer = null;
+
+  const showReconnectNotice = () => {
+    setParseStreamError((prev) => prev || 'Соединение потеряно. Переподключаемся…');
+    setParsingAll(true);
+    persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
+  };
+
+  es.onopen = () => {
+    if (reconnectNoticeTimer) {
+      clearTimeout(reconnectNoticeTimer);
+      reconnectNoticeTimer = null;
+    }
+    setParseStreamError(null);
+    setParsingAll(true);
+    persistStreamState({ error: null, active: true });
+  };
+
+  es.addEventListener('meta', (event) => {
+    const data = safeJsonParse(event.data);
+    if (!data) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamMeta(data);
+    setParseStreamProgress((prev) => ({
+      ...prev,
+      stage: data.stage || prev?.stage,
+      total_found: data.total_found ?? prev?.total_found,
+    }));
+    persistStreamState({ meta: data, active: true, error: null });
+  });
+
+  es.addEventListener('progress', (event) => {
+    const data = safeJsonParse(event.data);
+    if (!data) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamProgress(data);
+    persistStreamState({ progress: data, active: true, error: null });
+  });
+
+  es.addEventListener('item', (event) => {
+    const data = safeJsonParse(event.data);
+    if (!data?.item) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamProgress((prev) => ({
+      ...prev,
+      stage: data.stage || prev?.stage,
+      parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
+      total_found: data.total_found ?? prev?.total_found,
+    }));
+
+    persistStreamState({
+      progress: {
+        ...data,
+        parsed: data.parsed ?? ((parseStreamProgressRef.current?.parsed ?? 0) + 1),
+      },
+      active: true,
+      error: null,
+    });
+
+    setItems((prev) => {
+      const normalized = normalizeStreamItem(data.item);
+      return [normalized, ...prev].slice(0, MAX_STREAM_ITEMS);
+    });
+  });
+
+  es.addEventListener('done', (event) => {
+    const data = safeJsonParse(event.data) || {};
+    setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
+    setParseStreamError(null);
+    setParsingAll(false);
+
+    // Очищаем jobId из localStorage при завершении
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+
+    stopParseStream();
+    loadPage(1);
+
+    persistStreamState({
+      active: false,
+      error: null,
+      progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
+    });
+  });
+
+  es.addEventListener('error', (event) => {
+    const data = event?.data ? safeJsonParse(event.data) : null;
+    const detail = data?.detail || data?.message || 'Ошибка парсера';
+
+    // Очищаем jobId из localStorage при ошибке
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+
+    setParseStreamError(detail);
+    setParsingAll(false);
+    stopParseStream();
+    persistStreamState({ error: detail, active: false });
+  });
+
+  // Обработчик сетевых ошибок (не закрываем соединение)
+  es.onerror = () => {
+    if (!reconnectNoticeTimer) {
+      reconnectNoticeTimer = setTimeout(() => {
+        reconnectNoticeTimer = null;
+        showReconnectNotice();
+      }, 500);
+    }
+  };
+}
+
 export default function AdminParserTradesPage() {
   const router = useRouter();
   const initialStreamState = useMemo(() => readStoredParseStreamState(), []);
@@ -370,6 +501,39 @@ export default function AdminParserTradesPage() {
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // Автоподключение после перезагрузки страницы
+  useEffect(() => {
+    const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
+    if (!jobId) return;
+
+    const storedState = readStoredParseStreamState();
+    if (!storedState?.active) return;
+
+    const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}`);
+    parseStreamRef.current = es;
+
+    // Прикрепляем обработчики SSE
+    attachSseHandlers(es, {
+      setParseStreamError,
+      setParsingAll,
+      setParseStreamMeta,
+      setParseStreamProgress,
+      setItems,
+      stopParseStream,
+      loadPage,
+      persistStreamState,
+      parseStreamProgressRef,
+    });
+
+    // Очистка при размонтировании компонента
+    return () => {
+      if (parseStreamRef.current) {
+        parseStreamRef.current.close();
+        parseStreamRef.current = null;
+      }
+    };
+  }, []); // Пустой массив зависимостей - выполняется только при монтировании
 
   const changeView = useCallback(
     (nextView) => {
@@ -595,6 +759,10 @@ export default function AdminParserTradesPage() {
     setParseStreamError(null);
     stopParseStream();
     persistParseStreamState(null);
+    // Очищаем jobId из localStorage при сбросе статуса
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
   }, [stopParseStream, persistParseStreamState]);
 
   useEffect(() => () => {
@@ -659,135 +827,62 @@ export default function AdminParserTradesPage() {
       return;
     }
 
-    const params = new URLSearchParams();
-    params.set('search_string', searchTerm);
-    params.set('limit', String(PARSER_PAGE_SIZE));
-    params.set('only_available', 'true');
-    if (filters.start_date) params.set('start_date', filters.start_date);
-    if (filters.end_date) params.set('end_date', filters.end_date);
-
-    selectedRegions.forEach((code) => params.append('region_codes', code));
-
     setParsingAll(true);
     setParseStreamError(null);
     setParseStreamMeta(null);
     setParseStreamProgress(null);
     stopParseStream();
 
-    const streamUrlBase = API_BASE
-      ? `${API_BASE}/api/parser/fedresurs/all/stream`
-      : '/api/parser/fedresurs/all/stream';
-    const streamUrl = `${streamUrlBase}?${params.toString()}`;
-
-    const es = new EventSource(streamUrl);
-    parseStreamRef.current = es;
-
-    let reconnectNoticeTimer = null;
-
-    const showReconnectNotice = () => {
-      setParseStreamError((prev) => prev || 'Соединение потеряно. Переподключаемся…');
-      setParsingAll(true);
-      persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
-    };
-
-    es.onopen = () => {
-      if (reconnectNoticeTimer) {
-        clearTimeout(reconnectNoticeTimer);
-        reconnectNoticeTimer = null;
-      }
-      setParseStreamError(null);
-      setParsingAll(true);
-      persistStreamState({ error: null, active: true });
-    };
-
-    es.addEventListener('meta', (event) => {
-      const data = safeJsonParse(event.data);
-      if (!data) return;
-
-      setParseStreamError(null);
-      setParsingAll(true);
-      setParseStreamMeta(data);
-      setParseStreamProgress((prev) => ({
-        ...prev,
-        stage: data.stage || prev?.stage,
-        total_found: data.total_found ?? prev?.total_found,
-      }));
-      persistStreamState({ meta: data, active: true, error: null });
-    });
-
-    es.addEventListener('progress', (event) => {
-      const data = safeJsonParse(event.data);
-      if (!data) return;
-
-      setParseStreamError(null);
-      setParsingAll(true);
-      setParseStreamProgress(data);
-      persistStreamState({ progress: data, active: true, error: null });
-    });
-
-    es.addEventListener('item', (event) => {
-      const data = safeJsonParse(event.data);
-      if (!data?.item) return;
-
-      setParseStreamError(null);
-      setParsingAll(true);
-      setParseStreamProgress((prev) => ({
-        ...prev,
-        stage: data.stage || prev?.stage,
-        parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
-        total_found: data.total_found ?? prev?.total_found,
-      }));
-
-      persistStreamState({
-        progress: {
-          ...data,
-          parsed: data.parsed ?? ((parseStreamProgressRef.current?.parsed ?? 0) + 1),
+    try {
+      // 1. Сначала отправляем POST запрос для запуска задачи парсинга
+      const startRes = await fetch(`${API_BASE}/api/parser/fedresurs/all/start`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        active: true,
-        error: null,
+        body: JSON.stringify({
+          search_string: searchTerm,
+          limit: PARSER_PAGE_SIZE,
+          only_available: true,
+          start_date: filters.start_date || null,
+          end_date: filters.end_date || null,
+          region_codes: selectedRegions,
+          region_code: selectedRegions.length === 1 ? selectedRegions[0] : null,
+        }),
+      });
+      
+      const startData = await startRes.json();
+      const jobId = startData.jobId;
+      
+      // Сохраняем jobId в localStorage для возможности переподключения
+      localStorage.setItem(PARSE_JOB_ID_KEY, jobId);
+      persistStreamState({ active: true });
+
+      // 2. Подключаемся к SSE-потоку с полученным jobId
+      const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}`);
+      parseStreamRef.current = es;
+
+      // Прикрепляем обработчики SSE
+      attachSseHandlers(es, {
+        setParseStreamError,
+        setParsingAll,
+        setParseStreamMeta,
+        setParseStreamProgress,
+        setItems,
+        stopParseStream,
+        loadPage,
+        persistStreamState,
+        parseStreamProgressRef,
       });
 
-      setItems((prev) => {
-        const normalized = normalizeStreamItem(data.item);
-        return [normalized, ...prev].slice(0, MAX_STREAM_ITEMS);
-      });
-    });
-
-    es.addEventListener('done', (event) => {
-      const data = safeJsonParse(event.data) || {};
-      setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
-      setParseStreamError(null);
+    } catch (error) {
+      console.error('Failed to start parse job:', error);
+      setParseStreamError('Не удалось запустить задачу парсинга');
       setParsingAll(false);
-
-      stopParseStream();
-      loadPage(1);
-
-      persistStreamState({
-        active: false,
-        error: null,
-        progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
-      });
-    });
-
-    es.addEventListener('error', (event) => {
-      const data = event?.data ? safeJsonParse(event.data) : null;
-      const detail = data?.detail || data?.message || 'Ошибка парсера';
-
-      setParseStreamError(detail);
-      setParsingAll(false);
-      stopParseStream();
-      persistStreamState({ error: detail, active: false });
-    });
-
-    // ⛔ НЕ ЗАКРЫВАЕМ СТРИМ НА NETWORK ERROR
-    es.onerror = () => {
-      if (!reconnectNoticeTimer) {
-        reconnectNoticeTimer = setTimeout(() => {
-          reconnectNoticeTimer = null;
-          showReconnectNotice();
-        }, 500);
-      }
-    };
+      persistStreamState({ error: 'Не удалось запустить задачу парсинга', active: false });
+    }
   }, [filters, view, stopParseStream, loadPage, persistStreamState]);
 
   const runIngest = useCallback(
