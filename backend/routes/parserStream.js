@@ -4,6 +4,17 @@ import { upsertParserTrade } from '../services/parserTrades.js';
 const router = express.Router();
 
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
+
+/**
+ * sessions: key -> {
+ *   key, url, clients:Set<{res, cleanup}>,
+ *   stopRequested, stopTimeout,
+ *   upstreamActivityTimer,
+ *   currentAbortController, currentReader,
+ *   reconnectDelayMs,
+ *   startPromise
+ * }
+ */
 const activeSessions = new Map();
 
 function isAbortLikeError(error) {
@@ -14,9 +25,9 @@ function isAbortLikeError(error) {
 }
 
 router.get('/fedresurs/all/stream', async (req, res) => {
-  
   const url = new URL('/parse-fedresurs-trades-all-stream', PARSER_BASE_URL);
 
+  // пробрасываем query как есть
   for (const [k, v] of Object.entries(req.query)) {
     if (v === undefined || v === null) continue;
     if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, String(x)));
@@ -31,17 +42,17 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       try {
         clientRes.write(':heartbeat\n\n');
         clientRes.flush?.();
-      } catch (e) {
-        // ignore heartbeat failures
+      } catch {
+        // ignore
       }
     };
-
-  return setInterval(sendHeartbeat, heartbeatIntervalMs);
+    return setInterval(sendHeartbeat, heartbeatIntervalMs);
   };
 
-  const parseEventChunk = async (decoder, bufferRef, chunk) => {
-    bufferRef.buffer += chunk;
+  const parseEventChunk = async (bufferRef, chunkText) => {
+    bufferRef.buffer += chunkText;
 
+    // SSE events разделяются пустой строкой
     const segments = bufferRef.buffer.split(/\n\n/);
     bufferRef.buffer = segments.pop() ?? '';
 
@@ -65,9 +76,7 @@ router.get('/fedresurs/all/stream', async (req, res) => {
         try {
           const parsed = JSON.parse(payloadRaw);
           const item = parsed?.item ?? parsed;
-          if (item) {
-            await upsertParserTrade(item);
-          }
+          if (item) await upsertParserTrade(item);
         } catch (error) {
           console.error('Failed to persist streamed item:', error?.message || error);
         }
@@ -78,16 +87,18 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   const ensureSession = () => {
     if (activeSessions.has(sessionKey)) return activeSessions.get(sessionKey);
 
-  const session = {
+    const session = {
       key: sessionKey,
       url,
       clients: new Set(),
       stopRequested: false,
+      stopTimeout: null,
+
       upstreamActivityTimer: null,
       currentAbortController: null,
       currentReader: null,
+
       reconnectDelayMs: 1_000,
-      stopTimeout: null,
       startPromise: null,
     };
 
@@ -108,13 +119,17 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     };
 
     const clearUpstreamWatchdog = () => {
-      clearTimeout(session.upstreamActivityTimer);
+      if (session.upstreamActivityTimer) clearTimeout(session.upstreamActivityTimer);
       session.upstreamActivityTimer = null;
     };
 
     const stopUpstream = async () => {
-      try { session.currentAbortController?.abort(); } catch {}
-      try { await session.currentReader?.cancel(); } catch {}
+      try {
+        session.currentAbortController?.abort();
+      } catch {}
+      try {
+        await session.currentReader?.cancel();
+      } catch {}
       clearUpstreamWatchdog();
       session.currentAbortController = null;
       session.currentReader = null;
@@ -124,18 +139,23 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       clearUpstreamWatchdog();
       const upstreamInactivityMs = 45_000;
       session.upstreamActivityTimer = setTimeout(() => {
-        stopUpstream();
+        // если upstream “завис” — рвём и уходим в reconnect
+        stopUpstream().catch(() => {});
       }, upstreamInactivityMs);
     };
 
     const connectAndPipeStream = async () => {
       const abortController = new AbortController();
       session.currentAbortController = abortController;
-      let reader;
+      let reader = null;
 
       const cleanup = async () => {
-        try { abortController.abort(); } catch {}
-        try { await reader?.cancel(); } catch {}
+        try {
+          abortController.abort();
+        } catch {}
+        try {
+          await reader?.cancel();
+        } catch {}
         session.currentAbortController = null;
         session.currentReader = null;
       };
@@ -151,8 +171,10 @@ router.get('/fedresurs/all/stream', async (req, res) => {
           const text = await upstream.text().catch(() => '');
           throw new Error(text || `Upstream status ${upstream.status}`);
         }
+
         reader = upstream.body.getReader();
         session.currentReader = reader;
+
         const decoder = new TextDecoder();
         const bufferRef = { buffer: '' };
 
@@ -160,19 +182,27 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
         while (!session.stopRequested) {
           const { value, done } = await reader.read();
+
           if (done) {
+            // попробуем “допарсить” хвост
             try {
-              await parseEventChunk(decoder, bufferRef, decoder.decode());
+              if (bufferRef.buffer) await parseEventChunk(bufferRef, bufferRef.buffer);
             } catch (error) {
               console.error('Failed to flush SSE buffer:', error?.message || error);
             }
             throw new Error('Upstream stream ended');
           }
+
           if (value) {
             resetUpstreamWatchdog();
+
+            // транслируем клиентам “сырые” байты
             broadcast(Buffer.from(value));
+
+            // и параллельно парсим текст для сохранения item
             try {
-              await parseEventChunk(decoder, bufferRef, decoder.decode(value, { stream: true }));
+              const text = decoder.decode(value, { stream: true });
+              await parseEventChunk(bufferRef, text);
             } catch (error) {
               console.error('Failed to parse SSE chunk:', error?.message || error);
             }
@@ -197,11 +227,29 @@ router.get('/fedresurs/all/stream', async (req, res) => {
             broadcastEvent('error', JSON.stringify({ detail: error?.message || 'Stream error' }));
           }
 
-      await stopUpstream();
-      activeSessions.delete(session.key);
-      for (const client of session.clients) {
-        client.cleanup();
+          await stopUpstream();
+
+          // Backoff перед переподключением
+          const delay = abortLike ? 0 : session.reconnectDelayMs;
+          session.reconnectDelayMs = Math.min(session.reconnectDelayMs * 2, 30_000);
+
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
+        }
+      }
+
+      // финальная остановка
+      await stopUpstream();
+
+      // если сессия завершилась — закрываем клиентов
+      for (const client of Array.from(session.clients)) {
+        try {
+          client.cleanup();
+        } catch {}
+      }
+
+      activeSessions.delete(session.key);
     };
 
     session.startPromise = startLoop();
@@ -211,6 +259,7 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
   const session = ensureSession();
 
+  // --- SSE headers клиенту
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -220,11 +269,23 @@ router.get('/fedresurs/all/stream', async (req, res) => {
 
   const heartbeatTimer = attachHeartbeat(res);
 
+  const clientRef = {
+    res,
+    cleanup: null,
+  };
+
   const cleanupClient = () => {
     clearInterval(heartbeatTimer);
-    try { res.end(); } catch {}
+
+    // убираем клиента
     session.clients.delete(clientRef);
 
+    // закрываем соединение
+    try {
+      res.end();
+    } catch {}
+
+    // если клиентов нет — через 30 сек стопаем upstream
     if (session.clients.size === 0 && !session.stopTimeout) {
       session.stopTimeout = setTimeout(() => {
         session.stopRequested = true;
@@ -233,22 +294,19 @@ router.get('/fedresurs/all/stream', async (req, res) => {
     }
   };
 
-  const clientRef = { res, cleanup: cleanupClient };
+  clientRef.cleanup = cleanupClient;
+
+  // добавляем клиента в сессию
   session.clients.add(clientRef);
 
+  // если уже был запланирован stop — отменяем
   if (session.stopTimeout) {
     clearTimeout(session.stopTimeout);
     session.stopTimeout = null;
-
-      // ждём перед переподключением (но не тормозим намеренные перезапуски)
-      const delay = abortLike ? 0 : reconnectDelayMs;
-      reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
-      if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
+    session.stopRequested = false;
   }
 
+  // закрытие вкладки/соединения
   req.on('close', cleanupClient);
 });
 
