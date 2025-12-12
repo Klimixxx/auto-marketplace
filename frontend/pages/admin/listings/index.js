@@ -674,31 +674,53 @@ export default function AdminParserTradesPage() {
     setParseStreamProgress(null);
     stopParseStream();
 
-    const streamUrlBase = API_BASE ? `${API_BASE}/api/parser/fedresurs/all/stream` : '/api/parser/fedresurs/all/stream';
+    const streamUrlBase = API_BASE
+      ? `${API_BASE}/api/parser/fedresurs/all/stream`
+      : '/api/parser/fedresurs/all/stream';
     const streamUrl = `${streamUrlBase}?${params.toString()}`;
+
     const es = new EventSource(streamUrl);
     parseStreamRef.current = es;
 
+    let reconnectNoticeTimer = null;
+
+    const showReconnectNotice = () => {
+      setParseStreamError((prev) => prev || 'Соединение потеряно. Переподключаемся…');
+      setParsingAll(true);
+      persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
+    };
+
     es.onopen = () => {
+      if (reconnectNoticeTimer) {
+        clearTimeout(reconnectNoticeTimer);
+        reconnectNoticeTimer = null;
+      }
       setParseStreamError(null);
+      setParsingAll(true);
+      persistStreamState({ error: null, active: true });
     };
 
     es.addEventListener('meta', (event) => {
       const data = safeJsonParse(event.data);
       if (!data) return;
+
+      setParseStreamError(null);
+      setParsingAll(true);
       setParseStreamMeta(data);
       setParseStreamProgress((prev) => ({
         ...prev,
         stage: data.stage || prev?.stage,
         total_found: data.total_found ?? prev?.total_found,
       }));
-      persistStreamState({ meta: data, active: true });
+      persistStreamState({ meta: data, active: true, error: null });
     });
 
     es.addEventListener('progress', (event) => {
       const data = safeJsonParse(event.data);
       if (!data) return;
+
       setParseStreamError(null);
+      setParsingAll(true);
       setParseStreamProgress(data);
       persistStreamState({ progress: data, active: true, error: null });
     });
@@ -706,13 +728,16 @@ export default function AdminParserTradesPage() {
     es.addEventListener('item', (event) => {
       const data = safeJsonParse(event.data);
       if (!data?.item) return;
+
       setParseStreamError(null);
+      setParsingAll(true);
       setParseStreamProgress((prev) => ({
         ...prev,
         stage: data.stage || prev?.stage,
         parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
         total_found: data.total_found ?? prev?.total_found,
       }));
+
       persistStreamState({
         progress: {
           ...data,
@@ -721,38 +746,47 @@ export default function AdminParserTradesPage() {
         active: true,
         error: null,
       });
+
       setItems((prev) => {
         const normalized = normalizeStreamItem(data.item);
-        const next = [normalized, ...prev];
-        return next.slice(0, MAX_STREAM_ITEMS);
+        return [normalized, ...prev].slice(0, MAX_STREAM_ITEMS);
       });
-    }); // ✅ ВОТ ЭТОГО ЗАКРЫТИЯ НЕ ХВАТАЛО
+    });
 
     es.addEventListener('done', (event) => {
       const data = safeJsonParse(event.data) || {};
       setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
+      setParseStreamError(null);
       setParsingAll(false);
+
       stopParseStream();
       loadPage(1);
+
       persistStreamState({
         active: false,
+        error: null,
         progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
       });
     });
 
     es.addEventListener('error', (event) => {
       const data = event?.data ? safeJsonParse(event.data) : null;
-      const detail = data?.detail || data?.message || 'Ошибка соединения с парсером';
+      const detail = data?.detail || data?.message || 'Ошибка парсера';
+
       setParseStreamError(detail);
       setParsingAll(false);
       stopParseStream();
       persistStreamState({ error: detail, active: false });
     });
 
+    // ⛔ НЕ ЗАКРЫВАЕМ СТРИМ НА NETWORK ERROR
     es.onerror = () => {
-      setParseStreamError('Соединение потеряно. Переподключаемся…');
-      setParsingAll(true);
-      persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
+      if (!reconnectNoticeTimer) {
+        reconnectNoticeTimer = setTimeout(() => {
+          reconnectNoticeTimer = null;
+          showReconnectNotice();
+        }, 500);
+      }
     };
   }, [filters, view, stopParseStream, loadPage, persistStreamState]);
 
@@ -1453,4 +1487,3 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
-
