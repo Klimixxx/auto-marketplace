@@ -981,13 +981,13 @@ export default function AdminParserTradesPage() {
   const runParseAll = useCallback(async () => {
     if (view !== 'drafts') return;
     if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE ?? ??????. Загружаем… ??? ??? ?Парсим все…???.');
+      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно запустить потоковый парсинг.');
       return;
     }
 
     const token = readToken();
     if (!token) {
-      alert('??? Загружаем… Загружаем… Парсим все…? ? Загружаем….');
+      alert('Авторизуйтесь под админ-аккаунтом, чтобы запускать парсер.');
       return;
     }
 
@@ -998,7 +998,7 @@ export default function AdminParserTradesPage() {
     }
 
     if (!selectedRegions.length) {
-      alert('Загружаем… ???? ?? ???? ?Парсим все…?? Загружаем…? Загружаем…?.');
+      alert('Выберите хотя бы один регион перед запуском парсинга.');
       return;
     }
 
@@ -1026,12 +1026,12 @@ export default function AdminParserTradesPage() {
       persistStreamState({ active: true, last_event_id: null, meta: null, progress: null, error: null });
     } catch (error) {
       console.error('Failed to start parse job:', error);
-      setParseStreamError('?? Загружаем… Загружаем…?? ??????');
+      setParseStreamError('Не удалось запустить парсер');
       setParsingAll(false);
       setParseStreamLastEventId(null);
       parseStreamLastEventIdRef.current = null;
       setParseJobId(null);
-      persistStreamState({ error: '?? Загружаем… Загружаем…?? ??????', active: false, last_event_id: null });
+      persistStreamState({ error: 'Не удалось запустить парсер', active: false, last_event_id: null });
     }
   }, [filters, view, persistStreamState, startParserJob, stopParseStream]);
   const runIngest = useCallback(
@@ -1301,15 +1301,15 @@ export default function AdminParserTradesPage() {
   const isWaitingView = view === 'waiting';
   const isDraftsView = !isPublishedView && !isWaitingView;
   const pageTitle = isPublishedView
-    ? 'Загружаем… ? Загружаем…Загружаем… Загружаем…???'
+    ? 'Опубликованные объявления'
     : isWaitingView
-      ? 'Загружаем… ? Загружаем…??? ? Загружаем…?'
-      : 'Загружаем… ? Загружаем…??? (?? Загружаем…)';
+      ? 'Ожидающие публикации'
+      : 'Неопубликованные объявления';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const ingestPrimaryLabel = ingesting ? 'Загружаем…??' : 'Загружаем…? ????? ? Загружаем…???';
-  const ingestMoreLabel = ingesting ? 'Загружаем…??' : 'Загружаем…? ??? ? Загружаем…';
-  const parseAllLabel = parsingAll ? '?Парсим все…' : 'Загружаем…? ???';
+  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Загрузить сначала';
+  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Дозагрузить ещё';
+  const parseAllLabel = parsingAll ? 'Парсим…' : 'Спарсить все';
   const ingestDisabled = ingesting || parsingAll;
   const streamStage = parseStreamProgress?.stage || parseStreamMeta?.stage;
   const streamParsed = Number.isFinite(Number(parseStreamProgress?.parsed))
