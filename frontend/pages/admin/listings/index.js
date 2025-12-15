@@ -2,11 +2,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { io } from 'socket.io-client';
 import FilterBar from '../../../components/FilterBar';
 import computeTradeTiming from '../../../lib/tradeTiming';
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../../../lib/tradeTypes';
-import { resolveSocketUrl } from '../../../lib/api';
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -21,6 +19,13 @@ function normalizeBase(value) {
 }
 
 const API_BASE = normalizeBase(RAW_API_BASE);
+function resolveParserWsUrl(path = '') {
+  const base = API_BASE || (typeof window !== 'undefined' ? window.location.origin : '');
+  if (!base) return '';
+  const target = new URL(path || '/', base);
+  target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:';
+  return target.toString();
+}
 const PAGE_SIZE = 20;
 const PARSER_PAGE_SIZE = 50;
 const MAX_STREAM_ITEMS = 200;
@@ -503,69 +508,40 @@ export default function AdminParserTradesPage() {
     [],
   );
 
-  const stopParseStream = useCallback(() => {
+  const closeParserSocket = useCallback(() => {
     const socket = parseSocketRef.current;
-    const jobId = parseJobIdRef.current;
-    if (socket && jobId) {
-      socket.emit('parser:fedresurs:stop', { jobId });
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      try {
+        socket.close();
+      } catch (error) {
+        console.warn('Failed to close parser socket', error);
+      }
+    }
+    parseSocketRef.current = null;
+    parserSocketReadyRef.current = false;
+  }, []);
+
+  const sendParserMessage = useCallback((payload) => {
+    const socket = parseSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    try {
+      socket.send(JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Failed to send message to parser socket', error);
     }
   }, []);
 
-  const subscribeToParserJob = useCallback(
-    (jobId, lastEventId = null) => {
-      if (!jobId) return;
-      const payload = { jobId };
-      if (lastEventId) payload.lastEventId = lastEventId;
-
-      const socket = parseSocketRef.current;
-      if (!socket || !parserSocketReadyRef.current) return;
-
-      socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
-        if (!resp.ok) {
-          setParseStreamError(resp.error || '?? Загружаем… Загружаем…???? ?? ????? Загружаем…');
-        }
-      });
-    },
-    [setParseStreamError],
-  );
-
-  const startParserJob = useCallback(
-    async (params) => new Promise((resolve, reject) => {
-      const socket = parseSocketRef.current;
-      if (!socket) {
-        reject(new Error('??? Загружаем…??? ? Загружаем… Загружаем…'));
-        return;
-      }
-
-      const sendStart = () => {
-        socket.emit('parser:fedresurs:start', params, (resp = {}) => {
-          if (resp.ok && resp.jobId) {
-            resolve(resp.jobId);
-          } else {
-            reject(new Error(resp.error || '?? Загружаем… Загружаем…?? ??????'));
-          }
-        });
-      };
-
-      if (parserSocketReadyRef.current || socket.connected) {
-        sendStart();
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        socket.off('connect', onConnect);
-        reject(new Error('?? Загружаем… Загружаем…????? ? ?????? Загружаем…'));
-      }, 7000);
-
-      const onConnect = () => {
-        clearTimeout(timeout);
-        sendStart();
-      };
-
-      socket.once('connect', onConnect);
-    }),
-    [],
-  );
+  const stopParseStream = useCallback(() => {
+    const jobId = parseJobIdRef.current;
+    if (jobId) {
+      sendParserMessage({ action: 'stop', reason: 'Stopped by client' });
+    }
+    closeParserSocket();
+  }, [closeParserSocket, sendParserMessage]);
 
   const loadPage = useCallback(
     async (nextPage = 1, filtersOverride) => {
@@ -648,7 +624,7 @@ export default function AdminParserTradesPage() {
       setParseStreamLastEventId(stored?.last_event_id || null);
       setParseJobId(typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null);
       const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
-      if (jobId && parserSocketReadyRef.current) {
+      if (jobId) {
         subscribeToParserJob(jobId, stored?.last_event_id || null);
       }
     };
@@ -657,71 +633,9 @@ export default function AdminParserTradesPage() {
     return () => window.removeEventListener('storage', handleStorage);
   }, [subscribeToParserJob]);
 
-  // Автоподключение после перезагрузки страницы
-  // Загружаем…????? Загружаем…? Загружаем…? ????? Загружаем…?????
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const token = readToken();
-    if (!token) return undefined;
-
-    const socket = io(resolveSocketUrl(), {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      auth: { token },
-    });
-
-    parseSocketRef.current = socket;
-
-    const onEvent = (payload) =>
-      handleParserEvent(payload, {
-        setParseJobId,
-        setParseStreamError,
-        setParsingAll,
-        setParseStreamMeta,
-        setParseStreamProgress,
-        setLastEventId: setParseStreamLastEventId,
-        setItems,
-        stopParseStream,
-        loadPage,
-        persistStreamState,
-        parseStreamProgressRef,
-        parseStreamLastEventIdRef,
-      });
-
-    socket.on('parser:fedresurs:event', onEvent);
-
-    socket.on('connect', () => {
-      parserSocketReadyRef.current = true;
-      const currentJobId = parseJobIdRef.current;
-      if (currentJobId) {
-        subscribeToParserJob(currentJobId, parseStreamLastEventIdRef.current || null);
-      }
-    });
-
-    socket.on('disconnect', () => {
-      parserSocketReadyRef.current = false;
-    });
-
-    return () => {
-      socket.off('parser:fedresurs:event', onEvent);
-      socket.disconnect();
-      parseSocketRef.current = null;
-      parserSocketReadyRef.current = false;
-    };
-  }, [
-    loadPage,
-    persistStreamState,
-    setItems,
-    setParsingAll,
-    setParseJobId,
-    setParseStreamError,
-    setParseStreamMeta,
-    setParseStreamProgress,
-    setParseStreamLastEventId,
-    stopParseStream,
-    subscribeToParserJob,
-  ]);
+  useEffect(() => () => {
+    closeParserSocket();
+  }, [closeParserSocket]);
 
   // Загружаем…Загружаем… Загружаем…?? ?????? ?? localStorage
   useEffect(() => {
@@ -745,6 +659,130 @@ export default function AdminParserTradesPage() {
 
     subscribeToParserJob(payload.jobId, payload.lastEventId || null);
   }, [subscribeToParserJob]);
+  const handleParserPayload = useCallback(
+    (payload) =>
+      handleParserEvent(payload, {
+        setParseJobId,
+        setParseStreamError,
+        setParsingAll,
+        setParseStreamMeta,
+        setParseStreamProgress,
+        setLastEventId: setParseStreamLastEventId,
+        setItems,
+        stopParseStream,
+        loadPage,
+        persistStreamState,
+        parseStreamProgressRef,
+        parseStreamLastEventIdRef,
+      }),
+    [
+      loadPage,
+      persistStreamState,
+      setItems,
+      stopParseStream,
+    ],
+  );
+
+
+  const connectParserSocket = useCallback(
+    (initPayload) =>
+      new Promise((resolve, reject) => {
+        const url = resolveParserWsUrl('/parse-fedresurs-trades-all-live');
+        if (!url) {
+          reject(new Error('Parser WS URL is not configured'));
+          return;
+        }
+
+        closeParserSocket();
+
+        const socket = new WebSocket(url);
+        parseSocketRef.current = socket;
+        parserSocketReadyRef.current = false;
+
+        let settled = false;
+
+        const safeReject = (error) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+
+        socket.onopen = () => {
+          parserSocketReadyRef.current = true;
+          try {
+            socket.send(JSON.stringify(initPayload));
+          } catch (error) {
+            safeReject(error);
+          }
+        };
+
+        socket.onmessage = (event) => {
+          let payload;
+          try {
+            payload = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          const eventName = payload?.event || 'message';
+          if (eventName === 'started' && payload?.data?.jobId) {
+            const newJobId = payload.data.jobId;
+            setParseJobId(newJobId);
+            parseJobIdRef.current = newJobId;
+            persistStreamState({ active: true, last_event_id: payload?.data?.lastEventId || null });
+            if (!settled) {
+              settled = true;
+              resolve(newJobId);
+            }
+          }
+
+          handleParserPayload(payload);
+
+          if (eventName === 'error' && !settled) {
+            settled = true;
+            safeReject(new Error(payload?.data?.detail || 'Parser error'));
+          }
+        };
+
+        socket.onerror = () => {
+          safeReject(new Error('WebSocket error'));
+        };
+
+        socket.onclose = () => {
+          parserSocketReadyRef.current = false;
+          parseSocketRef.current = null;
+          if (!settled) {
+            settled = true;
+            safeReject(new Error('WebSocket closed'));
+          }
+        };
+      }),
+    [closeParserSocket, handleParserPayload, persistStreamState, setParseJobId],
+  );
+
+  const subscribeToParserJob = useCallback(
+    (jobId, lastEventId = null) => {
+      if (!jobId) return;
+      const payload = { action: 'subscribe', jobId };
+      if (lastEventId) payload.lastEventId = lastEventId;
+      connectParserSocket(payload).catch((error) => {
+        console.error('Failed to subscribe to parser job:', error);
+        setParseStreamError(error?.message || 'Не удалось подключиться к парсеру');
+      });
+    },
+    [connectParserSocket, setParseStreamError],
+  );
+
+  const startParserJob = useCallback(
+    async (params) =>
+      connectParserSocket({
+        action: 'start',
+        ...params,
+      }),
+    [connectParserSocket],
+  );
+
+
   const changeView = useCallback(
     (nextView) => {
       setView(nextView);
@@ -988,7 +1026,6 @@ export default function AdminParserTradesPage() {
 
       setParseJobId(jobId);
       persistStreamState({ active: true, last_event_id: null, meta: null, progress: null, error: null });
-      subscribeToParserJob(jobId, null);
     } catch (error) {
       console.error('Failed to start parse job:', error);
       setParseStreamError('?? Загружаем… Загружаем…?? ??????');
@@ -998,7 +1035,7 @@ export default function AdminParserTradesPage() {
       setParseJobId(null);
       persistStreamState({ error: '?? Загружаем… Загружаем…?? ??????', active: false, last_event_id: null });
     }
-  }, [filters, view, persistStreamState, startParserJob, stopParseStream, subscribeToParserJob]);
+  }, [filters, view, persistStreamState, startParserJob, stopParseStream]);
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
       if (view !== 'drafts') return;
@@ -1700,5 +1737,3 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
-
-
