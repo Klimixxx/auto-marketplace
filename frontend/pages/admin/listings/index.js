@@ -25,7 +25,7 @@ const PAGE_SIZE = 20;
 const PARSER_PAGE_SIZE = 50;
 const MAX_STREAM_ITEMS = 200;
 const DEFAULT_SEARCH_TERM = 'vin';
-const DASH = '�';
+const DASH = '—';
 const ARROW_LEFT = '<';
 const ARROW_RIGHT = '>';
 const FILTER_STORAGE_KEY = 'adminListingsFilters';
@@ -381,7 +381,7 @@ function handleParserEvent(
   }
 
   if (eventName === 'error') {
-    const detail = data?.detail || data?.message || '������ ������';
+    const detail = data?.detail || data?.message || '?Парсим все…???';
     setParseJobId(null);
 
     if (typeof window !== 'undefined') {
@@ -522,7 +522,7 @@ export default function AdminParserTradesPage() {
 
       socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
         if (!resp.ok) {
-          setParseStreamError(resp.error || '�� ������� ����������� �� ����� �������');
+          setParseStreamError(resp.error || '?? Загружаем… Загружаем…???? ?? ????? Загружаем…');
         }
       });
     },
@@ -533,7 +533,7 @@ export default function AdminParserTradesPage() {
     async (params) => new Promise((resolve, reject) => {
       const socket = parseSocketRef.current;
       if (!socket) {
-        reject(new Error('��� ���������� � ������� �������'));
+        reject(new Error('??? Загружаем…??? ? Загружаем… Загружаем…'));
         return;
       }
 
@@ -542,7 +542,7 @@ export default function AdminParserTradesPage() {
           if (resp.ok && resp.jobId) {
             resolve(resp.jobId);
           } else {
-            reject(new Error(resp.error || '�� ������� ��������� ������'));
+            reject(new Error(resp.error || '?? Загружаем… Загружаем…?? ??????'));
           }
         });
       };
@@ -554,7 +554,7 @@ export default function AdminParserTradesPage() {
 
       const timeout = setTimeout(() => {
         socket.off('connect', onConnect);
-        reject(new Error('�� ������� ������������ � ������ �������'));
+        reject(new Error('?? Загружаем… Загружаем…????? ? ?????? Загружаем…'));
       }, 7000);
 
       const onConnect = () => {
@@ -593,7 +593,7 @@ export default function AdminParserTradesPage() {
   }, [subscribeToParserJob]);
 
   // Автоподключение после перезагрузки страницы
-  // ������������ �������� �������� ����� ������������
+  // Загружаем…????? Загружаем…? Загружаем…? ????? Загружаем…?????
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
@@ -658,7 +658,7 @@ export default function AdminParserTradesPage() {
     subscribeToParserJob,
   ]);
 
-  // �������������� ��������� ������ �� localStorage
+  // Загружаем…Загружаем… Загружаем…?? ?????? ?? localStorage
   useEffect(() => {
     const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
     if (!jobId) return;
@@ -945,13 +945,13 @@ export default function AdminParserTradesPage() {
   const runParseAll = useCallback(async () => {
     if (view !== 'drafts') return;
     if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE �� ������. ������� ��� ��� ������ ������.');
+      alert('NEXT_PUBLIC_API_BASE ?? ??????. Загружаем… ??? ??? ?Парсим все…???.');
       return;
     }
 
     const token = readToken();
     if (!token) {
-      alert('��� ������� ������� ����� ���� � �������.');
+      alert('??? Загружаем… Загружаем… Парсим все…? ? Загружаем….');
       return;
     }
 
@@ -962,7 +962,7 @@ export default function AdminParserTradesPage() {
     }
 
     if (!selectedRegions.length) {
-      alert('������� ���� �� ���� ������ ����� �������� ��������.');
+      alert('Загружаем… ???? ?? ???? ?Парсим все…?? Загружаем…? Загружаем…?.');
       return;
     }
 
@@ -991,12 +991,12 @@ export default function AdminParserTradesPage() {
       subscribeToParserJob(jobId, null);
     } catch (error) {
       console.error('Failed to start parse job:', error);
-      setParseStreamError('�� ������� ��������� ������');
+      setParseStreamError('?? Загружаем… Загружаем…?? ??????');
       setParsingAll(false);
       setParseStreamLastEventId(null);
       parseStreamLastEventIdRef.current = null;
       setParseJobId(null);
-      persistStreamState({ error: '�� ������� ��������� ������', active: false, last_event_id: null });
+      persistStreamState({ error: '?? Загружаем… Загружаем…?? ??????', active: false, last_event_id: null });
     }
   }, [filters, view, persistStreamState, startParserJob, stopParseStream, subscribeToParserJob]);
   const runIngest = useCallback(
@@ -1084,7 +1084,7 @@ export default function AdminParserTradesPage() {
             const label = entry.region || entry.region_code || 'Регион';
             if (!entry.ok) {
               const message = entry.error?.message || data.error || 'Ошибка парсинга';
-              return `⚠️ ${label}: ${message}`;
+              return `?? ${label}: ${message}`;
             }
             const receivedCount = Number.isFinite(Number(entry.received)) ? Number(entry.received) : 0;
             const upsertedCount = Number.isFinite(Number(entry.upserted)) ? Number(entry.upserted) : 0;
@@ -1266,15 +1266,15 @@ export default function AdminParserTradesPage() {
   const isWaitingView = view === 'waiting';
   const isDraftsView = !isPublishedView && !isWaitingView;
   const pageTitle = isPublishedView
-    ? '������� � �������������� ����������'
+    ? 'Загружаем… ? Загружаем…Загружаем… Загружаем…???'
     : isWaitingView
-      ? '������� � ���������� � ��������'
-      : '������� � ���������� (�� �������)';
+      ? 'Загружаем… ? Загружаем…??? ? Загружаем…?'
+      : 'Загружаем… ? Загружаем…??? (?? Загружаем…)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const ingestPrimaryLabel = ingesting ? '���������' : '�������� ����� � ����������';
-  const ingestMoreLabel = ingesting ? '���������' : '�������� ��� � �������';
-  const parseAllLabel = parsingAll ? '������ ���' : '�������� ���';
+  const ingestPrimaryLabel = ingesting ? 'Загружаем…??' : 'Загружаем…? ????? ? Загружаем…???';
+  const ingestMoreLabel = ingesting ? 'Загружаем…??' : 'Загружаем…? ??? ? Загружаем…';
+  const parseAllLabel = parsingAll ? '?Парсим все…' : 'Загружаем…? ???';
   const ingestDisabled = ingesting || parsingAll;
   const streamStage = parseStreamProgress?.stage || parseStreamMeta?.stage;
   const streamParsed = Number.isFinite(Number(parseStreamProgress?.parsed))
@@ -1311,7 +1311,7 @@ export default function AdminParserTradesPage() {
             className="link"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <span aria-hidden="true">←</span>
+            <span aria-hidden="true"><</span>
             <span>Админ-панель</span>
           </Link>
         </div>
@@ -1406,7 +1406,7 @@ export default function AdminParserTradesPage() {
               className="admin-hint-card__title"
               style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
             >
-              <span>{parsingAll ? '�?дёт потоковый парсинг…' : 'Последний потоковый парсинг'}</span>
+              <span>{parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}</span>
               <button type="button" className="button button-small button-ghost" onClick={resetParseStreamState}>
                 Сбросить статус
               </button>
@@ -1487,7 +1487,7 @@ export default function AdminParserTradesPage() {
             </div>
             {!lastIngest ? (
               <div className="admin-hint-card__footer">
-                �?спользуйте кнопки выше, чтобы загрузить актуальные объявления по выбранному фильтру.
+                Используйте кнопки выше, чтобы загрузить актуальные объявления по выбранному фильтру.
               </div>
             ) : null}
           </div>
@@ -1567,7 +1567,7 @@ export default function AdminParserTradesPage() {
                           <div className="admin-table__meta">
                             {item.source_url ? (
                               <a href={item.source_url} target="_blank" rel="noreferrer" className="link">
-                                �?сточник
+                                Источник
                               </a>
                             ) : (
                               <span>{DASH}</span>
@@ -1662,7 +1662,7 @@ export default function AdminParserTradesPage() {
                               rel="noreferrer"
                               className="button button-small button-outline"
                             >
-                              �?сточник
+                              Источник
                             </a>
                           ) : null}
                         </td>
@@ -1700,6 +1700,9 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
+
+
+
 
 
 
