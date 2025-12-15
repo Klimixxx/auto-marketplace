@@ -1,2575 +1,1633 @@
-// backend/src/index.js
-import http from 'http';
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { Server as SocketIOServer } from 'socket.io';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { pool, query } from './db.js';
-import adminParserRouter from './routes/adminParser.js';
-import inspectionsRouter from './routes/inspections.js';
-import adminInspectionsRouter from './routes/adminInspections.js';
-import autotekaRouter from './routes/autoteka.js';
-import adminAutotekaRouter from './routes/adminAutoteka.js';
-import adminAutotekaSettingsRouter from './routes/adminAutotekaSettings.js';
-import adminInspectionSettingsRouter from './routes/adminInspectionSettings.js';
-import tradeOrdersRouter from './routes/tradeOrders.js';
-import adminTradeOrdersRouter from './routes/adminTradeOrders.js';
-import tradePricingRouter from './routes/tradePricing.js';
-import adminTradePricingRouter from './routes/adminTradePricing.js';
-import parserStreamRouter from './routes/parserStream.js';
-import { loadAutotekaSettings } from './services/autotekaSettings.js';
-import { loadInspectionSettings } from './services/inspectionSettings.js';
-import { loadAvitoBrands } from './services/avitoBrands.js';
-import supportRouter from './routes/support.js';
-import adminSupportRouter from './routes/adminSupport.js';
-import { setSocketInstance } from './services/socket.js';
-import { canAccessTicket, createUserNotification, formatDisplayName } from './services/support.js';
-import {
-  RUSSIAN_REGIONS,
-  getRegionNameByCode,
-  normalizeRegionCode,
-  findRegionCodeByName,
-} from '../shared/regions.js';
+'use client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import FilterBar from '../../../components/FilterBar';
+import computeTradeTiming from '../../../lib/tradeTiming';
+import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../../../lib/tradeTypes';
 
-const REGION_CODE_SET = new Set(RUSSIAN_REGIONS.map((region) => region.code));
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-
-
-
-dotenv.config();
-
-// ====== УТИЛИТЫ ======
-
-// Нормализация телефона к виду +79XXXXXXXXX
-function normalizePhone(p) {
-  const digits = String(p || '').replace(/[^\d+]/g, '');
-  return digits.startsWith('+') ? digits : '+' + digits;
+function normalizeBase(value) {
+  if (!value) return '';
+  let result = value;
+  while (result.length > 1 && result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  if (result === '/') return '';
+  return result;
 }
 
-// 6-значный код пользователя
-function genUserCode() {
-  return String(Math.floor(100000 + Math.random() * 900000)).padStart(6, '0');
-}
+const API_BASE = normalizeBase(RAW_API_BASE);
+const PAGE_SIZE = 20;
+const PARSER_PAGE_SIZE = 50;
+const MAX_STREAM_ITEMS = 200;
+const DEFAULT_SEARCH_TERM = 'vin';
+const DASH = '—';
+const ARROW_LEFT = '←';
+const ARROW_RIGHT = '→';
+const FILTER_STORAGE_KEY = 'adminListingsFilters';
+const PARSE_STREAM_STORAGE_KEY = 'adminParseStreamState';
+const PARSE_STREAM_STATE_TTL_MS = 10 * 60 * 1000;
+const PARSE_JOB_ID_KEY = 'fedresurs_parse_job_id';
 
-function normalizeUserId(value) {
-  if (value === null || value === undefined) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
-// Нативный fetch + таймаут через AbortController
-async function fetchJSON(url, { timeoutMs = 15000, headers, method = 'GET', body } = {}) {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), timeoutMs);
+function readToken() {
+  if (typeof window === 'undefined') return null;
   try {
-    const r = await fetch(url, { signal: ac.signal, headers, method, body });
-    const ct = r.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await r.json().catch(() => ({})) : await r.text();
-    return { ok: r.ok, status: r.status, data };
-  } finally {
-    clearTimeout(t);
+    return window.localStorage.getItem('token');
+  } catch {
+    return null;
   }
 }
 
-function flattenQueryParam(value) {
-  if (value === undefined || value === null) return [];
-  if (Array.isArray(value)) {
-    return value.flatMap((entry) => flattenQueryParam(entry));
-  }
-  const text = typeof value === 'string' ? value : String(value);
-  return text
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function resolveRegionCodeFromQuery(value) {
-  if (value === undefined || value === null) return null;
-  const trimmed = String(value).trim();
-  if (!trimmed) return null;
-
-  const normalized = normalizeRegionCode(trimmed);
-  if (normalized && REGION_CODE_SET.has(normalized)) {
-    return normalized;
-  }
-
-  if (normalized) {
-    const digitsOnly = normalized.replace(/\D+/g, '');
-    if (digitsOnly) {
-      if (REGION_CODE_SET.has(digitsOnly)) return digitsOnly;
-      const withoutLeadingZeros = digitsOnly.replace(/^0+/, '');
-      if (withoutLeadingZeros && REGION_CODE_SET.has(withoutLeadingZeros)) {
-        return withoutLeadingZeros;
-      }
-    }
-    const byNormalizedName = findRegionCodeByName(normalized);
-    if (byNormalizedName) return byNormalizedName;
-  }
-
-  const directDigits = trimmed.replace(/\D+/g, '');
-  if (directDigits) {
-    if (REGION_CODE_SET.has(directDigits)) return directDigits;
-    const withoutLeadingZeros = directDigits.replace(/^0+/, '');
-    if (withoutLeadingZeros && REGION_CODE_SET.has(withoutLeadingZeros)) {
-      return withoutLeadingZeros;
-    }
-  }
-
-  const byName = findRegionCodeByName(trimmed);
-  if (byName) return byName;
-
-  return null;
-}
-
-const app = express();
-const server = http.createServer(app);
-app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-
-// ==== МИГРАЦИИ (выполнить все .sql из /backend/migrations по алфавиту) ====
-
-
-async function runMigrations() {
+function readStoredParseStreamState() {
+  if (typeof window === 'undefined') return null;
   try {
-    const migrationsDir = path.join(__dirname, 'migrations'); // backend/migrations
-    const files = (await fs.readdir(migrationsDir))
-      .filter(f => f.endsWith('.sql'))
-      .sort();
-
-    for (const f of files) {
-      const full = path.join(migrationsDir, f);
-      const sql = await fs.readFile(full, 'utf8');
-      if (sql && sql.trim()) {
-        console.log(`Applying migration: ${f}`);
-        await query(sql);
-      }
-    }
-    console.log('Migrations applied.');
-  } catch (e) {
-    console.error('Migration error:', e.message);
-  }
-}
-
-// ВЫПОЛНЯЕМ МИГРАЦИИ ПЕРЕД СТАРТОМ СЕРВЕРА
-await runMigrations();
-
-// CORS (расширенный: методы/заголовки/credentials + preflight)
-function normalizeOriginValue(value) {
-  if (!value) return null;
-  const trimmed = String(value).trim();
-  if (!trimmed) return null;
-  if (trimmed === '*') return '*';
-  try {
-    const url = new URL(trimmed);
-    return `${url.protocol}//${url.host}`;
-  } catch (err) {
-    // значение может быть без протокола — вернём как есть
-    return trimmed;
-  }
-}
-
-const allowed = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => normalizeOriginValue(s))
-  .filter(Boolean);
-
-const allowedHosts = allowed
-  .map((origin) => {
-    if (origin === '*') return '*';
-    try {
-      return new URL(origin).host;
-    } catch (err) {
-      return origin.replace(/^(https?:)?\/\//, '');
-    }
-  })
-  .filter(Boolean);
-
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: allowed.length ? allowed : '*',
-    credentials: true,
-  },
-});
-setSocketInstance(io);
-
-io.use(async (socket, next) => {
-  try {
-    const rawToken = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
-    const token = typeof rawToken === 'string' && rawToken.startsWith('Bearer ')
-      ? rawToken.slice(7)
-      : rawToken && !rawToken.startsWith('Bearer ')
-        ? rawToken
-        : null;
-    if (!token) return next(new Error('AUTH_REQUIRED'));
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = normalizeUserId(payload?.sub);
-    if (!userId) return next(new Error('AUTH_INVALID'));
-    const { rows } = await query(
-      `SELECT id, name, phone, email, role, user_code, is_blocked
-         FROM users
-        WHERE id::text = $1
-        LIMIT 1`,
-      [userId]
-    );
-    const row = rows[0];
-    if (!row) return next(new Error('AUTH_INVALID'));
-    if (row.is_blocked) return next(new Error('ACCOUNT_BLOCKED'));
-    const numericId = Number(row.id);
-    socket.user = {
-      id: Number.isFinite(numericId) ? numericId : row.id,
-      name: row.name,
-      phone: row.phone,
-      email: row.email,
-      role: row.role,
-      userCode: row.user_code,
-    };
-    return next();
+    const raw = window.localStorage.getItem(PARSE_STREAM_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
   } catch (error) {
-    console.error('socket auth error:', error);
-    return next(new Error('AUTH_ERROR'));
+    console.warn('Failed to read stored parse stream state', error);
+    return null;
   }
-});
+}
 
-io.on('connection', (socket) => {
+function persistParseStreamState(nextState) {
+  if (typeof window === 'undefined') return;
   try {
-    if (socket.user?.role === 'admin') {
-      socket.join('support:agents');
-    }
-  } catch (err) {
-    console.error('socket connection init error:', err);
-  }
-
-  socket.on('support:join', async (payload = {}) => {
-    const ticketId = Number(payload.ticketId);
-    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
-    try {
-      const allowedAccess = await canAccessTicket(ticketId, socket.user);
-      if (!allowedAccess) return;
-      socket.join(`support:ticket:${ticketId}`);
-      socket.emit('support:joined', { ticketId });
-    } catch (error) {
-      console.error('socket join ticket error:', error);
-    }
-  });
-
-  socket.on('support:leave', (payload = {}) => {
-    const ticketId = Number(payload.ticketId);
-    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
-    socket.leave(`support:ticket:${ticketId}`);
-  });
-
-  socket.on('support:typing', async (payload = {}) => {
-    const ticketId = Number(payload.ticketId);
-    if (!Number.isFinite(ticketId) || ticketId <= 0) return;
-    try {
-      const allowedAccess = await canAccessTicket(ticketId, socket.user);
-      if (!allowedAccess) return;
-      socket.to(`support:ticket:${ticketId}`).emit('support:typing', {
-        ticketId,
-        userId: socket.user?.id,
-        role: socket.user?.role === 'admin' ? 'support' : 'client',
-        name: formatDisplayName(socket.user),
-        isTyping: !!payload.isTyping,
-      });
-    } catch (error) {
-      console.error('socket typing error:', error);
-    }
-  });
-});
-app.use(cors({
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-     if (!allowed.length || allowed.includes('*')) return cb(null, true);
-
-    const normalizedOrigin = normalizeOriginValue(origin);
-    const originHost = (() => {
-      try {
-        return new URL(normalizedOrigin || origin).host;
-      } catch (err) {
-        return (normalizedOrigin || origin || '').replace(/^(https?:)?\/\//, '');
-      }
-    })();
-
-    if (
-      (normalizedOrigin && allowed.includes(normalizedOrigin))
-      || (originHost && allowedHosts.includes(originHost))
-    ) {
-      return cb(null, true);
-    }
-    return cb(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-// обязательно! — пропускаем preflight без авторизации
-app.options('*', cors());
-
-
-// Порт: Render сам задаёт process.env.PORT
-const PORT = process.env.PORT || 8080;
-
-// Диагностика окружения (увидишь в Runtime logs на Render)
-console.log('Starting server with env:', {
-  PORT: process.env.PORT,
-  DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'MISSING',
-  JWT_SECRET: !!process.env.JWT_SECRET,
-  INGEST_TOKEN: !!process.env.INGEST_TOKEN,
-  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
-  PARSER_BASE_URL: process.env.PARSER_BASE_URL || '(not set)',
-});
-
-// JWT
-function signToken(user) {
-  const userId = normalizeUserId(user?.id);
-  if (!userId) throw new Error('Invalid user id for token');
-  return jwt.sign(
-    { sub: userId, phone: user.phone, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-}
-
-
-// ===== МИДЛВАРЫ АУТЕНТИФИКАЦИИ =====
-
-async function auth(req, res, next) {
-  if (req.method === 'OPTIONS') return next();
-  const h = req.headers.authorization || '';
-  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'No token' });
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = normalizeUserId(payload?.sub);
-    if (!userId) throw new Error('Invalid token payload');
-    req.user = { ...payload, sub: userId }; // { sub, phone, role }
-    req.userId = userId;
-
-    // мгновенная проверка блокировки
-    const { rows } = await query('SELECT is_blocked FROM users WHERE id::text = $1', [userId]);
-    if (rows[0]?.is_blocked) {
-      return res.status(403).json({ error: 'blocked' });
-    }
-
-    return next();
-  } catch (e) {
-    console.error('auth error:', e);
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
-
-async function requireAdmin(req, res, next) {
-  try {
-    const { rows } = await query('SELECT role FROM users WHERE id::text = $1', [req.user.sub]);
-    if (rows[0]?.role === 'admin') return next();
-    return res.status(403).json({ error: 'admin only' });
-  } catch (e) {
-    console.error('requireAdmin error:', e);
-    return res.status(500).json({ error: 'internal' });
-  }
-}
-
-function admin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  next();
-}
-
-// ===== СЛУЖЕБНОЕ =====
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Публичный трекер посещений (1 раз за сессию с фронта)
-app.post('/api/track/visit', async (req, res) => {
-  try {
-    await query(
-      `INSERT INTO visits_daily(day, cnt)
-         VALUES (CURRENT_DATE, 1)
-       ON CONFLICT (day)
-       DO UPDATE SET cnt = visits_daily.cnt + 1, updated_at = now()`
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('track visit error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// Публичная статистика платформы
-app.get('/api/public-stats', async (req, res) => {
-  try {
-    const { rows: [{ c: users }] } = await query(`SELECT count(*)::int c FROM users`);
-    res.json({ users });
-  } catch (e) {
-    console.error('public-stats error:', e);
-    res.status(500).json({ error: 'Failed to load stats' });
-  }
-});
-
-// ===== Phone auth (MVP) =====
-
-app.post('/api/auth/request-code', async (req, res) => {
-  try {
-    const raw = req.body?.phone;
-    if (!raw) return res.status(400).json({ error: 'phone required' });
-
-    const phone = normalizePhone(raw);
-
-    // rate-limit: не чаще 1 заявки в 30 сек
-    const last = await query(
-      `SELECT created_at FROM auth_codes WHERE phone=$1 ORDER BY created_at DESC LIMIT 1`,
-      [phone]
-    );
-    if (last.rows[0] && Date.now() - new Date(last.rows[0].created_at).getTime() < 30_000) {
-      return res.status(429).json({ error: 'Подождите 30 секунд перед повторной отправкой' });
-    }
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 цифр
-    await query(
-      `INSERT INTO auth_codes(phone, code, created_at, is_used) VALUES($1,$2, now(), false)`,
-      [phone, code]
-    );
-
-    // отправка SMS через smsc.ru
-    const login  = process.env.SMSC_LOGIN;
-    const pass   = process.env.SMSC_PASSWORD;
-    const sender = process.env.SMSC_SENDER || ''; // если согласован
-    const text   = encodeURIComponent(`Код входа: ${code}. Никому его не сообщайте.`);
-    const url    = `https://smsc.ru/sys/send.php?login=${encodeURIComponent(login)}&psw=${encodeURIComponent(pass)}&phones=${encodeURIComponent(phone)}&mes=${text}&fmt=3&charset=utf-8${sender?`&sender=${encodeURIComponent(sender)}`:''}`;
-
-    const { data: d } = await fetchJSON(url, { timeoutMs: 15000 });
-    console.log('SMSC response:', d);
-
-    if (!d || d.error || !d.id) {
-      const errMsg = d?.error ? `${d.error} (${d.error_code})` : 'Unknown SMSC error';
-      return res.status(502).json({ error: `SMSC error: ${errMsg}` });
-    }
-
-    return res.json({ ok: true, attemptId: d.id });
-  } catch (e) {
-    console.error('request-code error:', e);
-    return res.status(500).json({ error: 'Не удалось отправить SMS' });
-  }
-});
-
-app.post('/api/auth/verify-code', async (req, res) => {
-  try {
-    const phone = normalizePhone(req.body?.phone);
-    const code  = String(req.body?.code || '').replace(/\s/g, '');
-    if (!phone || !code) return res.status(400).json({ error: 'phone+code required' });
-
-    const { rows } = await query(
-      `SELECT id, phone, code, is_used, created_at
-         FROM auth_codes
-        WHERE phone = $1
-          AND code  = $2
-          AND created_at > now() - interval '5 minutes'
-        ORDER BY created_at DESC
-        LIMIT 1`,
-      [phone, code]
-    );
-
-    if (!rows[0]) {
-      const dbg = await query(
-        `SELECT code, created_at, is_used
-           FROM auth_codes
-          WHERE phone=$1
-          ORDER BY created_at DESC
-          LIMIT 3`,
-        [phone]
-      );
-      console.log('OTP DEBUG last codes for', phone, dbg.rows);
-      return res.status(401).json({ error: 'Неверный или просроченный код' });
-    }
-
-    const row = rows[0];
-    if (row.is_used) return res.status(400).json({ error: 'Код уже использован' });
-
-    await query(
-      `UPDATE auth_codes
-          SET is_used = true,
-              used_at = now()
-        WHERE phone = $1
-          AND code  = $2
-          AND created_at = $3
-          AND is_used = false`,
-      [phone, code, row.created_at]
-    );
-
-    let u = await query('SELECT id, phone, role, user_code, name, email, is_blocked FROM users WHERE phone=$1', [phone]);
-    let createdNewUser = false;
-    if (!u.rows[0]) {
-      // пытаемся вставить с уникальным user_code
-      let userRow = null;
-      for (let i = 0; i < 5; i++) {
-        const code6 = genUserCode();
-        try {
-          const created = await query(
-            `INSERT INTO users(phone, user_code, created_at)
-             VALUES($1, $2, now())
-             RETURNING id, phone, role, user_code, name, email`,
-            [phone, code6]
-          );
-          userRow = created.rows[0];
-          break;
-        } catch (e) {
-          if (!String(e.message || '').includes('users_user_code_key')) throw e;
-        }
-      }
-      if (!userRow) {
-        const fallback = await query(
-          `INSERT INTO users(phone, user_code, created_at)
-           VALUES($1, $2, now())
-           RETURNING id, phone, role, user_code, name, email`,
-          [phone, genUserCode()]
-        );
-        userRow = fallback.rows[0];
-      }
-      u = { rows: [userRow] };
-      createdNewUser = true;
-    }
-
-    const user = u.rows[0];
-    if (createdNewUser && user?.id) {
-      try {
-        await createUserNotification(
-          user.id,
-          'Добро пожаловать в AuctionAfto',
-          'Вы успешно зарегистрировались в личном кабинете. Исследуйте каталог и оставайтесь на связи — важные события появятся здесь.'
-        );
-      } catch (err) {
-        console.warn('welcome notification error:', err?.message || err);
-      }
-    }
-    if (user?.is_blocked) {
-      return res.status(403).json({
-        ok: false,
-        error: 'Ваш аккаунт заблокирован. Свяжитесь с поддержкой.'
-      });
-    }
-
-    // лог сессии
-    try {
-      const ip = String((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')).split(',')[0].trim();
-      const device = String(req.headers['user-agent'] || '').slice(0, 300);
-      await query(
-        `INSERT INTO user_sessions(user_id, ip, device) VALUES ($1,$2,$3)`,
-        [user.id, ip || null, device || null]
-      );
-    } catch (e) {
-      console.warn('session log error:', e.message);
-    }
-
-    const token = signToken({ id: user.id, phone: user.phone, role: user.role });
-    return res.json({ ok: true, token });
-  } catch (e) {
-    console.error('verify-code error:', e);
-    return res.status(500).json({ error: 'Ошибка проверки кода' });
-  }
-});
-
-// ===== Listings (каталог) =====
-
-const TRADE_TYPE_KEYS = [
-  'type', 'Type',
-  'trade_type', 'tradeType',
-  'procedure_type', 'procedureType',
-  'procedure_kind', 'procedureKind',
-  'auction_type', 'auctionType',
-  'auction_format', 'auctionFormat',
-  'format', 'kind',
-  'lot_type', 'lotType',
-  'sale_type', 'saleType',
-  'trade_stage', 'tradeStage',
-  'trade_format', 'tradeFormat',
-  'trading_type', 'tradingType',
-  'trade_offer', 'tradeOffer',
-  'trade_type_highlights', 'tradeTypeHighlights',
-  'trading_type_highlights', 'tradingTypeHighlights',
-  'trade_offer_highlights', 'tradeOfferHighlights',
-  'trade_stage_highlights', 'tradeStageHighlights',
-];
-
-const TRADE_TYPE_LABEL_FIELDS = [
-  'label', 'name', 'title', 'caption', 'key', 'property', 'field', 'parameter', 'param', 'attribute',
-  'header', 'heading', 'question', 'type_name', 'typeName',
-];
-
-const TRADE_TYPE_VALUE_FIELDS = [
-  'value', 'val', 'value_text', 'valueText', 'text', 'content', 'data', 'info', 'description',
-  'values', 'items', 'options', 'variants', 'answers',
-];
-
-const TRADE_TYPE_KEY_PATTERN = /(type|offer|trade|торг|процед|аукцион|auction)/i;
-const TRADE_TYPE_LABEL_PATTERN = /(торг|аукцион|процед|предлож|offer|auction|trade)/i;
-const TRADE_TYPE_LABEL_ONLY_PATTERN = /^(?:тип|вид)\s+(?:торг|процед)/i;
-
-const TRADE_TYPE_LABELS = {
-  public_offer: 'Публичное предложение',
-  open_auction: 'Открытый аукцион',
-};
-
-function cleanText(value) {
-  if (!value && value !== 0) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
-function normalizeTradeTypeCode(value) {
-  const text = cleanText(value);
-  if (!text) return null;
-  const lower = text.toLowerCase();
-  if (['public_offer', 'public offer', 'public-offer'].includes(lower)) return 'public_offer';
-  if (['open_auction', 'open auction', 'open-auction'].includes(lower)) return 'open_auction';
-  if (lower === 'offer' || lower.includes('публич') || lower.includes('offer') || lower.includes('предлож')) return 'public_offer';
-  if (
-    lower === 'auction'
-    || lower.includes('аукцион')
-    || lower.includes('auction')
-    || lower.includes('торг')
-    || lower.includes('bidding')
-  ) return 'open_auction';
-  return lower;
-}
-
-function tradeTypeLabelFromCode(value) {
-  const normalized = normalizeTradeTypeCode(value);
-  if (!normalized) return null;
-  if (TRADE_TYPE_LABELS[normalized]) return TRADE_TYPE_LABELS[normalized];
-  return null;
-}
-
-function withTradeTypeInfo(record) {
-  if (!record) return record;
-  const resolved = resolveListingTradeType(record);
-  const normalized = normalizeTradeTypeCode(resolved) || normalizeTradeTypeCode(record?.trade_type);
-  const label = record?.trade_type_label
-    || tradeTypeLabelFromCode(resolved)
-    || tradeTypeLabelFromCode(record?.trade_type)
-    || cleanText(resolved)
-    || cleanText(record?.trade_type);
-  return {
-    ...record,
-    trade_type_resolved: normalized || null,
-    trade_type_label: label || null,
-  };
-}
-
-function collectTradeTypeHints(source, out) {
-  if (!source && source !== 0) return;
-  if (typeof source === 'string' || typeof source === 'number') {
-    const text = String(source).trim();
-    if (!text) return;
-    const pairMatch = text.match(/^\s*([^:–—-]{1,80})[:–—-]\s*(.+)$/);
-    if (pairMatch && TRADE_TYPE_LABEL_PATTERN.test(pairMatch[1])) {
-      const valueText = pairMatch[2].trim();
-      if (valueText) out.push(valueText);
+    if (!nextState) {
+      window.localStorage.removeItem(PARSE_STREAM_STORAGE_KEY);
       return;
     }
-    const stripped = text.replace(/^(?:\s*(?:тип|вид)\s+(?:торг|процед)\s*(?:[:–—-]\s*)?)/i, '').trim();
-    if (stripped && stripped !== text) {
-      collectTradeTypeHints(stripped, out);
-      return;
-    }
-    if (TRADE_TYPE_LABEL_ONLY_PATTERN.test(text)) return;
-    out.push(text);
-    return;
-  }
-  if (Array.isArray(source)) {
-    source.forEach((item) => collectTradeTypeHints(item, out));
-    return;
-  }
-  if (typeof source === 'object') {
-    const labelMatches = TRADE_TYPE_LABEL_FIELDS.some(
-      (field) => typeof source[field] === 'string' && TRADE_TYPE_LABEL_PATTERN.test(source[field])
-    );
-
-    if (labelMatches) {
-      for (const field of TRADE_TYPE_VALUE_FIELDS) {
-        if (Object.prototype.hasOwnProperty.call(source, field)) {
-          collectTradeTypeHints(source[field], out);
-        }
-      }
-    }
-
-    for (const [key, value] of Object.entries(source)) {
-      if (TRADE_TYPE_KEYS.includes(key) || TRADE_TYPE_KEY_PATTERN.test(key)) {
-        collectTradeTypeHints(value, out);
-        continue;
-      }
-      if (labelMatches && TRADE_TYPE_LABEL_FIELDS.includes(key)) continue;
-      if (Array.isArray(value) || (value && typeof value === 'object')) {
-        collectTradeTypeHints(value, out);
-      } else if ((typeof value === 'string' || typeof value === 'number') && !TRADE_TYPE_LABEL_FIELDS.includes(key)) {
-        collectTradeTypeHints(value, out);
-      }
-    }
-  }
-}
-
-function resolveListingTradeType(record) {
-  const hints = [];
-  collectTradeTypeHints(record?.trade_type_label, hints);
-  collectTradeTypeHints(record?.trade_type, hints);
-  collectTradeTypeHints(record?.type, hints);
-  collectTradeTypeHints(record?.additional_data, hints);
-  collectTradeTypeHints(record?.additionalData, hints);
-
-  const details = record?.details || {};
-  const lot = details?.lot_details || {};
-
-  collectTradeTypeHints(details, hints);
-  collectTradeTypeHints(details?.additional_data, hints);
-  collectTradeTypeHints(details?.additionalData, hints);
-  collectTradeTypeHints(lot, hints);
-  collectTradeTypeHints(lot?.additional_data, hints);
-  collectTradeTypeHints(lot?.additionalData, hints);
-
-  const normalized = [];
-  const seen = new Set();
-  for (const hint of hints) {
-    if (!hint && hint !== 0) continue;
-    const text = String(hint).replace(/\s+/g, ' ').trim();
-    if (!text) continue;
-    const key = text.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalized.push(text);
-  }
-
-  const lowers = normalized.map((value) => value.toLowerCase());
-  const hasPublic = lowers.some((text) => text.includes('публич') || text.includes('public') || text.includes('предлож') || text.includes('offer'));
-  const hasAuction = lowers.some((text) => text.includes('аукцион') || text.includes('auction'));
-  const hasOpen = lowers.some((text) => text.includes('открыт') || text.includes('open'));
-
-  const base = normalizeTradeTypeCode(record?.trade_type);
-
-  if (base) return base;
-  if (hasAuction) return 'open_auction';
-  if (hasPublic) return 'public_offer';
-  return null;
-}
-
-function pickStatusCandidate(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string' || typeof value === 'number') {
-    const text = String(value).trim();
-    return text || null;
-  }
-  if (typeof value === 'object') {
-    const order = ['name', 'title', 'label', 'status', 'value'];
-    for (const key of order) {
-      if (value[key] !== undefined) {
-        const candidate = pickStatusCandidate(value[key]);
-        if (candidate) return candidate;
-      }
-    }
-  }
-  return null;
-}
-
-function extractStatusFromSource(source) {
-  if (!source || typeof source !== 'object') return null;
-  const direct = pickStatusCandidate(source.status);
-  if (direct) return direct;
-  const keys = ['status_name', 'statusName', 'status_label', 'statusLabel', 'lot_status'];
-  for (const key of keys) {
-    if (source[key] !== undefined) {
-      const candidate = pickStatusCandidate(source[key]);
-      if (candidate) return candidate;
-    }
-  }
-  return null;
-}
-
-function extractListingStatus(record) {
-  const direct = pickStatusCandidate(record?.status);
-  if (direct) return direct;
-  const fromRecord = extractStatusFromSource(record);
-  if (fromRecord) return fromRecord;
-  const details = record?.details;
-  const fromDetails = extractStatusFromSource(details);
-  if (fromDetails) return fromDetails;
-  const lot = details?.lot_details;
-  const fromLot = extractStatusFromSource(lot);
-  if (fromLot) return fromLot;
-  return null;
-}
-
-app.get('/api/listings', async (req, res) => {
-  const {
-    q,
-    region,
-    region_code: regionCodeParam,
-    city,
-    brand,
-    asset_type,
-    trade_type,
-    status,
-    minPrice,
-    maxPrice,
-    endDateFrom,
-    endDateTo,
-    published,
-    page = 1,
-    limit = 20,
-  } = req.query;
-
-  const where = [];
-  const params = [];
-
-  if (q) { params.push(q); where.push(
-    `(to_tsvector('russian', coalesce(title,'') || ' ' || coalesce(description,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(model,'')) @@ plainto_tsquery('russian', $${params.length})
-      OR vin ILIKE '%' || $${params.length} || '%')`
-  );}
-  const regionCodeValues = flattenQueryParam(regionCodeParam);
-  const normalizedRegionCodes = new Set();
-  regionCodeValues.forEach((value) => {
-    const resolved = resolveRegionCodeFromQuery(value);
-    if (resolved) normalizedRegionCodes.add(resolved);
-  });
-
-  if (normalizedRegionCodes.size) {
-    const placeholders = Array.from(normalizedRegionCodes).map((code) => {
-      params.push(code);
-      return `$${params.length}`;
-    });
-    where.push(`region_code IN (${placeholders.join(', ')})`);
-  } else {
-    const regionValues = flattenQueryParam(region);
-    if (regionValues.length) {
-      const regionCodesFromNames = new Set();
-      const plainRegionNames = new Set();
-      regionValues.forEach((value) => {
-        const resolved = resolveRegionCodeFromQuery(value);
-        if (resolved) {
-          regionCodesFromNames.add(resolved);
-        } else {
-          const trimmed = String(value ?? '').trim();
-          if (trimmed) plainRegionNames.add(trimmed);
-        }
-      });
-      if (regionCodesFromNames.size) {
-        const placeholders = Array.from(regionCodesFromNames).map((code) => {
-          params.push(code);
-          return `$${params.length}`;
-        });
-        where.push(`region_code IN (${placeholders.join(', ')})`);
-      } else if (plainRegionNames.size) {
-        const placeholders = Array.from(plainRegionNames).map((name) => {
-          params.push(name);
-          return `$${params.length}`;
-        });
-        if (placeholders.length === 1) {
-          where.push(`region = ${placeholders[0]}`);
-        } else {
-          where.push(`region IN (${placeholders.join(', ')})`);
-        }
-      }
-    }
-  }
-  if (city)       { params.push(city);       where.push(`city = $${params.length}`); }
-  if (asset_type) { params.push(asset_type); where.push(`asset_type = $${params.length}`); }
-  if (brand) {
-    const brandTerm = String(brand).trim();
-    if (brandTerm) {
-      params.push(`%${brandTerm}%`);
-      where.push(`brand ILIKE $${params.length}`);
-    }
-  }
-  if (trade_type) {
-    const normalizedParam = normalizeTradeTypeCode(trade_type);
-    if (normalizedParam === 'public_offer') {
-      const tradeField = "lower(coalesce(trade_type, ''))";
-      const detailsField = "lower(coalesce(details::text, ''))";
-
-      const equalityValues = Array.from(new Set([
-        'public_offer',
-        'offer',
-        'public offer',
-        'public-offer',
-        'публичное предложение',
-        'торговое предложение',
-      ].map((value) => value.toLowerCase())));
-      const equalityPlaceholders = equalityValues.map((value) => {
-        params.push(value);
-        return `$${params.length}`;
-      });
-      const equalityClause = equalityPlaceholders.length
-        ? `${tradeField} = ANY(ARRAY[${equalityPlaceholders.join(', ')}]::text[])`
-        : 'FALSE';
-
-      const likePatterns = Array.from(new Set([
-        '%публич%',
-        '%предлож%',
-        '%public offer%',
-        '%public-offer%',
-        '%public_offer%',
-      ].map((pattern) => pattern.toLowerCase())));
-      const likePlaceholders = likePatterns.map((pattern) => {
-        params.push(pattern);
-        return `$${params.length}`;
-      });
-      const tradeLikeClause = likePlaceholders.length
-        ? `${tradeField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
-        : 'FALSE';
-      const detailsLikeClause = likePlaceholders.length
-        ? `${detailsField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
-        : 'FALSE';
-
-      const positiveParts = [];
-      if (equalityClause !== 'FALSE' || tradeLikeClause !== 'FALSE') {
-        const tradePositive = [equalityClause, tradeLikeClause].filter((clause) => clause !== 'FALSE');
-        if (tradePositive.length) positiveParts.push(`(${tradePositive.join(' OR ')})`);
-      }
-      if (detailsLikeClause !== 'FALSE') positiveParts.push(detailsLikeClause);
-      const positiveClause = positiveParts.length ? `(${positiveParts.join(' OR ')})` : null;
-
-      const exclusionPatterns = Array.from(new Set([
-        '%аукцион%',
-        '%auction%',
-        '%open auction%',
-        '%открыт%',
-        '%bidding%',
-      ].map((pattern) => pattern.toLowerCase())));
-      const exclusionPlaceholders = exclusionPatterns.map((pattern) => {
-        params.push(pattern);
-        return `$${params.length}`;
-      });
-      const tradeExclusion = exclusionPlaceholders.length
-        ? `${tradeField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
-        : 'FALSE';
-      const detailsExclusion = exclusionPlaceholders.length
-        ? `${detailsField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
-        : 'FALSE';
-      const exclusionParts = [tradeExclusion, detailsExclusion].filter((clause) => clause !== 'FALSE');
-      const exclusionClause = exclusionParts.length ? `(${exclusionParts.join(' OR ')})` : null;
-
-      if (positiveClause && exclusionClause) {
-        where.push(`(${positiveClause} AND NOT ((${exclusionClause}) AND NOT ${positiveClause}))`);
-      } else if (positiveClause) {
-        where.push(positiveClause);
-      }
-    } else if (normalizedParam === 'open_auction') {
-      const tradeField = "lower(coalesce(trade_type, ''))";
-      const detailsField = "lower(coalesce(details::text, ''))";
-      const equalityValues = Array.from(new Set([
-        'open_auction',
-        'auction',
-        'open auction',
-        'open-auction',
-        'открытый аукцион',
-        'аукцион',
-      ].map((value) => value.toLowerCase())));
-      const equalityPlaceholders = equalityValues.map((value) => {
-        params.push(value);
-        return `$${params.length}`;
-      });
-      const equalityClause = equalityPlaceholders.length
-        ? `${tradeField} = ANY(ARRAY[${equalityPlaceholders.join(', ')}]::text[])`
-        : null;
-
-      const likePatterns = Array.from(new Set([
-        '%аукцион%',
-        '%auction%',
-        '%торг%',
-        '%bid%',
-        '%bidd%',
-        '%открыт%',
-        '%open%',
-      ].map((pattern) => pattern.toLowerCase())));
-      const likePlaceholders = likePatterns.map((pattern) => {
-        params.push(pattern);
-        const placeholder = `$${params.length}`;
-        return `$${params.length}`;
-      });
-      const tradeLikeClause = likePlaceholders.length
-        ? `${tradeField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
-        : null;
-      const detailsLikeClause = likePlaceholders.length
-        ? `${detailsField} LIKE ANY(ARRAY[${likePlaceholders.join(', ')}]::text[])`
-        : null;
-
-      const positiveParts = [equalityClause, tradeLikeClause, detailsLikeClause].filter(Boolean);
-      const positiveClause = positiveParts.length ? `(${positiveParts.join(' OR ')})` : null;
-
-      const exclusionPatterns = Array.from(new Set([
-        '%публич%',
-        '%предлож%',
-        '%offer%',
-        '%public offer%',
-        '%public-offer%',
-        '%public_offer%',
-      ].map((pattern) => pattern.toLowerCase())));
-      const exclusionPlaceholders = exclusionPatterns.map((pattern) => {
-        params.push(pattern);
-        return `$${params.length}`;
-      });
-      const tradeExclusion = exclusionPlaceholders.length
-        ? `${tradeField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
-        : null;
-      const detailsExclusion = exclusionPlaceholders.length
-        ? `${detailsField} LIKE ANY(ARRAY[${exclusionPlaceholders.join(', ')}]::text[])`
-        : null;
-      const exclusionParts = [tradeExclusion, detailsExclusion].filter(Boolean);
-      const exclusionClause = exclusionParts.length ? `(${exclusionParts.join(' OR ')})` : null;
-
-      if (positiveClause && exclusionClause) {
-        where.push(`(${positiveClause} AND NOT ${exclusionClause})`);
-      } else if (positiveClause) {
-        where.push(positiveClause);
-      }
-    } else if (normalizedParam) {
-      const clauses = [];
-      params.push(normalizedParam);
-      clauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
-      const spaced = normalizedParam.replace(/_/g, ' ');
-      if (spaced && spaced !== normalizedParam) {
-        params.push(spaced);
-        clauses.push(`lower(coalesce(trade_type, '')) = $${params.length}`);
-      }
-      params.push(`%${normalizedParam}%`);
-      clauses.push(`(
-        lower(coalesce(trade_type, '')) LIKE $${params.length}
-        OR lower(coalesce(details::text, '')) LIKE $${params.length}
-      )`);
-      if (spaced && spaced !== normalizedParam) {
-        params.push(`%${spaced}%`);
-        clauses.push(`(
-          lower(coalesce(trade_type, '')) LIKE $${params.length}
-          OR lower(coalesce(details::text, '')) LIKE $${params.length}
-        )`);
-      }
-      where.push(`(${clauses.join(' OR ')})`);
-    }
-  }
-  if (status)     { params.push(status);     where.push(`status = $${params.length}`); }
-  if (minPrice)   {
-    const num = Number(String(minPrice).replace(/\s/g, '').replace(',', '.'));
-    if (Number.isFinite(num)) {
-      params.push(num);
-      where.push(`coalesce(current_price, start_price, min_price, max_price) >= $${params.length}`);
-    }
-  }
-  if (maxPrice)   {
-    const num = Number(String(maxPrice).replace(/\s/g, '').replace(',', '.'));
-    if (Number.isFinite(num)) {
-      params.push(num);
-      where.push(`coalesce(current_price, start_price, min_price, max_price) <= $${params.length}`);
-    }
-  }
-  if (endDateFrom){ params.push(endDateFrom);where.push(`end_date >= $${params.length}`); }
-  if (endDateTo)  { params.push(endDateTo);  where.push(`end_date <= $${params.length}`); }
-
-  const publishedParam = typeof published === 'string' ? published.trim().toLowerCase() : published;
-  if (publishedParam === undefined || publishedParam === '' || publishedParam === null) {
-    where.push('published = TRUE');
-  } else if (['1', 'true', 'yes', 'on'].includes(publishedParam)) {
-    where.push('published = TRUE');
-  } else if (['0', 'false', 'no', 'off'].includes(publishedParam)) {
-    where.push('published = FALSE');
-  }
-
-
-  const pageNum = Math.max(1, parseInt(page));
-  const size = Math.min(50, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * size;
-
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const totalSql = `SELECT count(*)::int AS count FROM listings ${whereSql}`;
-  const listSql = `
-    SELECT id, title, region, region_code, city, brand, model, production_year, vin,
-           asset_type, trade_type, currency,
-           start_price, current_price, min_price, max_price,
-           status, end_date, source_url, photos, is_featured, published,
-           details, view_count
-    FROM listings
-    ${whereSql}
-    ORDER BY end_date NULLS LAST, created_at DESC
-    LIMIT ${size} OFFSET ${offset}
-  `;
-
-  try {
-    const [{ rows: [{ count }] }, { rows }] = await Promise.all([
-      query(totalSql, params),
-      query(listSql, params)
-    ]);
-    const items = rows.map(withTradeTypeInfo);
-    res.json({ items, total: count, page: pageNum, pageCount: Math.ceil(count / size) });
-  } catch (e) {
-    console.error('Listings error:', e);
-    res.status(500).json({ error: 'Failed to load listings' });
-  }
-});
-
-app.get('/api/listings/meta', async (_req, res) => {
-  try {
-    const [cities, brands, tradeTypes, avitoBrands] = await Promise.all([
-      query(`
-        SELECT DISTINCT city
-          FROM listings
-         WHERE published = TRUE AND city IS NOT NULL AND btrim(city) <> ''
-         ORDER BY city
-      `),
-      query(`
-        SELECT DISTINCT brand
-          FROM listings
-         WHERE published = TRUE AND brand IS NOT NULL AND btrim(brand) <> ''
-         ORDER BY brand
-      `),
-      query(`
-        SELECT trade_type, details
-          FROM listings
-         WHERE published = TRUE
-      `),
-      loadAvitoBrands().catch(() => []),
-    ]);
-
-    const brandValues = Array.isArray(avitoBrands) ? avitoBrands : [];
-    const dbBrandValues = brands.rows.map((r) => r.brand).filter(Boolean);
-    const brandSet = new Set();
-    [...brandValues, ...dbBrandValues].forEach((brand) => {
-      if (!brand) return;
-      const text = typeof brand === 'string' ? brand.trim() : String(brand);
-      if (text) brandSet.add(text);
-    });
-
-    const tradeTypeSet = new Set();
-    for (const row of tradeTypes.rows) {
-      const normalized = normalizeTradeTypeCode(resolveListingTradeType(row) || row.trade_type);
-      if (normalized) tradeTypeSet.add(normalized);
-    }
-    const preferredOrder = ['public_offer', 'open_auction', 'auction', 'offer'];
-    const tradeTypeList = Array.from(tradeTypeSet);
-    tradeTypeList.sort((a, b) => {
-      const ia = preferredOrder.indexOf(a);
-      const ib = preferredOrder.indexOf(b);
-      if (ia === -1 && ib === -1) return a.localeCompare(b);
-      if (ia === -1) return 1;
-      if (ib === -1) return -1;
-      return ia - ib;
-    });
-    
-    res.json({
-      regions: RUSSIAN_REGIONS,
-      cities: cities.rows.map((r) => r.city),
-      brands: Array.from(brandSet.values()).sort((a, b) => a.localeCompare(b, 'ru')),
-      tradeTypes: tradeTypeList,
-    });
-  } catch (e) {
-    console.error('listings meta error:', e);
-    res.status(500).json({ error: 'Failed to load filters' });
-  }
-});
-
-app.get('/api/listings/featured', async (req, res) => {
-  const limitRaw = Number.parseInt(req.query?.limit, 10);
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(24, limitRaw)) : 12;
-  try {
-    const { rows } = await query(
-      `SELECT id, title, region, region_code, city, brand, model, production_year, vin,
-              asset_type, trade_type, currency,
-              start_price, current_price, min_price, max_price,
-              status, end_date, source_url, photos, is_featured, published,
-              details, view_count
-         FROM listings
-        WHERE published = TRUE AND is_featured = TRUE
-        ORDER BY published_at DESC NULLS LAST, updated_at DESC
-        LIMIT $1`,
-      [limit]
-    );
-    const items = rows.map(withTradeTypeInfo);
-    res.json({ items });
-  } catch (e) {
-    console.error('listings featured error:', e);
-    res.status(500).json({ error: 'Failed to load featured listings' });
-  }
-});
-
-app.get('/api/listings/:id', async (req, res) => {
-  const { id } = req.params;
-  const { rows } = await query('SELECT * FROM listings WHERE id = $1 AND published = TRUE', [id]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  res.json(withTradeTypeInfo(rows[0]));
-});
-
-app.post('/api/listings/:id/views', auth, async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user?.sub;
-
-  try {
-    const { rows } = await query(
-      'SELECT id, published FROM listings WHERE id = $1 LIMIT 1',
-      [id]
-    );
-    const listing = rows[0];
-    if (!listing || listing.published !== true) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    const insertResult = await query(
-      `INSERT INTO listing_views (listing_id, user_id, first_viewed_at, last_viewed_at)
-       VALUES ($1, $2, now(), now())
-       ON CONFLICT DO NOTHING`,
-      [id, userId]
-    );
-
-    if (insertResult.rowCount === 0) {
-      await query(
-        `UPDATE listing_views
-            SET last_viewed_at = now()
-          WHERE listing_id = $1 AND user_id = $2`,
-        [id, userId]
-      );
-    } else {
-      await query(
-        'UPDATE listings SET view_count = view_count + 1 WHERE id = $1',
-        [id]
-      );
-    }
-
-    const { rows: countRows } = await query(
-      'SELECT view_count FROM listings WHERE id = $1',
-      [id]
-    );
-    const countValue = Number(countRows[0]?.view_count) || 0;
-
-    res.json({ ok: true, viewCount: countValue });
+    window.localStorage.setItem(PARSE_STREAM_STORAGE_KEY, JSON.stringify(nextState));
   } catch (error) {
-    console.error('listings view track error:', error);
-    res.status(500).json({ error: 'Failed to track view' });
+    console.warn('Failed to persist parse stream state', error);
   }
-});
-
-
-// ===== Favorites =====
-app.post('/api/favorites/:id', auth, async (req, res) => {
-  const userId = req.user.sub; const { id } = req.params;
-  try {
-    const { rows } = await query('SELECT published FROM listings WHERE id = $1', [id]);
-    const listing = rows[0];
-    if (!listing || listing.published !== true) {
-      await query('DELETE FROM favorites WHERE user_id::text=$1 AND listing_id=$2', [userId, id]);
-      return res.status(404).json({ error: 'Not found' });
-    }
-    await query(
-      'INSERT INTO favorites(user_id, listing_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
-      [userId, id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('Fav add error:', e);
-    res.status(500).json({ error: 'Failed' });
-  }
-});
-
-app.get('/api/stats/summary', async (_req, res) => {
-  try {
-    const [usersResult, listingsResult] = await Promise.all([
-      query('SELECT count(*)::int AS count FROM users'),
-      query(`
-        SELECT id, region_code, region, trade_type, details,
-               current_price, start_price, min_price, max_price
-          FROM listings
-         WHERE published = TRUE
-      `),
-    ]);
-
-    const listings = listingsResult.rows || [];
-    const regionMap = new Map();
-
-    for (const region of RUSSIAN_REGIONS) {
-      regionMap.set(region.code, {
-        region: region.name,
-        region_code: region.code,
-        listings: 0,
-        totalValue: 0,
-      });
-    }
-
-    const fallbackRegions = new Map();
-    let offersCount = 0;
-    let auctionsCount = 0;
-    let totalValue = 0;
-
-    for (const row of listings) {
-      const resolvedType = resolveListingTradeType(row) || row?.trade_type;
-      const normalizedType = normalizeTradeTypeCode(resolvedType);
-      if (normalizedType === 'public_offer') {
-        offersCount += 1;
-      } else if (normalizedType === 'open_auction') {
-        auctionsCount += 1;
-      }
-
-      const priceSources = [
-        row?.current_price,
-        row?.start_price,
-        row?.min_price,
-        row?.max_price,
-      ];
-      let price = 0;
-      for (const value of priceSources) {
-        const num = Number(value);
-        if (Number.isFinite(num) && num > 0) {
-          price = num;
-          break;
-        }
-        if (Number.isFinite(num) && !price) {
-          price = num;
-        }
-      }
-      totalValue += price;
-
-      let normalizedCode = normalizeRegionCode(row?.region_code);
-      if (normalizedCode && !regionMap.has(normalizedCode)) {
-        const withoutLeadingZeros = normalizedCode.replace(/^0+/, '');
-        if (withoutLeadingZeros && regionMap.has(withoutLeadingZeros)) {
-          normalizedCode = withoutLeadingZeros;
-        }
-      }
-      const rawRegionName = row?.region ? String(row.region).trim() : '';
-      let target;
-
-      if (normalizedCode) {
-        target = regionMap.get(normalizedCode);
-        if (!target) {
-          target = {
-            region: getRegionNameByCode(normalizedCode) || rawRegionName || null,
-            region_code: normalizedCode,
-            listings: 0,
-            totalValue: 0,
-          };
-          regionMap.set(normalizedCode, target);
-        } else if (!target.region) {
-          target.region = getRegionNameByCode(normalizedCode) || rawRegionName || null;
-        }
-      } else if (rawRegionName) {
-        const codeFromName = findRegionCodeByName(rawRegionName);
-        if (codeFromName) {
-          target = regionMap.get(codeFromName);
-          if (!target) {
-            target = {
-              region: getRegionNameByCode(codeFromName) || rawRegionName,
-              region_code: codeFromName,
-              listings: 0,
-              totalValue: 0,
-            };
-            regionMap.set(codeFromName, target);
-          } else if (!target.region) {
-            target.region = getRegionNameByCode(codeFromName) || rawRegionName;
-          }
-        } else {
-          const fallbackKey = `name:${rawRegionName.toLowerCase()}`;
-          target = fallbackRegions.get(fallbackKey);
-          if (!target) {
-            target = {
-              region: rawRegionName,
-              region_code: null,
-              listings: 0,
-              totalValue: 0,
-            };
-            fallbackRegions.set(fallbackKey, target);
-          }
-        }
-      }
-
-      if (target) {
-        target.listings += 1;
-        target.totalValue += price;
-      }
-    }
-
-    const regions = [...regionMap.values(), ...fallbackRegions.values()]
-      .map((region) => {
-        const listingsCount = Number(region.listings || 0);
-        const value = Number(region.totalValue || 0);
-        const average = listingsCount
-          ? Math.round((value / listingsCount) * 100) / 100
-          : 0;
-        return {
-          region: region.region,
-          region_code: region.region_code,
-          listings: listingsCount,
-          totalValue: value,
-          averagePrice: average,
-        };
-      })
-      .sort((a, b) => {
-        if ((b.listings || 0) !== (a.listings || 0)) {
-          return (b.listings || 0) - (a.listings || 0);
-        }
-        const nameA = a.region || '';
-        const nameB = b.region || '';
-        return nameA.localeCompare(nameB, 'ru');
-      });
-
-    res.json({
-      totalUsers: usersResult.rows[0]?.count ?? 0,
-      totalListings: listings.length,
-      offersCount,
-      auctionsCount,
-      totalValue,
-      regions,
-    });
-  } catch (e) {
-    console.error('stats summary error:', e);
-    res.status(500).json({ error: 'Failed to load summary stats' });
-  }
-});
-
-app.delete('/api/favorites/:id', auth, async (req, res) => {
-  const userId = req.user.sub; const { id } = req.params;
-  await query('DELETE FROM favorites WHERE user_id::text=$1 AND listing_id=$2', [userId, id]);
-  res.json({ ok: true });
-});
-
-// Профиль текущего пользователя
-app.get('/api/me', auth, async (req, res) => {
-  const userId = req.user.sub;
-  const { rows } = await query(
-    `SELECT id, user_code, name, email, phone, role, balance
-       FROM users
-      WHERE id::text=$1`,
-    [userId]
-  );
-  if (!rows[0]) return res.status(404).json({ error: 'User not found' });
-  res.json(rows[0]);
-});
-
-// Обновление профиля
-app.patch('/api/me', auth, async (req, res) => {
-  const userId = req.user.sub;
-  let { name, email, phone } = req.body || {};
-
-  // Валидация
-  if (name !== undefined) {
-    name = String(name).trim();
-    if (name && (name.length < 2 || name.length > 60)) {
-      return res.status(400).json({ error: 'Имя должно быть 2–60 символов' });
-    }
-  }
-  if (email !== undefined) {
-    email = String(email).trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Некорректная почта' });
-    }
-  }
-  if (phone !== undefined) {
-    phone = normalizePhone(String(phone || ''));
-    if (!/^\+\d{11,15}$/.test(phone)) {
-      return res.status(400).json({ error: 'Некорректный телефон' });
-    }
-    // уникальность телефона
-    const taken = await query(`SELECT 1 FROM users WHERE phone=$1 AND id::text<>$2`, [phone, userId]);
-    if (taken.rows[0]) {
-      return res.status(409).json({ error: 'Этот телефон уже используется' });
-    }
-  }
-
-  const { rows } = await query(
-    `UPDATE users
-        SET name       = COALESCE($1, name),
-            email      = COALESCE($2, email),
-            phone      = COALESCE($3, phone),
-            updated_at = now()
-      WHERE id::text=$4
-      RETURNING id, user_code, name, email, phone, role`,
-    [name ?? null, email ?? null, phone ?? null, userId]
-  );
-
-  const u = rows[0];
-  // если телефон изменился — выдадим новый токен
-  let token;
-  if (phone) {
-    token = signToken(u);
-  }
-  res.json({ ok: true, user: u, token });
-});
-
-app.use('/api/parser', parserStreamRouter);
-app.use('/api/admin', auth, requireAdmin, adminParserRouter);
-app.get('/api/inspections/price', async (_req, res) => {
-  try {
-    const settings = await loadInspectionSettings();
-    res.json({ price: settings?.price ?? 0 });
-  } catch (error) {
-    console.error('inspection price meta error:', error);
-    res.status(500).json({ error: 'SERVER_ERROR' });
-  }
-});
-app.get('/api/autoteka/price', async (_req, res) => {
-  try {
-    const settings = await loadAutotekaSettings();
-    res.json({ price: settings?.price ?? 0 });
-  } catch (error) {
-    console.error('autoteka price meta error:', error);
-    res.status(500).json({ error: 'SERVER_ERROR' });
-  }
-});
-app.use('/api/inspections', auth, inspectionsRouter);
-app.use('/api/autoteka', auth, autotekaRouter);
-app.use('/api/trade-pricing', tradePricingRouter);
-app.use('/api/trade-orders', auth, tradeOrdersRouter);
-app.use('/api/admin/inspections', auth, requireAdmin, adminInspectionsRouter);
-app.use('/api/admin/autoteka-orders', auth, requireAdmin, adminAutotekaRouter);
-app.use('/api/admin/autoteka-settings', auth, requireAdmin, adminAutotekaSettingsRouter);
-app.use('/api/admin/inspection-settings', auth, requireAdmin, adminInspectionSettingsRouter);
-app.use('/api/admin/trade-orders', auth, requireAdmin, adminTradeOrdersRouter);
-app.use('/api/admin/trade-pricing', auth, requireAdmin, adminTradePricingRouter);
-app.use('/api/support', auth, supportRouter);
-app.use('/api/admin/support', auth, requireAdmin, adminSupportRouter);
-
-
-
-// === Admin API ===
-app.get('/api/admin/admins', auth, requireAdmin, async (req, res) => {
-  try {
-    const { rows } = await query(
-      `SELECT user_code, name, phone, email, created_at
-         FROM users
-        WHERE role = 'admin'
-        ORDER BY created_at ASC`
-    );
-    res.json({ items: rows });
-  } catch (e) {
-    console.error('admins list error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// добавить админа по ID
-app.post('/api/admin/add', auth, requireAdmin, async (req, res) => {
-  const code = String(req.body?.user_code || '').trim();
-  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
-
-  try {
-    const { rows } = await query(
-      `UPDATE users
-          SET role = 'admin', updated_at = now()
-        WHERE user_code = $1
-        RETURNING id, user_code, name, phone, role`,
-      [code]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден' });
-    res.json({ ok: true, user: rows[0] });
-  } catch (e) {
-    console.error('add admin error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// убрать администратора
-app.delete('/api/admin/admins/:code', auth, requireAdmin, async (req, res) => {
-  const code = String(req.params?.code || '').trim();
-  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
-
-  try {
-    const { rows: current } = await query(
-      `SELECT user_code FROM users WHERE id::text = $1`,
-      [req.user.sub]
-    );
-    if (current[0]?.user_code === code) {
-      return res.status(400).json({ error: 'Нельзя удалить себя из администраторов' });
-    }
-
-    const { rows } = await query(
-      `UPDATE users
-          SET role = 'user', updated_at = now()
-        WHERE user_code = $1 AND role = 'admin'
-        RETURNING user_code, role`,
-      [code]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Пользователь не найден или уже не админ' });
-    res.json({ ok: true, user: rows[0] });
-  } catch (e) {
-    console.error('remove admin error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// статистика дешборда
-app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
-  try {
-    async function resolveParticipationStats() {
-      const candidates = ['participation_orders', 'trade_participation_orders', 'auction_participation_orders'];
-      for (const table of candidates) {
-        const exists = await query('SELECT to_regclass($1) AS oid', [table]);
-        if (exists.rows[0]?.oid) {
-          const [{ rows: [{ total = 0 }] }, { rows: [{ month = 0 }] }] = await Promise.all([
-            query(`SELECT count(*)::int AS total FROM ${table}`),
-            query(`SELECT count(*)::int AS month FROM ${table} WHERE created_at >= date_trunc('month', CURRENT_DATE)`),
-          ]);
-          return { total, month, table };
-        }
-      }
-      return { total: 0, month: 0, table: null };
-    }
-
-    const [
-      { rows: [{ c: users }] },
-      { rows: visits },
-      { rows: [listingStats] },
-      { rows: [{ registrations_month: registrationsMonth }] },
-      { rows: [inspectionsStats] },
-      { rows: [{ pro_count: proUsers }] },
-      participationStats,
-      { rows: [{ count: newUsers30 }] },
-      { rows: [{ count: activeUsers30 }] },
-      { rows: [{ count: positiveBalanceUsers }] },
-      { rows: [{ count: tradeOrdersCount }] },
-      { rows: [{ count: autotekaOrdersCount }] },
-      { rows: [balanceTopupsSums] },
-    ] = await Promise.all([
-      query(`SELECT count(*)::int c FROM users`),
-      query(
-        `SELECT day, cnt
-           FROM visits_daily
-          WHERE day >= CURRENT_DATE - INTERVAL '29 days'
-          ORDER BY day ASC`
-      ),
-      query(`SELECT count(*)::int AS total, count(*) FILTER (WHERE published = TRUE)::int AS published FROM listings`),
-      query(`SELECT count(*)::int AS registrations_month FROM users WHERE created_at >= date_trunc('month', CURRENT_DATE)`),
-      query(`
-        SELECT count(*)::int AS total,
-               count(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE))::int AS month
-          FROM inspections
-      `),
-      query(`SELECT count(*)::int AS pro_count FROM users WHERE lower(coalesce(subscription_status,'')) = 'pro'`),
-      resolveParticipationStats(),
-      query(`SELECT count(*)::int AS count FROM users WHERE created_at >= now() - INTERVAL '30 days'`),
-      query(`SELECT count(DISTINCT user_id)::int AS count FROM user_sessions WHERE created_at >= now() - INTERVAL '30 days'`),
-      query(`SELECT count(*)::int AS count FROM users WHERE COALESCE(balance, 0) > 0`),
-      query(`SELECT count(*)::int AS count FROM trade_orders`),
-      query(`SELECT count(*)::int AS count FROM autoteka_orders`),
-      query(`
-        SELECT
-          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '1 month' THEN amount END), 0)::numeric AS month,
-          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '6 months' THEN amount END), 0)::numeric AS half_year,
-          COALESCE(SUM(CASE WHEN created_at >= now() - INTERVAL '1 year' THEN amount END), 0)::numeric AS year
-        FROM balance_topups
-      `),
-    ]);
-
-    const map = new Map(visits.map(v => [String(v.day), v.cnt]));
-    const out = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0,10);
-      out.push({ day: iso, cnt: map.get(iso) || 0 });
-    }
-
-    const { rows: listings } = await query(`
-      SELECT id, region_code, region, trade_type, details,
-             current_price, start_price, min_price, max_price, status
-        FROM listings
-       WHERE published = TRUE
-    `);
-
-    let offersCount = 0;
-    let auctionsCount = 0;
-    let totalValue = 0;
-    let finishedCount = 0;
-
-    for (const row of listings) {
-      const resolvedType = resolveListingTradeType(row) || row?.trade_type;
-      const normalizedType = normalizeTradeTypeCode(resolvedType);
-      if (normalizedType === 'public_offer') {
-        offersCount += 1;
-      } else if (normalizedType === 'open_auction') {
-        auctionsCount += 1;
-      }
-
-      const priceSources = [row?.current_price, row?.start_price, row?.min_price, row?.max_price];
-      let price = 0;
-      for (const value of priceSources) {
-        const num = Number(value);
-        if (Number.isFinite(num) && num > 0) { price = num; break; }
-        if (Number.isFinite(num) && !price) price = num;
-      }
-      totalValue += price;
-
-      const statusName = extractListingStatus(row);
-      if (statusName && statusName.toLowerCase().includes('заверш')) {
-        finishedCount += 1;
-      }
-    }
-
-    const balanceTopups = {
-      month: Number(balanceTopupsSums?.month ?? 0) || 0,
-      halfYear: Number(balanceTopupsSums?.half_year ?? 0) || 0,
-      year: Number(balanceTopupsSums?.year ?? 0) || 0,
-    };
-
-    res.json({
-      users,
-      visits: out,
-      listings: {
-        total: listingStats?.total ?? 0,
-        published: listingStats?.published ?? 0,
-      },
-      registrationsMonth: registrationsMonth ?? 0,
-      inspections: {
-        total: inspectionsStats?.total ?? 0,
-        month: inspectionsStats?.month ?? 0,
-      },
-      proUsers: proUsers ?? 0,
-      participation: participationStats,
-      usersStats: {
-        total: users ?? 0,
-        new30Days: newUsers30 ?? 0,
-        active30Days: activeUsers30 ?? 0,
-        positiveBalance: positiveBalanceUsers ?? 0,
-      },
-      listingsStats: {
-        publicOffers: offersCount,
-        openAuctions: auctionsCount,
-        totalListings: listings.length,
-        totalValue,
-        finished: finishedCount,
-      },
-      finance: {
-        tradeOrders: tradeOrdersCount ?? 0,
-        autotekaOrders: autotekaOrdersCount ?? 0,
-        inspectionOrders: inspectionsStats?.total ?? 0,
-        balanceTopups,
-      },
-    });
-  } catch (e) {
-    console.error('admin stats error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// Пополнение баланса
-app.post('/api/me/balance-add', auth, async (req, res) => {
-  const userId = req.user.sub;
-  const amount = Number(req.body?.amount);
-  if (!amount || amount <= 0) return res.status(400).json({ error: 'Некорректная сумма' });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows } = await client.query(
-      `UPDATE users
-          SET balance = COALESCE(balance,0) + $1,
-              updated_at = now()
-        WHERE id::text=$2
-        RETURNING balance`,
-      [amount, userId]
-    );
-    if (!rows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-    await client.query(
-      `INSERT INTO balance_topups(user_id, amount) VALUES ($1, $2)`,
-      [userId, amount]
-    );
-    await client.query('COMMIT');
-    
-    const newBalance = rows[0].balance;
-    try {
-      const formatter = new Intl.NumberFormat('ru-RU', {
-        style: 'currency',
-        currency: 'RUB',
-        maximumFractionDigits: 0,
-      });
-      const amountText = formatter.format(amount);
-      const balanceText = formatter.format(newBalance ?? 0);
-      await createUserNotification(
-        userId,
-        'Баланс пополнен',
-        `Баланс пополнен на ${amountText}. Текущий баланс: ${balanceText}.`
-      );
-    } catch (err) {
-      console.warn('balance topup notification error:', err?.message || err);
-    }
-
-    return res.json({ ok: true, balance: newBalance });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('balance-add error:', e);
-    res.status(500).json({ error: 'Не удалось пополнить' });
-  } finally {
-    client.release();
-  }
-});
-
-app.get('/api/me/favorites', auth, async (req, res) => {
-  const userId = req.user.sub;
-  const { rows: stale } = await query(
-    `SELECT f.listing_id
-       FROM favorites f
-       LEFT JOIN listings l ON l.id = f.listing_id
-      WHERE f.user_id::text = $1
-        AND (l.id IS NULL OR l.published IS DISTINCT FROM TRUE)`,
-    [userId]
-  );
-
-  if (stale.length) {
-    const ids = stale
-      .map((row) => Number(row.listing_id))
-      .filter((value) => Number.isFinite(value));
-    if (ids.length) {
-      await query(
-        'DELETE FROM favorites WHERE user_id::text=$1 AND listing_id = ANY($2::int[])',
-        [userId, ids]
-      );
-    }
-  }
-  const { rows } = await query(
-    `SELECT l.* FROM favorites f JOIN listings l ON l.id=f.listing_id
-     WHERE f.user_id::text=$1 AND l.published = TRUE ORDER BY f.created_at DESC`,
-    [userId]
-  );
-  res.json({ items: rows.map(withTradeTypeInfo) });
-});
-
-// ===== Admin =====
-app.get('/api/admin/listings-stats', auth, admin, async (req, res) => {
-  const [{ rows: [{ c: total }] }, { rows: [{ c: active }] }] = await Promise.all([
-    query('SELECT count(*)::int c FROM listings', []),
-    query('SELECT count(*)::int c FROM listings WHERE published = TRUE', [])
-  ]);
-  res.json({ total, active });
-});
-
-app.patch('/api/listings/:id', auth, admin, async (req, res) => {
-  const { id } = req.params;
-  const { published } = req.body || {};
-  try {
-    const { rows } = await query(
-      `UPDATE listings
-          SET published = COALESCE($1, published),
-              published_at = CASE
-                WHEN $1 IS TRUE THEN COALESCE(published_at, now())
-                WHEN $1 IS FALSE THEN NULL
-                ELSE published_at
-              END,
-              updated_at = now()
-        WHERE id = $2
-        RETURNING *`,
-      [published, id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    const listing = rows[0];
-    if (listing.published !== true) {
-      await query('DELETE FROM favorites WHERE listing_id = $1', [id]);
-    }
-    res.json(listing);
-  } catch (e) {
-    console.error('Update listing error:', e);
-    res.status(500).json({ error: 'Failed to update' });
-  }
-});
-
-app.post('/api/listings/:id/feature', auth, admin, async (req, res) => {
-  const { id } = req.params;
-  const flagRaw = req.body?.is_featured ?? req.body?.featured ?? true;
-  const isFeatured = ['1', 'true', 'yes', true].includes(String(flagRaw).toLowerCase());
-  try {
-    const { rows } = await query(
-      `UPDATE listings
-          SET is_featured = $1,
-              published_at = CASE WHEN $1 = TRUE AND published = TRUE THEN COALESCE(published_at, now()) ELSE published_at END,
-              updated_at = now()
-        WHERE id = $2
-        RETURNING *`,
-      [isFeatured, id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
-  } catch (e) {
-    console.error('feature listing error:', e);
-    res.status(500).json({ error: 'Failed to update' });
-  }
-});
-
-app.delete('/api/listings/:id', auth, admin, async (req, res) => {
-  const { id } = req.params;
-  try {
-    const { rowCount } = await query('DELETE FROM listings WHERE id = $1', [id]);
-    if (!rowCount) return res.status(404).json({ error: 'Not found' });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('delete listing error:', e);
-    res.status(500).json({ error: 'Failed to delete' });
-  }
-});
-
-// === ADMIN: пользователи ===
-app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
-  try {
-    const q = String(req.query.q || '').trim();
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-    const offset = (page - 1) * limit;
-
-    if (/^\d{6}$/.test(q)) {
-      const { rows } = await query(`
-        SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
-          FROM users
-         WHERE user_code = $1
-      `, [q]);
-      return res.json({ items: rows, page: 1, pages: 1, total: rows.length });
-    }
-
-    const { rows: [{ c: total }] } = await query(`SELECT count(*)::int c FROM users`);
-    const { rows: items } = await query(`
-      SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
-        FROM users
-       ORDER BY created_at DESC
-       LIMIT $1 OFFSET $2
-    `, [limit, offset]);
-    const pages = Math.max(1, Math.ceil(total / limit));
-    res.json({ items, page, pages, total, limit });
-  } catch (e) {
-    console.error('admin users list error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.get('/api/admin/users/:code', auth, requireAdmin, async (req, res) => {
-  try {
-    const code = String(req.params.code || '');
-    const { rows } = await query(`
-      SELECT id, user_code, name, phone, email, created_at, subscription_status, role, is_blocked, balance_frozen, balance
-        FROM users WHERE user_code = $1
-    `, [code]);
-    if (!rows.length) return res.status(404).json({ error: 'not found' });
-
-    const user = rows[0];
-    const { rows: sessions } = await query(`
-      SELECT ip, city, device, created_at
-        FROM user_sessions
-       WHERE user_id::text = $1
-       ORDER BY created_at DESC
-       LIMIT 10
-    `, [String(user.id)]);
-
-    const userIdText = String(user.id);
-    const [
-      { rows: [{ count: inspectionsCount = 0 }] },
-      { rows: [{ count: autotekaCount = 0 }] },
-      { rows: [{ count: tradeOrdersCount = 0 }] },
-    ] = await Promise.all([
-      query('SELECT COUNT(*)::int AS count FROM inspections WHERE user_id::text = $1', [userIdText]),
-      query('SELECT COUNT(*)::int AS count FROM autoteka_orders WHERE user_id::text = $1', [userIdText]),
-      query('SELECT COUNT(*)::int AS count FROM trade_orders WHERE user_id::text = $1', [userIdText]),
-    ]);
-
-    res.json({
-      user,
-      sessions,
-      stats: {
-        inspections: inspectionsCount ?? 0,
-        autoteka: autotekaCount ?? 0,
-        tradeOrders: tradeOrdersCount ?? 0,
-      },
-    });
-  } catch (e) {
-    console.error('admin user card error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.post('/api/admin/users/:code/block', auth, requireAdmin, async (req, res) => {
-  try {
-    const code = String(req.params.code || '');
-    const block = Boolean(req.body?.block);
-    const { rows } = await query(`
-      UPDATE users SET is_blocked = $2, updated_at = now()
-       WHERE user_code = $1
-      RETURNING user_code, is_blocked
-    `, [code, block]);
-  if (!rows.length) return res.status(404).json({ error: 'not found' });
-    res.json({ ok: true, user: rows[0] });
-  } catch (e) {
-    console.error('admin block error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.post('/api/admin/users/:code/freeze-balance', auth, requireAdmin, async (req, res) => {
-  try {
-    const code = String(req.params.code || '');
-    const freeze = Boolean(req.body?.freeze);
-    const { rows } = await query(`
-      UPDATE users SET balance_frozen = $2, updated_at = now()
-       WHERE user_code = $1
-      RETURNING id, user_code, balance_frozen
-    `, [code, freeze]);
-    if (!rows.length) return res.status(404).json({ error: 'not found' });
-    
-    const updated = rows[0];
-    if (updated?.id) {
-      try {
-        await createUserNotification(
-          updated.id,
-          freeze ? 'Баланс заморожен' : 'Баланс разморожен',
-          freeze
-            ? 'Ваш баланс временно заморожен администратором. Свяжитесь с поддержкой, если нужна дополнительная информация.'
-            : 'Баланс снова доступен для операций. Спасибо за ожидание!'
-        );
-      } catch (err) {
-        console.warn('freeze notification error:', err?.message || err);
-      }
-    }
-
-    res.json({ ok: true, user: { user_code: updated.user_code, balance_frozen: updated.balance_frozen } });
-  } catch (e) {
-    console.error('admin freeze error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// === ADMIN: отправить уведомление пользователю ===
-app.post('/api/admin/notify', auth, requireAdmin, async (req, res) => {
-  try {
-    const rawCode = String(req.body?.user_code || '').trim();
-    const title = String(req.body?.title || '').trim();
-    const body = String(req.body?.body || '').trim();
-    const sendAllRaw = req.body?.send_all ?? req.body?.sendAll;
-    const sendAll =
-      sendAllRaw === true ||
-      sendAllRaw === 'true' ||
-      sendAllRaw === '1' ||
-      sendAllRaw === 1;
-
-    if (!title || !body) return res.status(400).json({ error: 'Введите заголовок и описание' });
-
-    if (sendAll) {
-      await query(
-        `INSERT INTO user_notifications(user_id, title, body)
-         SELECT id, $1, $2 FROM users`,
-        [title, body]
-      );
-      return res.json({ ok: true, audience: 'all' });
-    }
-
-    if (!/^\d{6}$/.test(rawCode)) return res.status(400).json({ error: 'Неверный ID (6 цифр)' });
-
-    const { rows: u } = await query(`SELECT id FROM users WHERE user_code = $1`, [rawCode]);
-    if (!u.length) return res.status(404).json({ error: 'Пользователь не найден' });
-
-    await query(
-      `INSERT INTO user_notifications(user_id, title, body) VALUES ($1,$2,$3)`,
-      [String(u[0].id), title, body]
-    );
-    res.json({ ok: true, audience: 'single' });
-  } catch (e) {
-    console.error('admin notify error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// === USER: уведомления ===
-app.get('/api/notifications', auth, async (req, res) => {
-  try {
-    const lim = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10)));
-    const { rows } = await query(
-      `SELECT id, title, body, created_at, read_at
-         FROM user_notifications
-        WHERE user_id::text = $1
-        ORDER BY created_at DESC
-        LIMIT $2`,
-      [req.user.sub, lim]
-    );
-    res.json({ items: rows });
-  } catch (e) {
-    console.error('get notifications error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.get('/api/notifications/unread-count', auth, async (req, res) => {
-  try {
-    const { rows: [{ c }] } = await query(
-      `SELECT count(*)::int c
-         FROM user_notifications
-        WHERE user_id::text = $1 AND read_at IS NULL`,
-      [req.user.sub]
-    );
-    res.json({ count: c });
-  } catch (e) {
-    console.error('unread count error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.get('/api/notifications/:id', auth, async (req, res) => {
-  try {
-    const id = Number.parseInt(String(req.params.id || '').trim(), 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid id' });
-    }
-
-    const { rows } = await query(
-      `SELECT id, title, body, created_at, read_at
-         FROM user_notifications
-        WHERE id = $1 AND user_id::text = $2
-        LIMIT 1`,
-      [id, req.user.sub]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'not found' });
-
-    const notification = { ...rows[0] };
-    if (!notification.read_at) {
-      try {
-        const { rows: markRows } = await query(
-          `UPDATE user_notifications
-              SET read_at = now()
-            WHERE id = $1 AND user_id::text = $2 AND read_at IS NULL
-            RETURNING read_at`,
-          [id, req.user.sub]
-        );
-        if (markRows[0]?.read_at) {
-          notification.read_at = markRows[0].read_at;
-        }
-      } catch (markErr) {
-        console.warn('mark single notification error:', markErr?.message || markErr);
-      }
-    }
-
-    res.json({ notification });
-  } catch (e) {
-    console.error('get notification error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-app.post('/api/notifications/mark-read', auth, async (req, res) => {
-  try {
-    const rawId = req.body?.id ?? req.body?.notification_id ?? req.body?.notificationId;
-    const parsedId = rawId != null ? Number.parseInt(String(rawId).trim(), 10) : NaN;
-    if (Number.isFinite(parsedId) && parsedId > 0) {
-      await query(
-        `UPDATE user_notifications
-            SET read_at = now()
-          WHERE user_id::text = $1 AND id = $2 AND read_at IS NULL`,
-        [req.user.sub, parsedId]
-      );
-    } else {
-      await query(
-        `UPDATE user_notifications
-            SET read_at = now()
-          WHERE user_id::text = $1 AND read_at IS NULL`,
-        [req.user.sub]
-      );
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('mark read error:', e);
-    res.status(500).json({ error: 'failed' });
-  }
-});
-
-// ===== Ingest сырого массива (оставляем как было) =====
-app.post('/api/ingest', async (req, res) => {
-  const token = req.headers['x-ingest-token'];
-  if (!token) return res.status(401).json({ error: 'No ingest token' });
-  if (token !== process.env.INGEST_TOKEN) return res.status(403).json({ error: 'Invalid token' });
-
-  const items = Array.isArray(req.body) ? req.body : [];
-  if (!items.length) return res.status(400).json({ error: 'Array of items required' });
-
-  try {
-    for (const it of items) {
-      const {
-        source_id, title, description, asset_type, region,
-        currency = 'RUB', start_price = null, current_price = null, status = null,
-        end_date = null, source_url = null, details = {}
-      } = it;
-
-      await query(
-        `INSERT INTO listings
-         (source_id, title, description, asset_type, region, currency, start_price,
-          current_price, status, end_date, source_url, details)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-         ON CONFLICT (source_id) DO UPDATE SET
-           title=EXCLUDED.title,
-           description=EXCLUDED.description,
-           asset_type=EXCLUDED.asset_type,
-           region=EXCLUDED.region,
-           currency=EXCLUDED.currency,
-           start_price=EXCLUDED.start_price,
-           current_price=EXCLUDED.current_price,
-           status=EXCLUDED.status,
-           end_date=EXCLUDED.end_date,
-           source_url=EXCLUDED.source_url,
-           details=EXCLUDED.details,
-           updated_at=now()`,
-        [source_id, title, description, asset_type, region, currency,
-         start_price, current_price, status, end_date, source_url, details]
-      );
-    }
-    res.json({ ok: true, count: items.length });
-  } catch (e) {
-    console.error('Ingest error:', e);
-    res.status(500).json({ error: 'Ingest failed' });
-  }
-});
-
-
-// ==================== НОВОЕ: Интеграция с Trade Parser API ====================
-
-// Базовый URL парсера и таймаут
-const PARSER_BASE = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
-const PARSER_TIMEOUT = Number(process.env.PARSER_API_TIMEOUT || 30000);
-
-// Безопасный парсинг числа (с пробелами/запятыми)
-function pickNumber(n) {
-  if (n == null) return null;
-  const num = Number(String(n).replace(/\s/g, '').replace(',', '.'));
-  return Number.isFinite(num) ? num : null;
 }
 
-// Преобразование одного объекта парсера -> запись для таблицы listings
-function normalizeTradeType(value) {
-  if (!value && value !== 0) return null;
-  const text = String(value).trim();
-  if (!text) return null;
-  const lower = text.toLowerCase();
+function formatCurrency(value, currency = 'RUB') {
+  if (value == null || value === '') return DASH;
 
-  const isPublicOffer = lower.includes('публич')
-    || lower.includes('offer')
-    || lower.includes('предлож');
-  if (isPublicOffer) {
-    return 'offer';
+  let numeric = null;
+  if (typeof value === 'number') {
+    numeric = Number.isFinite(value) ? value : null;
+  } else if (typeof value === 'string') {
+    const normalized = value.replace(/\u00a0/g, '').replace(/\s/g, '').replace(',', '.');
+    const parsed = Number(normalized);
+    numeric = Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (lower.includes('аук') || lower.includes('auction') || lower.includes('торг') || lower.includes('bidding')) {
-    return 'auction';
-  }
-  return text;
-}
+  if (numeric == null) return String(value);
 
-function normalizePhotoEntry(photo) {
-  if (!photo) return null;
-  if (typeof photo === 'string') {
-    const trimmed = photo.trim();
-    return trimmed ? { url: trimmed } : null;
-  }
-  if (typeof photo === 'object') {
-    const url = photo.url || photo.href || photo.link || photo.download_url || photo.src || null;
-    if (!url) return null;
-    const title = photo.title || photo.name || photo.caption || photo.alt || null;
-    return title ? { url, title } : { url };
-  }
-  return null;
-}
-
-function collectPhotos(pr, lot) {
-  const pools = [
-    pr?.photos,
-    pr?.images,
-    lot?.photos,
-    lot?.images,
-    lot?.gallery,
-    lot?.photo_urls,
-  ].filter(Boolean);
-
-  const out = [];
-  const seen = new Set();
-
-  for (const pool of pools) {
-    const list = Array.isArray(pool) ? pool : [pool];
-    for (const entry of list) {
-      const photo = normalizePhotoEntry(entry);
-      if (photo && photo.url && !seen.has(photo.url)) {
-        seen.add(photo.url);
-        out.push(photo);
-        if (out.length >= 12) return out;
-      }
-    }
-  }
-
-  return out;
-}
-
-function mapParsedToListing(item) {
-  // поддерживаем 2 формы: { parsed_data, fedresurs_data } или плоский объект
-  const fed = item?.fedresurs_data || {};
-  const pr  = item?.parsed_data    || item || {};
-
-  const lotSource = pr.lot_details && typeof pr.lot_details === 'object' && !Array.isArray(pr.lot_details)
-    ? pr.lot_details
-    : {};
-  const lot = { ...lotSource };
-
-  const regionCodeRaw =
-    lot.region_code
-    ?? lot.regionCode
-    ?? pr.region_code
-    ?? pr.regionCode
-    ?? item?.region_code
-    ?? fed?.region_code
-    ?? null;
-  const region_code = normalizeRegionCode(regionCodeRaw);
-  const regionName = region_code ? getRegionNameByCode(region_code) : null;
-  if (region_code) {
-    lot.region_code = region_code;
-    if (!lot.region && regionName) {
-      lot.region = regionName;
-    }
-  }
-  const photos = collectPhotos(pr, lot);
-
-  const details = {
-    lot_details: Object.keys(lot).length ? lot : null,
-    debtor_details: pr.debtor_details || null,
-    contact_details: pr.contact_details || null,
-    prices: pr.prices || null,
-    documents: pr.documents || null,
-    photos: photos.length ? photos : null,
-    fedresurs_meta: fed || null,
-  };
-  if (region_code) {
-    details.region_code = region_code;
-  }
-
-  const title = pr.title || [lot.brand, lot.model, lot.year].filter(Boolean).join(' ') || 'Лот';
-  const description = pr?.description || lot?.description || '';
-  const asset_type = lot.category || pr.category || 'vehicle';
-  const region = regionName || lot.region || pr.region || null;
-  const city = lot.city || lot.location || pr.city || pr.location || null;
-  const brand = lot.brand || pr.brand || null;
-  const model = lot.model || pr.model || null;
-  const production_year = lot.year || lot.production_year || lot.manufacture_year || pr.year || null;
-  const vin = lot.vin || pr.vin || null;
-
-  const start_price = pickNumber(lot.start_price ?? lot.startPrice ?? pr.start_price ?? pr.startPrice);
-  const min_price = pickNumber(lot.min_price ?? lot.minPrice ?? lot.minimal_price ?? lot.minimum_price ?? pr.min_price);
-  const max_price = pickNumber(lot.max_price ?? lot.maxPrice ?? lot.maximum_price ?? pr.max_price);
-
-  // current_price можно попытаться брать из последнего периода public offer, если он есть
-  let current_price = pickNumber(pr.current_price ?? pr.currentPrice ?? lot.current_price ?? lot.currentPrice) || start_price;
-  const prices = Array.isArray(pr.prices) ? pr.prices : [];
-  if (prices.length) {
-    const last = prices[prices.length - 1];
-    const p = pickNumber(last?.price ?? last?.currentPrice ?? last?.current_price);
-    if (p) current_price = p;
-  }
-
-  const trade_type = normalizeTradeType(pr.trade_type || lot.trade_type || lot.procedure_type || pr.procedure_type);
-
-  // статус и дата окончания: берём из fedresurs_data, если есть
-  const status = fed?.status || pr?.status || null;
-  const end_date = fed?.dateFinish ? new Date(fed.dateFinish) : pr?.date_finish ? new Date(pr.date_finish) : null;
-
-  const source_url = fed?.possible_url || pr?.trade_platform_url || pr?.source_url || null;
-
-  // Уникальный source_id: пробуем fedresurs_id, иначе номер торгов, иначе fallback
-  const source_id = pr.fedresurs_id || pr.bidding_number || fed.guid || fed.number || `unknown:${(pr.title||'').slice(0,50)}`;
-
-  return {
-    source_id,
-    title,
-    description,
-    asset_type,
-    region,
-    region_code,
-    city,
-    brand,
-    model,
-    production_year,
-    vin,
-    trade_type,
-    currency: 'RUB',
-    start_price,
-    current_price,
-    min_price,
-    max_price,
-    status,
-    end_date,
-    source_url,
-    photos,
-    details
-  };
-}
-
-// UPSERT одной записи в listings
-async function upsertListing(listing) {
-  const {
-    source_id,
-    title,
-    description,
-    asset_type,
-    region,
-    region_code = null,
-    city = null,
-    brand = null,
-    model = null,
-    production_year = null,
-    vin = null,
-    trade_type = null,
-    currency = 'RUB',
-    start_price = null,
-    current_price = null,
-    min_price = null,
-    max_price = null,
-    status = null,
-    end_date = null,
-    source_url = null,
-    photos = [],
-    details = {},
-  } = listing;
-
-  const normalizedPhotos = Array.isArray(photos) ? photos : [];
-
-  await query(
-    `INSERT INTO listings
-     (source_id, title, description, asset_type, region, region_code, city, brand, model, production_year, vin,
-      trade_type, currency, start_price, current_price, min_price, max_price, status, end_date,
-      source_url, photos, details)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
-     ON CONFLICT (source_id) DO UPDATE SET
-       title=EXCLUDED.title,
-       description=EXCLUDED.description,
-       asset_type=EXCLUDED.asset_type,
-       region=EXCLUDED.region,
-       region_code=EXCLUDED.region_code,
-       city=EXCLUDED.city,
-       brand=EXCLUDED.brand,
-       model=EXCLUDED.model,
-       production_year=EXCLUDED.production_year,
-       vin=EXCLUDED.vin,
-       trade_type=EXCLUDED.trade_type,
-       currency=EXCLUDED.currency,
-       start_price=EXCLUDED.start_price,
-       current_price=EXCLUDED.current_price,
-       min_price=EXCLUDED.min_price,
-       max_price=EXCLUDED.max_price,
-       status=EXCLUDED.status,
-       end_date=EXCLUDED.end_date,
-       source_url=EXCLUDED.source_url,
-       photos=EXCLUDED.photos,
-       details=EXCLUDED.details,
-       updated_at=now()`,
-    [
-      source_id,
-      title,
-      description,
-      asset_type,
-      region,
-      region_code,
-      city,
-      brand,
-      model,
-      production_year,
-      vin,
-      trade_type,
+  try {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
       currency,
-      start_price,
-      current_price,
-      min_price,
-      max_price,
-      status,
-      end_date,
-      source_url,
-      JSON.stringify(normalizedPhotos),
-      details,
-    ]
+      maximumFractionDigits: 0,
+    }).format(numeric);
+  } catch {
+    return `${numeric} ${currency}`;
+  }
+}
+
+function formatDate(value) {
+  if (!value) return DASH;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('ru-RU');
+}
+
+function formatTradeType(value) {
+  const normalized = normalizeTradeTypeCode(value);
+  return (
+    formatTradeTypeLabel(normalized)
+    || formatTradeTypeLabel(value)
+    || normalized
+    || value
+    || DASH
   );
 }
 
-// POST /admin/ingest/fedresurs?search=vin&limit=15&offset=0&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
-app.post('/admin/ingest/fedresurs', async (req, res) => {
-  // защита по токену
-  const token = req.headers['x-ingest-token'];
-  if (!token) return res.status(401).json({ error: 'No ingest token' });
-  if (token !== process.env.INGEST_TOKEN) return res.status(403).json({ error: 'Invalid token' });
-
-  try {
-    const {
-      search = 'vin',
-      start_date,
-      end_date,
-      limit = 15,
-      offset = 0,
-      region_code: regionCodeRaw,
-    } = Object.assign({}, req.query, req.body);
-
-    const region_code = normalizeRegionCode(regionCodeRaw);
-    if (!region_code) {
-      return res.status(400).json({ error: 'region_code is required' });
+function pickFirstText(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      const text = String(candidate).trim();
+      if (text) return text;
     }
-
-    // собираем URL запроса к парсеру
-    const u = new URL('/parse-fedresurs-trades', PARSER_BASE);
-    u.searchParams.set('search_string', String(search));
-    if (start_date) u.searchParams.set('start_date', String(start_date));
-    if (end_date)   u.searchParams.set('end_date',   String(end_date));
-    u.searchParams.set('limit',  String(limit));
-    u.searchParams.set('offset', String(offset));
-    u.searchParams.set('region_code', String(region_code));
-
-    console.log('Parser request:', u.toString());
-
-    const { ok, status, data } = await fetchJSON(u.toString(), { timeoutMs: PARSER_TIMEOUT });
-    if (!ok) {
-      return res.status(502).json({ error: 'Parser error', status, data });
-    }
-
-    let items = [];
-    let totalFound = null;
-
-    if (Array.isArray(data)) {
-      items = data;
-      totalFound = data.length;
-    } else if (data && typeof data === 'object') {
-      const candidates = [data.results, data.items, data.pageData, data.data, data.list];
-      const found = candidates.find((value) => Array.isArray(value));
-      if (!found) {
-        return res.status(502).json({ error: 'Unexpected parser payload', sample: data });
-      }
-      items = found;
-      const totalCandidate = data.total_found ?? data.found ?? data.total ?? data.totalCount;
-      if (totalCandidate !== undefined && totalCandidate !== null) {
-        const numeric = Number(totalCandidate);
-        if (Number.isFinite(numeric)) {
-          totalFound = numeric;
-        }
-      }
-      if (totalFound == null) {
-        totalFound = items.length;
-      }
-    } else {
-      return res.status(502).json({ error: 'Unexpected parser payload', sample: data });
-    }
-
-    let upserted = 0;
-    for (const item of items) {
-      try {
-        const listing = mapParsedToListing(item);
-        await upsertListing(listing);
-        upserted++;
-      } catch (e) {
-        console.error('UPSERT_FROM_PARSER_ERROR', e?.message, { fedresurs_id: item?.parsed_data?.fedresurs_id || item?.fedresurs_data?.guid });
-      }
-    }
-
-    return res.json({
-      ok: true,
-      region_code,
-      received: items.length,
-      upserted,
-      offset: Number(offset),
-      limit: Number(limit),
-      total_found: totalFound,
-    });
-  } catch (err) {
-    console.error('admin ingest fedresurs error:', err);
-    return res.status(500).json({ error: 'ingest failed', message: err?.message });
   }
-});
+  return null;
+}
 
-// ==================== /НОВОЕ ====================
+function formatCreatedAt(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('ru-RU');
+}
 
-server.listen(PORT, () => console.log(`API listening on ${PORT}`));
+function resolveSearchTerm(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed || DEFAULT_SEARCH_TERM;
+}
+
+function cleanFilters(input = {}) {
+  const result = {};
+  Object.entries(input || {}).forEach(([key, rawValue]) => {
+    if (rawValue == null) return;
+    if (Array.isArray(rawValue)) {
+      const normalized = rawValue
+        .map((entry) => {
+          if (entry == null) return null;
+          const text = typeof entry === 'string' ? entry.trim() : String(entry);
+          return text === '' ? null : text;
+        })
+        .filter(Boolean);
+      if (!normalized.length) return;
+      result[key] = Array.from(new Set(normalized));
+      return;
+    }
+    const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+    if (value === '') return;
+    result[key] = value;
+  });
+  return result;
+}
+
+function pickPrimaryRegionCode(value) {
+  if (value == null) return '';
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (entry == null) continue;
+      const text = typeof entry === 'string' ? entry.trim() : String(entry);
+      if (text) return text;
+    }
+    return '';
+  }
+  if (typeof value === 'string') return value.trim();
+  const text = String(value);
+  return text === 'undefined' ? '' : text;
+}
+
+function extractRegionCodes(value) {
+  const result = [];
+  const seen = new Set();
+  const list = Array.isArray(value) ? value : value == null ? [] : [value];
+  list
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .forEach((entry) => {
+      if (entry == null) return;
+      const text = typeof entry === 'string' ? entry.trim() : String(entry);
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      result.push(text);
+    });
+  return result;
+}
+
+function formatNumber(value) {
+  if (value == null) return DASH;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    try {
+      return new Intl.NumberFormat('ru-RU').format(numeric);
+    } catch {
+      return String(numeric);
+    }
+  }
+  return String(value);
+}
+
+function safeJsonParse(payload) {
+  try {
+    return JSON.parse(payload);
+  } catch (error) {
+    console.warn('Failed to parse SSE payload', error);
+    return null;
+  }
+}
+
+function normalizeStreamItem(item) {
+  const parsed = item?.parsed_data ?? {};
+  const fedresurs = item?.fedresurs_data ?? {};
+
+  const idBase = parsed.id || parsed.guid || fedresurs.id || fedresurs.guid || fedresurs.number || Date.now();
+  const title = pickFirstText(parsed.title, parsed.name, fedresurs.title, fedresurs.name, 'Лот');
+  const region = pickFirstText(parsed.region, parsed.region_name, fedresurs.region, fedresurs.region_code);
+  const tradeType = pickFirstText(
+    parsed.trade_type,
+    parsed.tradeType,
+    parsed.trade_type_code,
+    fedresurs.trade_type,
+    fedresurs.tradeType,
+  );
+  const startPrice =
+    parsed.start_price
+    ?? parsed.price
+    ?? parsed.price_start
+    ?? parsed.startPrice
+    ?? fedresurs.start_price
+    ?? fedresurs.price
+    ?? fedresurs.price_start;
+  const finishDate = pickFirstText(
+    parsed.date_finish,
+    parsed.finish_date,
+    parsed.dateEnd,
+    parsed.close_date,
+    fedresurs.date_finish,
+    fedresurs.dateEnd,
+  );
+  const sourceUrl = pickFirstText(
+    parsed.source_url,
+    parsed.url,
+    parsed.lot_url,
+    fedresurs.source_url,
+    fedresurs.url,
+    fedresurs.lot_href,
+  );
+
+  return {
+    id: `stream-${idBase}`,
+    title,
+    region,
+    trade_type: tradeType,
+    start_price: startPrice,
+    date_finish: finishDate,
+    trade_place: parsed.trade_place || parsed.site || fedresurs.trade_place,
+    source_url: sourceUrl,
+    currency: parsed.currency || fedresurs.currency || 'RUB',
+    created_at: parsed.created_at || parsed.createdAt || new Date().toISOString(),
+    parsed_data: parsed,
+    fedresurs_data: fedresurs,
+  };
+}
+
+function loadStoredFilters() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return cleanFilters(parsed);
+  } catch (error) {
+    console.warn('Failed to read admin filters from storage', error);
+    return {};
+  }
+}
+
+// Функция для прикрепления обработчиков SSE
+function attachSseHandlers(es, {
+  setParseStreamError,
+  setParsingAll,
+  setParseStreamMeta,
+  setParseStreamProgress,
+  setLastEventId,
+  setItems,
+  stopParseStream,
+  loadPage,
+  persistStreamState,
+  parseStreamProgressRef,
+  parseStreamLastEventIdRef,
+}) {
+  let reconnectNoticeTimer = null;
+  const recordEventId = (evt) => {
+    const evtId = evt?.lastEventId;
+    if (!evtId) return;
+    setLastEventId(evtId);
+    if (parseStreamLastEventIdRef) {
+      parseStreamLastEventIdRef.current = evtId;
+    }
+    persistStreamState({ last_event_id: evtId, active: true });
+  };
+
+  const showReconnectNotice = () => {
+    setParseStreamError((prev) => prev || 'Соединение потеряно. Переподключаемся…');
+    setParsingAll(true);
+    persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
+  };
+
+  es.onopen = () => {
+    if (reconnectNoticeTimer) {
+      clearTimeout(reconnectNoticeTimer);
+      reconnectNoticeTimer = null;
+    }
+    setParseStreamError(null);
+    setParsingAll(true);
+    persistStreamState({ error: null, active: true });
+  };
+
+  es.addEventListener('meta', (event) => {
+    recordEventId(event);
+    const data = safeJsonParse(event.data);
+    if (!data) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamMeta(data);
+    setParseStreamProgress((prev) => ({
+      ...prev,
+      stage: data.stage || prev?.stage,
+      total_found: data.total_found ?? prev?.total_found,
+    }));
+    persistStreamState({ meta: data, active: true, error: null });
+  });
+
+  es.addEventListener('progress', (event) => {
+    recordEventId(event);
+    const data = safeJsonParse(event.data);
+    if (!data) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamProgress(data);
+    persistStreamState({ progress: data, active: true, error: null });
+  });
+
+  es.addEventListener('item', (event) => {
+    recordEventId(event);
+    const data = safeJsonParse(event.data);
+    if (!data?.item) return;
+
+    setParseStreamError(null);
+    setParsingAll(true);
+    setParseStreamProgress((prev) => ({
+      ...prev,
+      stage: data.stage || prev?.stage,
+      parsed: data.parsed ?? ((prev?.parsed ?? 0) + 1),
+      total_found: data.total_found ?? prev?.total_found,
+    }));
+
+    persistStreamState({
+      progress: {
+        ...data,
+        parsed: data.parsed ?? ((parseStreamProgressRef.current?.parsed ?? 0) + 1),
+      },
+      active: true,
+      error: null,
+    });
+
+    setItems((prev) => {
+      const normalized = normalizeStreamItem(data.item);
+      return [normalized, ...prev].slice(0, MAX_STREAM_ITEMS);
+    });
+  });
+
+  es.addEventListener('done', (event) => {
+    recordEventId(event);
+    const data = safeJsonParse(event.data) || {};
+    setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
+    setParseStreamError(null);
+    setParsingAll(false);
+
+    // Очищаем jobId из localStorage при завершении
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+
+    stopParseStream();
+    loadPage(1);
+
+    persistStreamState({
+      active: false,
+      error: null,
+      progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
+      last_event_id: parseStreamLastEventIdRef?.current || null,
+    });
+  });
+
+  es.addEventListener('error', (event) => {
+    recordEventId(event);
+    const data = event?.data ? safeJsonParse(event.data) : null;
+    const detail = data?.detail || data?.message || 'Ошибка парсера';
+
+    // Очищаем jobId из localStorage при ошибке
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+
+    setParseStreamError(detail);
+    setParsingAll(false);
+    stopParseStream();
+    persistStreamState({ error: detail, active: false, last_event_id: parseStreamLastEventIdRef?.current || null });
+  });
+
+  // Обработчик сетевых ошибок (не закрываем соединение)
+  es.onerror = () => {
+    if (!reconnectNoticeTimer) {
+      reconnectNoticeTimer = setTimeout(() => {
+        reconnectNoticeTimer = null;
+        showReconnectNotice();
+      }, 500);
+    }
+  };
+}
+
+export default function AdminParserTradesPage() {
+  const router = useRouter();
+  const initialStreamState = useMemo(() => readStoredParseStreamState(), []);
+  const [items, setItems] = useState([]);
+  const [filters, setFilters] = useState(() => loadStoredFilters());
+  const filtersRef = useRef(filters);
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [listLoading, setListLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
+  const [parsingAll, setParsingAll] = useState(Boolean(initialStreamState?.active));
+  const [publishingId, setPublishingId] = useState(null);
+  const [waitingId, setWaitingId] = useState(null);
+  const [unpublishingId, setUnpublishingId] = useState(null);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [lastIngest, setLastIngest] = useState(null);
+  const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
+  const [view, setView] = useState('drafts');
+  const queryView = router.query?.view;
+  const parseStreamRef = useRef(null);
+  const [parseStreamMeta, setParseStreamMeta] = useState(initialStreamState?.meta || null);
+  const [parseStreamProgress, setParseStreamProgress] = useState(initialStreamState?.progress || null);
+  const [parseStreamError, setParseStreamError] = useState(initialStreamState?.error || null);
+  const [parseStreamLastEventId, setParseStreamLastEventId] = useState(initialStreamState?.last_event_id || null);
+  const parseStreamMetaRef = useRef(parseStreamMeta);
+  const parseStreamProgressRef = useRef(parseStreamProgress);
+  const parseStreamErrorRef = useRef(parseStreamError);
+  const parseStreamLastEventIdRef = useRef(parseStreamLastEventId);
+  const parsingAllRef = useRef(parsingAll);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const rawView = queryView;
+    const viewParam = Array.isArray(rawView) ? rawView[0] : rawView;
+    const normalized = viewParam === 'published' || viewParam === 'waiting' ? viewParam : 'drafts';
+    setView((prev) => (prev === normalized ? prev : normalized));
+  }, [router.isReady, queryView]);
+
+  useEffect(() => {
+    parseStreamMetaRef.current = parseStreamMeta;
+  }, [parseStreamMeta]);
+
+  useEffect(() => {
+    parseStreamProgressRef.current = parseStreamProgress;
+  }, [parseStreamProgress]);
+
+  useEffect(() => {
+    parseStreamErrorRef.current = parseStreamError;
+  }, [parseStreamError]);
+
+  useEffect(() => {
+    parseStreamLastEventIdRef.current = parseStreamLastEventId;
+  }, [parseStreamLastEventId]);
+
+  useEffect(() => {
+    parsingAllRef.current = parsingAll;
+  }, [parsingAll]);
+
+  const persistStreamState = useCallback(
+    (overrides = {}) => {
+      const meta = overrides.meta !== undefined ? overrides.meta : parseStreamMetaRef.current;
+      const progress = overrides.progress !== undefined ? overrides.progress : parseStreamProgressRef.current;
+      const error = overrides.error !== undefined ? overrides.error : parseStreamErrorRef.current;
+      const active = overrides.active !== undefined ? overrides.active : parsingAllRef.current;
+      const lastEventId = overrides.last_event_id !== undefined
+        ? overrides.last_event_id
+        : parseStreamLastEventIdRef.current;
+
+      if (!meta && !progress && !error && !active && !lastEventId) {
+        persistParseStreamState(null);
+        return;
+      }
+
+      persistParseStreamState({
+        meta,
+        progress,
+        error,
+        active,
+        last_event_id: lastEventId,
+        updated_at: new Date().toISOString(),
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    persistStreamState();
+  }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStorage = (event) => {
+      if (event.key && event.key !== PARSE_STREAM_STORAGE_KEY) return;
+      const stored = readStoredParseStreamState();
+      setParsingAll(Boolean(stored?.active));
+      setParseStreamMeta(stored?.meta || null);
+      setParseStreamProgress(stored?.progress || null);
+      setParseStreamError(stored?.error || null);
+      setParseStreamLastEventId(stored?.last_event_id || null);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Автоподключение после перезагрузки страницы
+  useEffect(() => {
+    const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
+    if (!jobId) return;
+
+    const storedState = readStoredParseStreamState();
+    if (!storedState?.active) return;
+
+    const resumeLastEventId = storedState?.last_event_id || null;
+    setParseStreamLastEventId(resumeLastEventId);
+    parseStreamLastEventIdRef.current = resumeLastEventId;
+    const resumeQuery = resumeLastEventId ? `&lastEventId=${encodeURIComponent(resumeLastEventId)}` : '';
+    const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}${resumeQuery}`);
+    parseStreamRef.current = es;
+
+    // Прикрепляем обработчики SSE
+    attachSseHandlers(es, {
+      setParseStreamError,
+      setParsingAll,
+      setParseStreamMeta,
+      setParseStreamProgress,
+      setLastEventId: setParseStreamLastEventId,
+      setItems,
+      stopParseStream,
+      loadPage,
+      persistStreamState,
+      parseStreamProgressRef,
+      parseStreamLastEventIdRef,
+    });
+
+    // Очистка при размонтировании компонента
+    return () => {
+      if (parseStreamRef.current) {
+        parseStreamRef.current.close();
+        parseStreamRef.current = null;
+      }
+    };
+  }, []); // Пустой массив зависимостей - выполняется только при монтировании
+
+  const changeView = useCallback(
+    (nextView) => {
+      setView(nextView);
+      setItems([]);
+      setPage(1);
+      setPageCount(1);
+      setPublishingId(null);
+      setWaitingId(null);
+      setUnpublishingId(null);
+      setListLoading(true);
+      setIngesting(false);
+      if (!router.isReady) return;
+      const nextQuery = { ...router.query };
+      if (nextView === 'published') {
+        nextQuery.view = 'published';
+      } else if (nextView === 'waiting') {
+        nextQuery.view = 'waiting';
+      } else {
+        delete nextQuery.view;
+      }
+      router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+    },
+    [router],
+  );
+
+  const applyProgress = useCallback((progress) => {
+    if (!progress || typeof progress !== 'object') {
+      setProgressSearchTerm(DEFAULT_SEARCH_TERM);
+      setNextOffset(0);
+      setLastIngest(null);
+      return;
+    }
+
+    const toInt = (value, fallback = 0) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const searchTerm =
+      typeof progress.search_term === 'string' && progress.search_term.trim()
+        ? progress.search_term
+        : DEFAULT_SEARCH_TERM;
+    setProgressSearchTerm(searchTerm);
+
+    const next = toInt(progress.next_offset, 0);
+    setNextOffset(next);
+
+    const lastOffset = toInt(progress.last_offset, 0);
+    const received = toInt(progress.last_received, 0);
+    const upserted = toInt(progress.last_upserted, 0);
+    const limit = toInt(progress.last_limit, PARSER_PAGE_SIZE);
+    const totalFoundRaw = progress.total_found;
+    const totalFound = totalFoundRaw === null || totalFoundRaw === undefined ? null : toInt(totalFoundRaw, null);
+
+    let hasMore = null;
+    if (typeof progress.has_more === 'boolean') {
+      hasMore = progress.has_more;
+    } else if (totalFound != null) {
+      hasMore = next < totalFound;
+    }
+
+    const updatedAt = progress.updated_at || null;
+    const hasHistory = Boolean(
+      updatedAt || received > 0 || upserted > 0 || lastOffset > 0 || (totalFound != null && totalFound > 0),
+    );
+
+    setLastIngest(
+      hasHistory
+        ? {
+            offset: lastOffset,
+            received,
+            upserted,
+            limit,
+            nextOffset: next,
+            totalFound,
+            hasMore,
+            updatedAt,
+            searchTerm,
+          }
+        : null,
+    );
+  }, []);
+
+  const fetchProgress = useCallback(
+    async (searchTerm, regionCode) => {
+      if (!API_BASE) {
+        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        console.warn('No admin token found. Skip progress fetch.');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      const normalizedSearch = typeof searchTerm === 'string' ? searchTerm.trim() : '';
+      if (normalizedSearch) {
+        params.set('search', resolveSearchTerm(normalizedSearch));
+      }
+      const normalizedRegion = pickPrimaryRegionCode(regionCode);
+      if (normalizedRegion) {
+        params.set('region_code', normalizedRegion);
+      }
+
+      const qs = params.toString();
+      const url = qs ? `${API_BASE}/api/admin/parser-progress?${qs}` : `${API_BASE}/api/admin/parser-progress`;
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'failed');
+        }
+        applyProgress(data);
+      } catch (error) {
+        console.error('fetchProgress error:', error);
+      }
+    },
+    [applyProgress],
+  );
+
+  const loadPage = useCallback(
+    async (nextPage = 1, filtersOverride) => {
+      if (!API_BASE) {
+        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Для доступа в раздел авторизуйтесь под админ-аккаунтом.');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      const activeFilters = cleanFilters(filtersOverride ?? filtersRef.current);
+      if (activeFilters.q) params.set('q', activeFilters.q);
+      if (activeFilters.region_code) {
+        const regionFilter = activeFilters.region_code;
+        if (Array.isArray(regionFilter)) {
+          regionFilter.forEach((code) => {
+            if (code) params.append('region_code', code);
+          });
+        } else {
+          params.set('region_code', regionFilter);
+        }
+      } else if (activeFilters.region) {
+        params.set('region_code', activeFilters.region);
+      }
+      if (activeFilters.city) params.set('city', activeFilters.city);
+      if (activeFilters.brand) params.set('brand', activeFilters.brand);
+      if (activeFilters.trade_type) params.set('trade_type', activeFilters.trade_type);
+      if (activeFilters.minPrice) params.set('minPrice', activeFilters.minPrice);
+      if (activeFilters.maxPrice) params.set('maxPrice', activeFilters.maxPrice);
+      params.set('page', String(nextPage));
+      params.set('limit', String(PAGE_SIZE));
+      const status = view === 'published' ? 'published' : view === 'waiting' ? 'waiting' : 'drafts';
+      params.set('status', status);
+
+      setListLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
+        }
+
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setPage(data.page || nextPage);
+        setPageCount(data.pageCount || 1);
+        setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
+      } catch (error) {
+        console.error('loadPage error:', error);
+        alert(error.message || 'Ошибка запроса');
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [view],
+  );
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    loadPage(1);
+  }, [loadPage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    } catch (error) {
+      console.warn('Failed to persist admin filters', error);
+    }
+  }, [filters]);
+
+  const stopParseStream = useCallback(() => {
+    if (parseStreamRef.current) {
+      parseStreamRef.current.close();
+      parseStreamRef.current = null;
+    }
+  }, []);
+
+  const resetParseStreamState = useCallback(() => {
+    setParsingAll(false);
+    setParseStreamMeta(null);
+    setParseStreamProgress(null);
+    setParseStreamError(null);
+    setParseStreamLastEventId(null);
+    parseStreamLastEventIdRef.current = null;
+    stopParseStream();
+    persistParseStreamState(null);
+    // Очищаем jobId из localStorage при сбросе статуса
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+  }, [stopParseStream, persistParseStreamState]);
+
+  useEffect(() => () => {
+    stopParseStream();
+  }, [stopParseStream]);
+
+  useEffect(() => {
+    if (view === 'drafts') {
+      const searchTerm = filters.q || '';
+      const primaryRegionCode = pickPrimaryRegionCode(filters.region_code);
+      fetchProgress(searchTerm, primaryRegionCode);
+    } else {
+      applyProgress(null);
+    }
+  }, [view, fetchProgress, applyProgress, filters.q, filters.region_code]);
+
+  useEffect(() => {
+    if (!initialStreamState?.active) return;
+
+    const updatedAtMs = initialStreamState?.updated_at ? Date.parse(initialStreamState.updated_at) : NaN;
+    const isStale = Number.isFinite(updatedAtMs)
+      ? Date.now() - updatedAtMs > PARSE_STREAM_STATE_TTL_MS
+      : false;
+
+    if (isStale) {
+      resetParseStreamState();
+    }
+  }, [initialStreamState, resetParseStreamState]);
+
+  const handleFilterSearch = useCallback(
+    (nextFilters) => {
+      const cleaned = cleanFilters(nextFilters);
+      setFilters(cleaned);
+      filtersRef.current = cleaned;
+      setPage(1);
+      loadPage(1, cleaned);
+    },
+    [loadPage],
+  );
+
+  const runParseAll = useCallback(async () => {
+    if (view !== 'drafts') return;
+    if (!API_BASE) {
+      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно запустить полный парсинг.');
+      return;
+    }
+
+    const token = readToken();
+    if (!token) {
+      alert('Сначала войдите в админ-аккаунт.');
+      return;
+    }
+
+    const searchTerm = resolveSearchTerm(filters.q || '');
+    let selectedRegions = extractRegionCodes(filters.region_code);
+    if (!selectedRegions.length && filters.region) {
+      selectedRegions = extractRegionCodes(filters.region);
+    }
+
+    if (!selectedRegions.length) {
+      alert('Выберите регион для полного парсинга.');
+      return;
+    }
+
+    setParsingAll(true);
+    setParseStreamError(null);
+    setParseStreamMeta(null);
+    setParseStreamProgress(null);
+    setParseStreamLastEventId(null);
+    parseStreamLastEventIdRef.current = null;
+    stopParseStream();
+
+    try {
+      // 1. Сначала отправляем POST запрос для запуска задачи парсинга
+      const startRes = await fetch(`${API_BASE}/api/parser/fedresurs/all/start`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          search_string: searchTerm,
+          limit: PARSER_PAGE_SIZE,
+          only_available: true,
+          start_date: filters.start_date || null,
+          end_date: filters.end_date || null,
+          region_codes: selectedRegions,
+          region_code: selectedRegions.length === 1 ? selectedRegions[0] : null,
+        }),
+      });
+      
+      const startData = await startRes.json().catch(() => ({}));
+      const jobId = startData?.jobId;
+      if (!startRes.ok || !jobId) {
+        const detail = startData?.error || startData?.detail || 'گ?گç ‘?گ?گّگ>گ?‘?‘? گْگّگُ‘?‘?‘'گٌ‘'‘? گْگّگ?گّ‘ط‘? گُگّ‘?‘?گٌگ?گ?گّ';
+        throw new Error(detail);
+      }
+      
+      // Сохраняем jobId в localStorage для возможности переподключения
+      localStorage.setItem(PARSE_JOB_ID_KEY, jobId);
+      persistStreamState({ active: true, last_event_id: null, meta: null, progress: null, error: null });
+
+      // 2. Подключаемся к SSE-потоку с полученным jobId
+      const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}`);
+      parseStreamRef.current = es;
+
+      // Прикрепляем обработчики SSE
+      attachSseHandlers(es, {
+        setParseStreamError,
+        setParsingAll,
+        setParseStreamMeta,
+        setParseStreamProgress,
+        setLastEventId: setParseStreamLastEventId,
+        setItems,
+        stopParseStream,
+        loadPage,
+        persistStreamState,
+        parseStreamProgressRef,
+        parseStreamLastEventIdRef,
+      });
+
+    } catch (error) {
+      console.error('Failed to start parse job:', error);
+      setParseStreamError('Не удалось запустить задачу парсинга');
+      setParsingAll(false);
+      setParseStreamLastEventId(null);
+      parseStreamLastEventIdRef.current = null;
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(PARSE_JOB_ID_KEY);
+      }
+      persistStreamState({ error: 'Не удалось запустить задачу парсинга', active: false, last_event_id: null });
+    }
+  }, [filters, view, stopParseStream, loadPage, persistStreamState]);
+
+  const runIngest = useCallback(
+    async ({ reset = false } = {}) => {
+      if (view !== 'drafts') return;
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      const searchTerm = resolveSearchTerm(filters.q || '');
+      let selectedRegions = extractRegionCodes(filters.region_code);
+      if (!selectedRegions.length && filters.region) {
+        selectedRegions = extractRegionCodes(filters.region);
+      }
+      if (!selectedRegions.length) {
+        alert('Выберите хотя бы один регион перед запуском парсинга.');
+        return;
+      }
+      const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
+      const offsetToUse = reset ? 0 : nextOffset;
+
+      const payload = {
+        search: searchTerm,
+        limit: PARSER_PAGE_SIZE,
+        reset: Boolean(reset),
+        region_codes: selectedRegions,
+      };
+
+      if (selectedRegions.length === 1) {
+        payload.region_code = selectedRegions[0];
+      }
+
+      if (!reset) {
+        const offsetsMap = {};
+        if (primaryRegionCode && Number.isFinite(Number(offsetToUse))) {
+          offsetsMap[primaryRegionCode] = Number(offsetToUse);
+        }
+        if (Object.keys(offsetsMap).length) {
+          payload.offset_map = offsetsMap;
+        }
+        if (selectedRegions.length === 1 && Number.isFinite(Number(offsetToUse))) {
+          payload.offset = Number(offsetToUse);
+        }
+      } else if (selectedRegions.length === 1) {
+        payload.offset = 0;
+      }
+
+      setIngesting(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/actions/ingest`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось запустить парсер');
+        }
+        const regionsResult = Array.isArray(data.regions) ? data.regions : [];
+        const targetRegion = regionsResult.find((entry) => entry.region_code === primaryRegionCode)
+          || regionsResult[0]
+          || null;
+
+        if (targetRegion && targetRegion.ok && targetRegion.progress) {
+          applyProgress(targetRegion.progress);
+        } else if (data.progress) {
+          applyProgress(data.progress);
+        } else if (targetRegion && targetRegion.progress) {
+          applyProgress(targetRegion.progress);
+        }
+
+        if (regionsResult.length) {
+          const summaryLines = regionsResult.map((entry) => {
+            const label = entry.region || entry.region_code || 'Регион';
+            if (!entry.ok) {
+              const message = entry.error?.message || data.error || 'Ошибка парсинга';
+              return `⚠️ ${label}: ${message}`;
+            }
+            const receivedCount = Number.isFinite(Number(entry.received)) ? Number(entry.received) : 0;
+            const upsertedCount = Number.isFinite(Number(entry.upserted)) ? Number(entry.upserted) : 0;
+            const nextValue = Number.isFinite(Number(entry.next_offset))
+              ? Number(entry.next_offset)
+              : entry.next_offset ?? '—';
+            return `• ${label}: получено ${receivedCount}, сохранено ${upsertedCount}, следующий offset ${nextValue}`;
+          });
+          const header = data.ok === false ? 'Парсер завершён с ошибками:' : 'Парсер завершён:';
+          alert(`${header}\n${summaryLines.join('\n')}`);
+        } else {
+          const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
+          const receivedCount = Number.isFinite(Number(data.received)) ? Number(data.received) : 0;
+          const limitUsed = Number.isFinite(Number(data.limit)) ? Number(data.limit) : PARSER_PAGE_SIZE;
+          const upsertedCount = Number.isFinite(Number(data.upserted)) ? Number(data.upserted) : 0;
+          const fallbackProgress = {
+            search_term: searchTerm,
+            region_code: primaryRegionCode,
+            next_offset: Number.isFinite(Number(data.next_offset))
+              ? Number(data.next_offset)
+              : baseOffset + (receivedCount || limitUsed),
+            last_offset: baseOffset,
+            last_received: receivedCount,
+            last_upserted: upsertedCount,
+            last_limit: limitUsed,
+            total_found: data.parser_meta?.total_found ?? null,
+            has_more: data.parser_meta?.has_more ?? null,
+            updated_at: new Date().toISOString(),
+          };
+          applyProgress(fallbackProgress);
+          alert(
+            `Получено: ${receivedCount}, сохранено/обновлено: ${upsertedCount}. `
+              + `Текущий offset: ${baseOffset}, следующий: ${Number(data.next_offset) || nextOffset}.`,
+          );
+        }
+
+        await loadPage(1);
+        if (primaryRegionCode) {
+          await fetchProgress(searchTerm, primaryRegionCode);
+        }
+      } catch (error) {
+        console.error('ingest error:', error);
+        alert(`Ошибка: ${error.message || 'ingest failed'}`);
+      } finally {
+        setIngesting(false);
+      }
+    },
+    [filters, loadPage, nextOffset, applyProgress, fetchProgress, view],
+  );
+
+  const publish = useCallback(
+    async (id) => {
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      setPublishingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/publish`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        alert('Объявление опубликовано на сайте.');
+        await loadPage(page);
+      } catch (error) {
+        console.error('publish error:', error);
+        alert(`Ошибка публикации: ${error.message || 'failed'}`);
+      } finally {
+        setPublishingId(null);
+      }
+    },
+    [page, loadPage],
+  );
+
+  const addToWaiting = useCallback(
+    async (id) => {
+      if (view === 'published') return;
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно добавить объявление в ожидание.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      setWaitingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/wait`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        alert('Объявление добавлено в раздел ожидания публикации.');
+        await loadPage(page);
+      } catch (error) {
+        console.error('waiting error:', error);
+        alert(`Ошибка отправки в ожидание: ${error.message || 'failed'}`);
+      } finally {
+        setWaitingId(null);
+      }
+    },
+    [page, loadPage, view],
+  );
+
+  const unpublish = useCallback(
+    async (id) => {
+      if (view !== 'published') return;
+      if (!API_BASE) {
+        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно снять объявление с публикации.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Сначала войдите в админ-аккаунт.');
+        return;
+      }
+
+      if (typeof window !== 'undefined') {
+        const confirmed = window.confirm('Снять объявление с публикации? Оно исчезнет из раздела /trades.');
+        if (!confirmed) return;
+      }
+
+      setUnpublishingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades/${id}/unpublish`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error((data && data.error) || 'failed');
+        }
+
+        alert('Объявление снято с публикации и скрыто из раздела /trades.');
+        await loadPage(page);
+      } catch (error) {
+        console.error('unpublish error:', error);
+        alert(`Ошибка снятия с публикации: ${error.message || 'failed'}`);
+      } finally {
+        setUnpublishingId(null);
+      }
+    },
+    [page, loadPage, view],
+  );
+
+  const isPublishedView = view === 'published';
+  const isWaitingView = view === 'waiting';
+  const isDraftsView = !isPublishedView && !isWaitingView;
+  const pageTitle = isPublishedView
+    ? 'Админка — Опубликованные объявления'
+    : isWaitingView
+      ? 'Админка — Объявления в ожидании'
+      : 'Админка — Объявления (из парсера)';
+  const canGoPrev = page > 1;
+  const canGoNext = page < pageCount;
+  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые с Федресурса';
+  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё с парсера';
+  const parseAllLabel = parsingAll ? 'Парсим все…' : 'СПАРСИТЬ ВСЕ';
+  const ingestDisabled = ingesting || parsingAll;
+  const streamStage = parseStreamProgress?.stage || parseStreamMeta?.stage;
+  const streamParsed = Number.isFinite(Number(parseStreamProgress?.parsed))
+    ? Number(parseStreamProgress.parsed)
+    : null;
+  const streamTotalFound = Number.isFinite(Number(parseStreamProgress?.total_found))
+    ? Number(parseStreamProgress.total_found)
+    : Number.isFinite(Number(parseStreamMeta?.total_found))
+      ? Number(parseStreamMeta.total_found)
+      : null;
+  const streamCollected = Number.isFinite(Number(parseStreamProgress?.collected))
+    ? Number(parseStreamProgress.collected)
+    : null;
+  const streamOffset = Number.isFinite(Number(parseStreamProgress?.offset))
+    ? Number(parseStreamProgress.offset)
+    : null;
+  const streamRegions = Array.isArray(parseStreamMeta?.region_codes)
+    ? parseStreamMeta.region_codes
+    : parseStreamMeta?.region_code
+      ? [parseStreamMeta.region_code]
+      : null;
+  const filterInitial = useMemo(() => ({ ...filters }), [filters]);
+
+  return (
+    <div className="container">
+      <div className="admin-page">
+        <div style={{ marginBottom: 12 }}>
+          <Link
+            href="/admin"
+            className="link"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <span aria-hidden="true">←</span>
+            <span>Админ-панель</span>
+          </Link>
+        </div>
+        <div className="admin-page__header">
+          <h1 className="admin-page__title">{pageTitle}</h1>
+          <p className="admin-page__subtitle">
+            {isPublishedView
+              ? 'Редактируйте объявления, которые уже опубликованы на сайте.'
+              : isWaitingView
+                ? 'Подготовленные объявления, которые ожидают финальной проверки перед публикацией.'
+                : 'Отслеживайте свежие объявления из парсера и готовьте их к публикации.'}
+          </p>
+        </div>
+
+        <div className="admin-tabs">
+          <button
+            type="button"
+            className={`admin-segment ${isDraftsView ? 'is-active' : ''}`}
+            onClick={() => changeView('drafts')}
+            disabled={view === 'drafts'}
+          >
+            Неопубликованные
+          </button>
+          <button
+            type="button"
+            className={`admin-segment ${isWaitingView ? 'is-active' : ''}`}
+            onClick={() => changeView('waiting')}
+            disabled={view === 'waiting'}
+          >
+            Ожидание
+          </button>
+          <button
+            type="button"
+            className={`admin-segment ${isPublishedView ? 'is-active' : ''}`}
+            onClick={() => changeView('published')}
+            disabled={view === 'published'}
+          >
+            Опубликованные
+          </button>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <FilterBar
+            onSearch={handleFilterSearch}
+            initial={filterInitial}
+            favoritesCount={0}
+            showFavoritesLink={false}
+            showCityFilter={false}
+          />
+        </div>
+
+        {isDraftsView ? (
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              marginTop: 12,
+              alignItems: 'center',
+            }}
+          >
+            <button
+              type="button"
+              className="button button-small button-outline"
+              onClick={() => runIngest({ reset: true })}
+              disabled={ingestDisabled}
+            >
+              {ingestPrimaryLabel}
+            </button>
+            <button
+              type="button"
+              className="button button-small button-outline"
+              onClick={() => runIngest({ reset: false })}
+              disabled={ingestDisabled}
+            >
+              {ingestMoreLabel}
+            </button>
+            <button
+              type="button"
+              className="button button-small button-outline"
+              onClick={runParseAll}
+              disabled={ingestDisabled}
+            >
+              {parseAllLabel}
+            </button>
+          </div>
+        ) : null}
+
+        {isDraftsView && (parseStreamMeta || parseStreamProgress || parseStreamError) ? (
+          <div className="admin-hint-card" style={{ marginTop: 12 }}>
+            <div
+              className="admin-hint-card__title"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
+            >
+              <span>{parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}</span>
+              <button type="button" className="button button-small button-ghost" onClick={resetParseStreamState}>
+                Сбросить статус
+              </button>
+            </div>
+            <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 6 }}>
+              <span>
+                Запрос: <strong>{parseStreamMeta?.search_string || progressSearchTerm}</strong>
+              </span>
+              {streamRegions ? (
+                <span>
+                  Регионы: <strong>{streamRegions.join(', ')}</strong>
+                </span>
+              ) : null}
+              {streamStage ? (
+                <span>
+                  Стадия: <strong>{streamStage}</strong>
+                </span>
+              ) : null}
+              {streamCollected != null ? (
+                <span>
+                  Собрано: <strong>{formatNumber(streamCollected)}</strong>
+                </span>
+              ) : null}
+              {streamOffset != null ? (
+                <span>
+                  Текущий offset: <strong>{formatNumber(streamOffset)}</strong>
+                </span>
+              ) : null}
+              {streamTotalFound != null ? (
+                <span>
+                  Найдено всего: <strong>{formatNumber(streamTotalFound)}</strong>
+                </span>
+              ) : null}
+              {streamParsed != null ? (
+                <span>
+                  Распарсено: <strong>{formatNumber(streamParsed)}</strong>
+                </span>
+              ) : null}
+            </div>
+            {parseStreamError ? (
+              <div className="admin-hint-card__meta" style={{ color: '#b91c1c' }}>
+                Ошибка: {parseStreamError}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isPublishedView ? (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Опубликованные объявления</div>
+            <p className="admin-hint-card__text">
+              Здесь собраны объявления, которые уже видят пользователи сайта. Вы можете обновить данные или снять лот при необходимости.
+            </p>
+          </div>
+        ) : isWaitingView ? (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Ожидающие публикации</div>
+            <p className="admin-hint-card__text">
+              Эти объявления прошли подготовку и ждут финальной загрузки фотографий или документов. После проверки опубликуйте их на сайте.
+            </p>
+          </div>
+        ) : (
+          <div className="admin-hint-card">
+            <div className="admin-hint-card__title">Статус загрузки парсера</div>
+            <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 8 }}>
+              <span>
+                Обьявлений в базе парсера: <strong>{formatNumber(lastIngest?.totalFound ?? totalCount ?? 0)}</strong>
+              </span>
+              <span>
+                Обьявлений в категории «Непопубликованные»: <strong>{formatNumber(totalCount)}</strong>
+              </span>
+              <span>
+                Обновлено: {lastIngest?.updatedAt ? formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt : DASH}
+              </span>
+            </div>
+            <div className="admin-hint-card__note">
+              Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset <strong>{nextOffset}</strong>.
+            </div>
+            {!lastIngest ? (
+              <div className="admin-hint-card__footer">
+                Используйте кнопки выше, чтобы загрузить актуальные объявления по выбранному фильтру.
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <div className="admin-table-card">
+          <div className="admin-table-card__scroll">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Заголовок</th>
+                  <th>Регион</th>
+                  <th>Тип объявления</th>
+                  <th>Начальная цена</th>
+                  <th>Окончание</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td className="admin-table__empty" colSpan={6}>
+                      {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const createdAt = formatCreatedAt(item.created_at);
+                    const publishedAt = formatCreatedAt(item.published_at);
+                    const waitingAt = formatCreatedAt(item.waiting_at);
+                    const isPublishing = publishingId === item.id;
+                    const isWaiting = waitingId === item.id;
+                    const isUnpublishing = unpublishingId === item.id;
+                    const detailHref = {
+                      pathname: '/admin/listings/[id]',
+                      query: isPublishedView
+                        ? { id: item.id, view: 'published' }
+                        : isWaitingView
+                          ? { id: item.id, view: 'waiting' }
+                          : { id: item.id },
+                    };
+                    const tradeTypeLabel =
+                      pickFirstText(
+                        item.trade_type_label,
+                        item.resolved_trade_type_label,
+                        item?.lot_details?.trade_type_label,
+                        item?.details?.trade_type_label,
+                      );
+                    const tradeTypeValue =
+                      pickFirstText(
+                        item.trade_type_resolved,
+                        item.resolved_trade_type,
+                        item.normalized_trade_type,
+                        item.trade_type,
+                        item.tradeType,
+                        item?.lot_details?.trade_type,
+                        item?.details?.trade_type,
+                        tradeTypeLabel,
+                      );
+                    const tradeTypeCode = normalizeTradeTypeCode(tradeTypeValue);
+                    const tradeTypeText =
+                      tradeTypeLabel
+                      || formatTradeType(tradeTypeValue)
+                      || formatTradeType(tradeTypeLabel)
+                      || DASH;
+                    const tradeTypeCodeText = tradeTypeCode || tradeTypeValue;
+                    const timing = computeTradeTiming(item);
+                    const status = timing?.status;
+                    const finishDateText = formatDate(timing?.finishDate || item.date_finish);
+                    const statusColor = status?.color || '#334155';
+                    const statusBackground = status?.color ? `${status.color}1a` : 'rgba(148,163,184,0.12)';
+
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="admin-table__title">{item.title || 'Лот'}</div>
+                          <div className="admin-table__meta">
+                            {item.source_url ? (
+                              <a href={item.source_url} target="_blank" rel="noreferrer" className="link">
+                                Источник
+                              </a>
+                            ) : (
+                              <span>{DASH}</span>
+                            )}
+                            {createdAt ? <span>Создано: {createdAt}</span> : null}
+                          </div>
+                          {publishedAt ? (
+                            <div className="admin-table__meta">Опубликовано: {publishedAt}</div>
+                          ) : waitingAt ? (
+                            <div className="admin-table__meta">В ожидании: {waitingAt}</div>
+                          ) : null}
+                        </td>
+                        <td>{item.region || DASH}</td>
+                        <td>
+                          <div className="admin-table__value">{tradeTypeText}</div>
+                          {tradeTypeCodeText && tradeTypeText !== tradeTypeCodeText ? (
+                            <div className="admin-table__meta">Код: {tradeTypeCodeText}</div>
+                          ) : null}
+                        </td>
+                        <td>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
+                        <td>
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '6px 10px',
+                              borderRadius: 999,
+                              background: statusBackground,
+                              color: statusColor,
+                              fontWeight: 700,
+                              border: `1px solid ${status?.color ? `${status.color}33` : 'rgba(148,163,184,0.35)'}`,
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: statusColor,
+                                display: 'inline-block',
+                              }}
+                            />
+                            <span>{status?.label || 'Статус не определён'}</span>
+                          </div>
+                          {finishDateText ? (
+                            <div className="admin-table__meta">Окончание: {finishDateText}</div>
+                          ) : null}
+                          {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
+                        </td>
+                        <td>
+                          <Link
+                            href={detailHref}
+                            className="button button-small button-outline"
+                          >
+                            Открыть
+                          </Link>
+                          {isPublishedView ? (
+                            <button
+                              type="button"
+                              className="button button-small button-outline"
+                              onClick={() => unpublish(item.id)}
+                              disabled={isUnpublishing || listLoading}
+                              style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
+                            >
+                              {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
+                            </button>
+                          ) : isWaitingView ? (
+                            <button
+                              type="button"
+                              className="button button-small"
+                              onClick={() => publish(item.id)}
+                              disabled={isPublishing || listLoading}
+                            >
+                              {isPublishing ? 'Публикуем…' : 'Опубликовать'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button button-small"
+                              onClick={() => addToWaiting(item.id)}
+                              disabled={isWaiting || listLoading}
+                            >
+                              {isWaiting ? 'Отправляем…' : 'Ожидание'}
+                            </button>
+                          )}
+                          {item.source_url ? (
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="button button-small button-outline"
+                            >
+                              Источник
+                            </a>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="admin-pagination">
+          <button
+            type="button"
+            className="button button-small button-outline"
+            onClick={() => loadPage(page - 1)}
+            disabled={!canGoPrev || listLoading}
+          >
+            {ARROW_LEFT} Назад
+          </button>
+          <div className="admin-pagination__info">
+            Страница {page} из {pageCount}
+          </div>
+          <button
+            type="button"
+            className="button button-small button-outline"
+            onClick={() => loadPage(page + 1)}
+            disabled={!canGoNext || listLoading}
+          >
+            Вперёд {ARROW_RIGHT}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
