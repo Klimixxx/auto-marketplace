@@ -1311,7 +1311,7 @@ export default function AdminParserTradesPage() {
             className="link"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <span aria-hidden="true"><</span>
+            <span aria-hidden="true"></span>
             <span>Админ-панель</span>
           </Link>
         </div>
