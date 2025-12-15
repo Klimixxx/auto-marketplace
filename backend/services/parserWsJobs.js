@@ -23,13 +23,22 @@ function createDeferred() {
 }
 
 function broadcast(session, event, payload) {
+  const deadClients = [];
   for (const client of Array.from(session.clients)) {
     try {
-      client.emit(event, payload);
+      if (client.connected !== false) {
+        client.emit(event, payload);
+      } else {
+        deadClients.push(client);
+      }
     } catch (error) {
       console.error('Failed to emit parser event to client:', error?.message || error);
-      session.clients.delete(client);
+      deadClients.push(client);
     }
+  }
+  // Clean up dead clients
+  for (const client of deadClients) {
+    session.clients.delete(client);
   }
 }
 
@@ -81,11 +90,27 @@ function attachWebSocket(session) {
 
   ws.on('open', () => {
     session.reconnectDelay = 1_000;
+    console.log(`Parser WS opened for jobId=${session.jobId || 'new'}`);
     sendInit();
     // keepalive to prevent intermediaries from closing idle connection
     pingTimer = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        try { ws.ping(); } catch {}
+        try { 
+          ws.ping();
+        } catch (error) {
+          console.warn('Failed to send ping to parser WS:', error?.message || error);
+          // If ping fails, connection might be dead - clear timer
+          if (pingTimer) {
+            clearInterval(pingTimer);
+            pingTimer = null;
+          }
+        }
+      } else {
+        // Connection not open, clear timer
+        if (pingTimer) {
+          clearInterval(pingTimer);
+          pingTimer = null;
+        }
       }
     }, 20_000);
   });
@@ -94,7 +119,8 @@ function attachWebSocket(session) {
     let payload;
     try {
       payload = JSON.parse(raw.toString());
-    } catch {
+    } catch (error) {
+      console.warn('Failed to parse parser WS message:', error?.message || error);
       return;
     }
 
@@ -129,15 +155,22 @@ function attachWebSocket(session) {
         await upsertParserTrade(data.item);
       } catch (error) {
         console.error('Failed to persist parsed item:', error?.message || error);
+        // Don't return - continue to broadcast even if persistence fails
       }
     }
 
-    broadcast(session, 'parser:fedresurs:event', {
-      jobId: session.jobId,
-      event: eventName,
-      data,
-      id: payload?.id ?? null,
-    });
+    // Broadcast to clients, but don't fail if broadcast fails
+    try {
+      broadcast(session, 'parser:fedresurs:event', {
+        jobId: session.jobId,
+        event: eventName,
+        data,
+        id: payload?.id ?? null,
+      });
+    } catch (error) {
+      console.error('Failed to broadcast parser event:', error?.message || error);
+      // Continue processing even if broadcast fails
+    }
 
     if (eventName === 'done' || eventName === 'error' || eventName === 'stopped') {
       session.stopRequested = true;
@@ -145,12 +178,15 @@ function attachWebSocket(session) {
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', (code, reason) => {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
     session.ws = null;
+
+    const reasonStr = reason?.toString() || 'Unknown';
+    console.log(`Parser WS closed: code=${code}, reason=${reasonStr}, jobId=${session.jobId || 'none'}, clients=${session.clients.size}`);
 
     if (!session.started && !session.stopRequested) {
       session.startDeferred.reject?.(new Error('Upstream socket closed before start'));
@@ -162,13 +198,21 @@ function attachWebSocket(session) {
       return;
     }
 
-    session.reconnectDelay = Math.min(session.reconnectDelay * 2, 30_000);
-    setTimeout(() => attachWebSocket(session), session.reconnectDelay);
+    // Only reconnect if we have clients
+    if (session.clients.size > 0) {
+      session.reconnectDelay = Math.min(session.reconnectDelay * 2, 30_000);
+      console.log(`Reconnecting parser WS in ${session.reconnectDelay}ms for jobId=${session.jobId}`);
+      setTimeout(() => attachWebSocket(session), session.reconnectDelay);
+    } else {
+      console.log(`Not reconnecting parser WS - no clients for jobId=${session.jobId}`);
+      if (session.jobId) activeSessions.delete(session.jobId);
+    }
   });
 
   ws.on('error', (error) => {
-    console.error('Parser WS error:', error?.message || error);
-    try { ws.close(); } catch {}
+    console.error(`Parser WS error for jobId=${session.jobId || 'none'}:`, error?.message || error, error?.code || '');
+    // Don't close immediately - let 'close' event handle it
+    // This allows for better error recovery
   });
 }
 
