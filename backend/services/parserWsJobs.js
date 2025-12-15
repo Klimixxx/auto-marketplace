@@ -68,6 +68,7 @@ function attachWebSocket(session) {
   const upstreamUrl = new URL('/parse-fedresurs-trades-all-live', PARSER_BASE_URL);
   const ws = new WebSocket(toWsUrl(upstreamUrl.toString()));
   session.ws = ws;
+  let pingTimer = null;
 
   const sendInit = () => {
     try {
@@ -81,6 +82,12 @@ function attachWebSocket(session) {
   ws.on('open', () => {
     session.reconnectDelay = 1_000;
     sendInit();
+    // keepalive to prevent intermediaries from closing idle connection
+    pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.ping(); } catch {}
+      }
+    }, 20_000);
   });
 
   ws.on('message', async (raw) => {
@@ -139,6 +146,10 @@ function attachWebSocket(session) {
   });
 
   ws.on('close', () => {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
     session.ws = null;
 
     if (!session.started && !session.stopRequested) {
