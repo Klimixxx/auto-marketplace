@@ -397,6 +397,7 @@ function handleParserEvent(
 export default function AdminParserTradesPage() {
   const router = useRouter();
   const initialStreamState = useMemo(() => readStoredParseStreamState(), []);
+  const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState([]);
   const [filters, setFilters] = useState(() => loadStoredFilters());
   const filtersRef = useRef(filters);
@@ -457,6 +458,10 @@ export default function AdminParserTradesPage() {
   useEffect(() => {
     parseJobIdRef.current = parseJobId;
   }, [parseJobId]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1292,6 +1297,10 @@ export default function AdminParserTradesPage() {
       ? [parseStreamMeta.region_code]
       : null;
   const filterInitial = useMemo(() => ({ ...filters }), [filters]);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <div className="container">
