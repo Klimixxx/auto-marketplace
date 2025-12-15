@@ -153,6 +153,42 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       }
 
       reader = upstream.body.getReader();
+      const decoder = new TextDecoder();
+      const bufferRef = { buffer: '' };
+
+      const parseEventChunk = async (chunkText) => {
+        bufferRef.buffer += chunkText;
+
+        const segments = bufferRef.buffer.split(/\n\n/);
+        bufferRef.buffer = segments.pop() ?? '';
+
+        for (const segment of segments) {
+          const lines = segment.split(/\n/);
+          let eventName = 'message';
+          const dataParts = [];
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventName = line.slice('event:'.length).trim() || 'message';
+            } else if (line.startsWith('data:')) {
+              dataParts.push(line.slice('data:'.length).trim());
+            }
+          }
+
+          const payloadRaw = dataParts.join('\n');
+          if (!payloadRaw) continue;
+
+          if (eventName === 'item') {
+            try {
+              const parsed = JSON.parse(payloadRaw);
+              const item = parsed?.item ?? parsed;
+              if (item) await upsertParserTrade(item);
+            } catch (error) {
+              console.error('Failed to persist streamed item:', error?.message || error);
+            }
+          }
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
@@ -162,6 +198,20 @@ router.get('/fedresurs/all/stream', async (req, res) => {
           // просто прокидываем байты SSE дальше
           res.write(Buffer.from(value));
           res.flush?.();
+          try {
+            const text = decoder.decode(value, { stream: true });
+            await parseEventChunk(text);
+          } catch (error) {
+            console.error('Failed to parse SSE chunk (jobId):', error?.message || error);
+          }
+        }
+      }
+
+      if (bufferRef.buffer) {
+        try {
+          await parseEventChunk(bufferRef.buffer);
+        } catch (error) {
+          console.error('Failed to flush SSE buffer (jobId):', error?.message || error);
         }
       }
 
