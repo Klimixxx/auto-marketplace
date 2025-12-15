@@ -2,9 +2,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { io } from 'socket.io-client';
 import FilterBar from '../../../components/FilterBar';
 import computeTradeTiming from '../../../lib/tradeTiming';
 import { formatTradeTypeLabel, normalizeTradeTypeCode } from '../../../lib/tradeTypes';
+import { resolveSocketUrl } from '../../../lib/api';
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -23,9 +25,9 @@ const PAGE_SIZE = 20;
 const PARSER_PAGE_SIZE = 50;
 const MAX_STREAM_ITEMS = 200;
 const DEFAULT_SEARCH_TERM = 'vin';
-const DASH = '—';
-const ARROW_LEFT = '←';
-const ARROW_RIGHT = '→';
+const DASH = 'вЂ”';
+const ARROW_LEFT = 'в†ђ';
+const ARROW_RIGHT = 'в†’';
 const FILTER_STORAGE_KEY = 'adminListingsFilters';
 const PARSE_STREAM_STORAGE_KEY = 'adminParseStreamState';
 const PARSE_STREAM_STATE_TTL_MS = 10 * 60 * 1000;
@@ -214,7 +216,7 @@ function normalizeStreamItem(item) {
   const fedresurs = item?.fedresurs_data ?? {};
 
   const idBase = parsed.id || parsed.guid || fedresurs.id || fedresurs.guid || fedresurs.number || Date.now();
-  const title = pickFirstText(parsed.title, parsed.name, fedresurs.title, fedresurs.name, 'Лот');
+  const title = pickFirstText(parsed.title, parsed.name, fedresurs.title, fedresurs.name, 'Р›РѕС‚');
   const region = pickFirstText(parsed.region, parsed.region_name, fedresurs.region, fedresurs.region_code);
   const tradeType = pickFirstText(
     parsed.trade_type,
@@ -277,52 +279,38 @@ function loadStoredFilters() {
   }
 }
 
-// Функция для прикрепления обработчиков SSE
-function attachSseHandlers(es, {
-  setParseStreamError,
-  setParsingAll,
-  setParseStreamMeta,
-  setParseStreamProgress,
-  setLastEventId,
-  setItems,
-  stopParseStream,
-  loadPage,
-  persistStreamState,
-  parseStreamProgressRef,
-  parseStreamLastEventIdRef,
-}) {
-  let reconnectNoticeTimer = null;
-  const recordEventId = (evt) => {
-    const evtId = evt?.lastEventId;
-    if (!evtId) return;
-    setLastEventId(evtId);
+// Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїСЂРёРєСЂРµРїР»РµРЅРёСЏ РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ SSE
+// WS parse event handler
+function handleParserEvent(
+  payload,
+  {
+    setParseJobId,
+    setParseStreamError,
+    setParsingAll,
+    setParseStreamMeta,
+    setParseStreamProgress,
+    setLastEventId,
+    setItems,
+    stopParseStream,
+    loadPage,
+    persistStreamState,
+    parseStreamProgressRef,
+    parseStreamLastEventIdRef,
+  },
+) {
+  const eventId = payload?.id;
+  const eventName = payload?.event || 'message';
+  const data = payload?.data;
+
+  if (eventId != null) {
+    setLastEventId(eventId);
     if (parseStreamLastEventIdRef) {
-      parseStreamLastEventIdRef.current = evtId;
+      parseStreamLastEventIdRef.current = eventId;
     }
-    persistStreamState({ last_event_id: evtId, active: true });
-  };
+    persistStreamState({ last_event_id: eventId, active: true });
+  }
 
-  const showReconnectNotice = () => {
-    setParseStreamError((prev) => prev || 'Соединение потеряно. Переподключаемся…');
-    setParsingAll(true);
-    persistStreamState({ error: 'Соединение потеряно. Переподключаемся…', active: true });
-  };
-
-  es.onopen = () => {
-    if (reconnectNoticeTimer) {
-      clearTimeout(reconnectNoticeTimer);
-      reconnectNoticeTimer = null;
-    }
-    setParseStreamError(null);
-    setParsingAll(true);
-    persistStreamState({ error: null, active: true });
-  };
-
-  es.addEventListener('meta', (event) => {
-    recordEventId(event);
-    const data = safeJsonParse(event.data);
-    if (!data) return;
-
+  if (eventName === 'meta' && data) {
     setParseStreamError(null);
     setParsingAll(true);
     setParseStreamMeta(data);
@@ -332,24 +320,18 @@ function attachSseHandlers(es, {
       total_found: data.total_found ?? prev?.total_found,
     }));
     persistStreamState({ meta: data, active: true, error: null });
-  });
+    return;
+  }
 
-  es.addEventListener('progress', (event) => {
-    recordEventId(event);
-    const data = safeJsonParse(event.data);
-    if (!data) return;
-
+  if (eventName === 'progress' && data) {
     setParseStreamError(null);
     setParsingAll(true);
     setParseStreamProgress(data);
     persistStreamState({ progress: data, active: true, error: null });
-  });
+    return;
+  }
 
-  es.addEventListener('item', (event) => {
-    recordEventId(event);
-    const data = safeJsonParse(event.data);
-    if (!data?.item) return;
-
+  if (eventName === 'item' && data?.item) {
     setParseStreamError(null);
     setParsingAll(true);
     setParseStreamProgress((prev) => ({
@@ -372,16 +354,16 @@ function attachSseHandlers(es, {
       const normalized = normalizeStreamItem(data.item);
       return [normalized, ...prev].slice(0, MAX_STREAM_ITEMS);
     });
-  });
+    return;
+  }
 
-  es.addEventListener('done', (event) => {
-    recordEventId(event);
-    const data = safeJsonParse(event.data) || {};
-    setParseStreamProgress((prev) => ({ ...prev, ...data, stage: data.stage || 'done' }));
+  if (eventName === 'done') {
+    const payloadData = data || {};
+    setParseStreamProgress((prev) => ({ ...prev, ...payloadData, stage: payloadData.stage || 'done' }));
     setParseStreamError(null);
     setParsingAll(false);
+    setParseJobId(null);
 
-    // Очищаем jobId из localStorage при завершении
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PARSE_JOB_ID_KEY);
     }
@@ -392,17 +374,16 @@ function attachSseHandlers(es, {
     persistStreamState({
       active: false,
       error: null,
-      progress: { ...parseStreamProgressRef.current, ...data, stage: data.stage || 'done' },
+      progress: { ...parseStreamProgressRef.current, ...payloadData, stage: payloadData.stage || 'done' },
       last_event_id: parseStreamLastEventIdRef?.current || null,
     });
-  });
+    return;
+  }
 
-  es.addEventListener('error', (event) => {
-    recordEventId(event);
-    const data = event?.data ? safeJsonParse(event.data) : null;
-    const detail = data?.detail || data?.message || 'Ошибка парсера';
+  if (eventName === 'error') {
+    const detail = data?.detail || data?.message || 'Ошибка потока';
+    setParseJobId(null);
 
-    // Очищаем jobId из localStorage при ошибке
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PARSE_JOB_ID_KEY);
     }
@@ -411,19 +392,8 @@ function attachSseHandlers(es, {
     setParsingAll(false);
     stopParseStream();
     persistStreamState({ error: detail, active: false, last_event_id: parseStreamLastEventIdRef?.current || null });
-  });
-
-  // Обработчик сетевых ошибок (не закрываем соединение)
-  es.onerror = () => {
-    if (!reconnectNoticeTimer) {
-      reconnectNoticeTimer = setTimeout(() => {
-        reconnectNoticeTimer = null;
-        showReconnectNotice();
-      }, 500);
-    }
-  };
+  }
 }
-
 export default function AdminParserTradesPage() {
   const router = useRouter();
   const initialStreamState = useMemo(() => readStoredParseStreamState(), []);
@@ -444,7 +414,13 @@ export default function AdminParserTradesPage() {
   const [progressSearchTerm, setProgressSearchTerm] = useState(DEFAULT_SEARCH_TERM);
   const [view, setView] = useState('drafts');
   const queryView = router.query?.view;
-  const parseStreamRef = useRef(null);
+  const parseSocketRef = useRef(null);
+  const [parseJobId, setParseJobId] = useState(
+    typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null,
+  );
+  const parseJobIdRef = useRef(parseJobId);
+  const pendingParserSubscriptionRef = useRef(null);
+  const parserSocketReadyRef = useRef(false);
   const [parseStreamMeta, setParseStreamMeta] = useState(initialStreamState?.meta || null);
   const [parseStreamProgress, setParseStreamProgress] = useState(initialStreamState?.progress || null);
   const [parseStreamError, setParseStreamError] = useState(initialStreamState?.error || null);
@@ -480,6 +456,19 @@ export default function AdminParserTradesPage() {
   }, [parseStreamLastEventId]);
 
   useEffect(() => {
+    parseJobIdRef.current = parseJobId;
+  }, [parseJobId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (parseJobId) {
+      localStorage.setItem(PARSE_JOB_ID_KEY, parseJobId);
+    } else {
+      localStorage.removeItem(PARSE_JOB_ID_KEY);
+    }
+  }, [parseJobId]);
+
+  useEffect(() => {
     parsingAllRef.current = parsingAll;
   }, [parsingAll]);
 
@@ -510,6 +499,72 @@ export default function AdminParserTradesPage() {
     [],
   );
 
+  const stopParseStream = useCallback(() => {
+    const socket = parseSocketRef.current;
+    const jobId = parseJobIdRef.current;
+    if (socket && jobId) {
+      socket.emit('parser:fedresurs:stop', { jobId });
+    }
+  }, []);
+
+  const subscribeToParserJob = useCallback(
+    (jobId, lastEventId = null) => {
+      if (!jobId) return;
+      const payload = { jobId };
+      if (lastEventId) payload.lastEventId = lastEventId;
+
+      const socket = parseSocketRef.current;
+      if (socket && parserSocketReadyRef.current) {
+        socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
+          if (!resp.ok) {
+            setParseStreamError(resp.error || 'Не удалось подписаться на поток парсера');
+          }
+        });
+      } else {
+        pendingParserSubscriptionRef.current = payload;
+      }
+    },
+    [setParseStreamError],
+  );
+
+  const startParserJob = useCallback(
+    async (params) => new Promise((resolve, reject) => {
+      const socket = parseSocketRef.current;
+      if (!socket) {
+        reject(new Error('Нет соединения с сокетом парсера'));
+        return;
+      }
+
+      const sendStart = () => {
+        socket.emit('parser:fedresurs:start', params, (resp = {}) => {
+          if (resp.ok && resp.jobId) {
+            resolve(resp.jobId);
+          } else {
+            reject(new Error(resp.error || 'Не удалось запустить парсер'));
+          }
+        });
+      };
+
+      if (parserSocketReadyRef.current || socket.connected) {
+        sendStart();
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        socket.off('connect', onConnect);
+        reject(new Error('Не удалось подключиться к сокету парсера'));
+      }, 7000);
+
+      const onConnect = () => {
+        clearTimeout(timeout);
+        sendStart();
+      };
+
+      socket.once('connect', onConnect);
+    }),
+    [],
+  );
+
   useEffect(() => {
     persistStreamState();
   }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
@@ -524,13 +579,90 @@ export default function AdminParserTradesPage() {
       setParseStreamProgress(stored?.progress || null);
       setParseStreamError(stored?.error || null);
       setParseStreamLastEventId(stored?.last_event_id || null);
+      setParseJobId(typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null);
     };
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Автоподключение после перезагрузки страницы
+  // РђРІС‚РѕРїРѕРґРєР»СЋС‡РµРЅРёРµ РїРѕСЃР»Рµ РїРµСЂРµР·Р°РіСЂСѓР·РєРё СЃС‚СЂР°РЅРёС†С‹
+  // автоподнятие активной подписки после перезагрузки
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const token = readToken();
+    if (!token) return undefined;
+
+    const socket = io(resolveSocketUrl(), {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      auth: { token },
+    });
+
+    parseSocketRef.current = socket;
+
+    const flushPending = () => {
+      const pending = pendingParserSubscriptionRef.current;
+      if (pending?.jobId) {
+        socket.emit('parser:fedresurs:subscribe', pending, (resp = {}) => {
+          if (!resp.ok) {
+            setParseStreamError(resp.error || 'Не удалось подключиться к парсеру');
+          }
+        });
+        pendingParserSubscriptionRef.current = null;
+      }
+    };
+
+    const onEvent = (payload) =>
+      handleParserEvent(payload, {
+        setParseJobId,
+        setParseStreamError,
+        setParsingAll,
+        setParseStreamMeta,
+        setParseStreamProgress,
+        setLastEventId: setParseStreamLastEventId,
+        setItems,
+        stopParseStream,
+        loadPage,
+        persistStreamState,
+        parseStreamProgressRef,
+        parseStreamLastEventIdRef,
+      });
+
+    socket.on('parser:fedresurs:event', onEvent);
+
+    socket.on('connect', () => {
+      parserSocketReadyRef.current = true;
+      flushPending();
+    });
+
+    socket.on('disconnect', () => {
+      parserSocketReadyRef.current = false;
+    });
+
+    flushPending();
+
+    return () => {
+      socket.off('parser:fedresurs:event', onEvent);
+      socket.disconnect();
+      parseSocketRef.current = null;
+      parserSocketReadyRef.current = false;
+    };
+  }, [
+    loadPage,
+    persistStreamState,
+    setItems,
+    setParsingAll,
+    setParseJobId,
+    setParseStreamError,
+    setParseStreamMeta,
+    setParseStreamProgress,
+    setParseStreamLastEventId,
+    stopParseStream,
+  ]);
+
+  // восстановление состояния стрима из localStorage
   useEffect(() => {
     const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
     if (!jobId) return;
@@ -539,36 +671,28 @@ export default function AdminParserTradesPage() {
     if (!storedState?.active) return;
 
     const resumeLastEventId = storedState?.last_event_id || null;
+    setParseJobId(jobId);
     setParseStreamLastEventId(resumeLastEventId);
     parseStreamLastEventIdRef.current = resumeLastEventId;
-    const resumeQuery = resumeLastEventId ? `&lastEventId=${encodeURIComponent(resumeLastEventId)}` : '';
-    const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}${resumeQuery}`);
-    parseStreamRef.current = es;
+    setParsingAll(true);
+    setParseStreamMeta(storedState?.meta || null);
+    setParseStreamProgress(storedState?.progress || null);
+    setParseStreamError(storedState?.error || null);
 
-    // Прикрепляем обработчики SSE
-    attachSseHandlers(es, {
-      setParseStreamError,
-      setParsingAll,
-      setParseStreamMeta,
-      setParseStreamProgress,
-      setLastEventId: setParseStreamLastEventId,
-      setItems,
-      stopParseStream,
-      loadPage,
-      persistStreamState,
-      parseStreamProgressRef,
-      parseStreamLastEventIdRef,
-    });
+    const payload = { jobId };
+    if (resumeLastEventId) payload.lastEventId = resumeLastEventId;
 
-    // Очистка при размонтировании компонента
-    return () => {
-      if (parseStreamRef.current) {
-        parseStreamRef.current.close();
-        parseStreamRef.current = null;
-      }
-    };
-  }, []); // Пустой массив зависимостей - выполняется только при монтировании
-
+    const socket = parseSocketRef.current;
+    if (socket && parserSocketReadyRef.current) {
+      socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
+        if (!resp.ok) {
+          setParseStreamError(resp.error || 'Не удалось переподключиться к парсеру');
+        }
+      });
+    } else {
+      pendingParserSubscriptionRef.current = payload;
+    }
+  }, []);
   const changeView = useCallback(
     (nextView) => {
       setView(nextView);
@@ -706,7 +830,7 @@ export default function AdminParserTradesPage() {
 
       const token = readToken();
       if (!token) {
-        alert('Для доступа в раздел авторизуйтесь под админ-аккаунтом.');
+        alert('Р”Р»СЏ РґРѕСЃС‚СѓРїР° РІ СЂР°Р·РґРµР» Р°РІС‚РѕСЂРёР·СѓР№С‚РµСЃСЊ РїРѕРґ Р°РґРјРёРЅ-Р°РєРєР°СѓРЅС‚РѕРј.');
         return;
       }
 
@@ -745,7 +869,7 @@ export default function AdminParserTradesPage() {
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
-          throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
+          throw new Error((data && data.error) || 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє РѕР±СЉСЏРІР»РµРЅРёР№');
         }
 
         setItems(Array.isArray(data.items) ? data.items : []);
@@ -754,7 +878,7 @@ export default function AdminParserTradesPage() {
         setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
       } catch (error) {
         console.error('loadPage error:', error);
-        alert(error.message || 'Ошибка запроса');
+        alert(error.message || 'РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°');
       } finally {
         setListLoading(false);
       }
@@ -779,13 +903,6 @@ export default function AdminParserTradesPage() {
     }
   }, [filters]);
 
-  const stopParseStream = useCallback(() => {
-    if (parseStreamRef.current) {
-      parseStreamRef.current.close();
-      parseStreamRef.current = null;
-    }
-  }, []);
-
   const resetParseStreamState = useCallback(() => {
     setParsingAll(false);
     setParseStreamMeta(null);
@@ -794,13 +911,12 @@ export default function AdminParserTradesPage() {
     setParseStreamLastEventId(null);
     parseStreamLastEventIdRef.current = null;
     stopParseStream();
+    setParseJobId(null);
     persistParseStreamState(null);
-    // Очищаем jobId из localStorage при сбросе статуса
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PARSE_JOB_ID_KEY);
     }
   }, [stopParseStream, persistParseStreamState]);
-
   useEffect(() => () => {
     stopParseStream();
   }, [stopParseStream]);
@@ -842,13 +958,13 @@ export default function AdminParserTradesPage() {
   const runParseAll = useCallback(async () => {
     if (view !== 'drafts') return;
     if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE не задан. Невозможно запустить полный парсинг.');
+      alert('NEXT_PUBLIC_API_BASE не указан. Укажите его для работы кнопки.');
       return;
     }
 
     const token = readToken();
     if (!token) {
-      alert('Сначала войдите в админ-аккаунт.');
+      alert('Для запуска парсера нужен вход в систему.');
       return;
     }
 
@@ -859,7 +975,7 @@ export default function AdminParserTradesPage() {
     }
 
     if (!selectedRegions.length) {
-      alert('Выберите регион для полного парсинга.');
+      alert('Укажите хотя бы один регион перед запуском парсинга.');
       return;
     }
 
@@ -870,81 +986,43 @@ export default function AdminParserTradesPage() {
     setParseStreamLastEventId(null);
     parseStreamLastEventIdRef.current = null;
     stopParseStream();
+    setParseJobId(null);
 
     try {
-      // 1. Сначала отправляем POST запрос для запуска задачи парсинга
-      const startRes = await fetch(`${API_BASE}/api/parser/fedresurs/all/start`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          search_string: searchTerm,
-          limit: PARSER_PAGE_SIZE,
-          only_available: true,
-          start_date: filters.start_date || null,
-          end_date: filters.end_date || null,
-          region_codes: selectedRegions,
-          region_code: selectedRegions.length === 1 ? selectedRegions[0] : null,
-        }),
+      const jobId = await startParserJob({
+        search_string: searchTerm,
+        limit: PARSER_PAGE_SIZE,
+        only_available: true,
+        start_date: filters.start_date || null,
+        end_date: filters.end_date || null,
+        region_codes: selectedRegions,
+        region_code: selectedRegions.length === 1 ? selectedRegions[0] : null,
       });
-      
-      const startData = await startRes.json().catch(() => ({}));
-      const jobId = startData?.jobId;
-      if (!startRes.ok || !jobId) {
-        const detail = startData?.error || startData?.detail || 'Не удалось запустить задачу парсинга';
-        throw new Error(detail);
-      }
-      
-      // Сохраняем jobId в localStorage для возможности переподключения
-      localStorage.setItem(PARSE_JOB_ID_KEY, jobId);
+
+      setParseJobId(jobId);
       persistStreamState({ active: true, last_event_id: null, meta: null, progress: null, error: null });
-
-      // 2. Подключаемся к SSE-потоку с полученным jobId
-      const es = new EventSource(`${API_BASE}/api/parser/fedresurs/all/stream?jobId=${encodeURIComponent(jobId)}`);
-      parseStreamRef.current = es;
-
-      // Прикрепляем обработчики SSE
-      attachSseHandlers(es, {
-        setParseStreamError,
-        setParsingAll,
-        setParseStreamMeta,
-        setParseStreamProgress,
-        setLastEventId: setParseStreamLastEventId,
-        setItems,
-        stopParseStream,
-        loadPage,
-        persistStreamState,
-        parseStreamProgressRef,
-        parseStreamLastEventIdRef,
-      });
-
+      subscribeToParserJob(jobId, null);
     } catch (error) {
       console.error('Failed to start parse job:', error);
-      setParseStreamError('Не удалось запустить задачу парсинга');
+      setParseStreamError('Не удалось запустить парсер');
       setParsingAll(false);
       setParseStreamLastEventId(null);
       parseStreamLastEventIdRef.current = null;
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(PARSE_JOB_ID_KEY);
-      }
-      persistStreamState({ error: 'Не удалось запустить задачу парсинга', active: false, last_event_id: null });
+      setParseJobId(null);
+      persistStreamState({ error: 'Не удалось запустить парсер', active: false, last_event_id: null });
     }
-  }, [filters, view, stopParseStream, loadPage, persistStreamState]);
-
+  }, [filters, view, persistStreamState, startParserJob, stopParseStream, subscribeToParserJob]);
   const runIngest = useCallback(
     async ({ reset = false } = {}) => {
       if (view !== 'drafts') return;
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно вызвать парсер.');
+        alert('NEXT_PUBLIC_API_BASE РЅРµ Р·Р°РґР°РЅ. РќРµРІРѕР·РјРѕР¶РЅРѕ РІС‹Р·РІР°С‚СЊ РїР°СЂСЃРµСЂ.');
         return;
       }
 
       const token = readToken();
       if (!token) {
-        alert('Сначала войдите в админ-аккаунт.');
+        alert('РЎРЅР°С‡Р°Р»Р° РІРѕР№РґРёС‚Рµ РІ Р°РґРјРёРЅ-Р°РєРєР°СѓРЅС‚.');
         return;
       }
 
@@ -954,7 +1032,7 @@ export default function AdminParserTradesPage() {
         selectedRegions = extractRegionCodes(filters.region);
       }
       if (!selectedRegions.length) {
-        alert('Выберите хотя бы один регион перед запуском парсинга.');
+        alert('Р’С‹Р±РµСЂРёС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРёРЅ СЂРµРіРёРѕРЅ РїРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј РїР°СЂСЃРёРЅРіР°.');
         return;
       }
       const primaryRegionCode = pickPrimaryRegionCode(selectedRegions);
@@ -999,7 +1077,7 @@ export default function AdminParserTradesPage() {
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
-          throw new Error((data && data.error) || 'Не удалось запустить парсер');
+          throw new Error((data && data.error) || 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ РїР°СЂСЃРµСЂ');
         }
         const regionsResult = Array.isArray(data.regions) ? data.regions : [];
         const targetRegion = regionsResult.find((entry) => entry.region_code === primaryRegionCode)
@@ -1016,19 +1094,19 @@ export default function AdminParserTradesPage() {
 
         if (regionsResult.length) {
           const summaryLines = regionsResult.map((entry) => {
-            const label = entry.region || entry.region_code || 'Регион';
+            const label = entry.region || entry.region_code || 'Р РµРіРёРѕРЅ';
             if (!entry.ok) {
-              const message = entry.error?.message || data.error || 'Ошибка парсинга';
-              return `⚠️ ${label}: ${message}`;
+              const message = entry.error?.message || data.error || 'РћС€РёР±РєР° РїР°СЂСЃРёРЅРіР°';
+              return `вљ пёЏ ${label}: ${message}`;
             }
             const receivedCount = Number.isFinite(Number(entry.received)) ? Number(entry.received) : 0;
             const upsertedCount = Number.isFinite(Number(entry.upserted)) ? Number(entry.upserted) : 0;
             const nextValue = Number.isFinite(Number(entry.next_offset))
               ? Number(entry.next_offset)
-              : entry.next_offset ?? '—';
-            return `• ${label}: получено ${receivedCount}, сохранено ${upsertedCount}, следующий offset ${nextValue}`;
+              : entry.next_offset ?? 'вЂ”';
+            return `вЂў ${label}: РїРѕР»СѓС‡РµРЅРѕ ${receivedCount}, СЃРѕС…СЂР°РЅРµРЅРѕ ${upsertedCount}, СЃР»РµРґСѓСЋС‰РёР№ offset ${nextValue}`;
           });
-          const header = data.ok === false ? 'Парсер завершён с ошибками:' : 'Парсер завершён:';
+          const header = data.ok === false ? 'РџР°СЂСЃРµСЂ Р·Р°РІРµСЂС€С‘РЅ СЃ РѕС€РёР±РєР°РјРё:' : 'РџР°СЂСЃРµСЂ Р·Р°РІРµСЂС€С‘РЅ:';
           alert(`${header}\n${summaryLines.join('\n')}`);
         } else {
           const baseOffset = Number.isFinite(Number(data.offset)) ? Number(data.offset) : offsetToUse;
@@ -1051,8 +1129,8 @@ export default function AdminParserTradesPage() {
           };
           applyProgress(fallbackProgress);
           alert(
-            `Получено: ${receivedCount}, сохранено/обновлено: ${upsertedCount}. `
-              + `Текущий offset: ${baseOffset}, следующий: ${Number(data.next_offset) || nextOffset}.`,
+            `РџРѕР»СѓС‡РµРЅРѕ: ${receivedCount}, СЃРѕС…СЂР°РЅРµРЅРѕ/РѕР±РЅРѕРІР»РµРЅРѕ: ${upsertedCount}. `
+              + `РўРµРєСѓС‰РёР№ offset: ${baseOffset}, СЃР»РµРґСѓСЋС‰РёР№: ${Number(data.next_offset) || nextOffset}.`,
           );
         }
 
@@ -1062,7 +1140,7 @@ export default function AdminParserTradesPage() {
         }
       } catch (error) {
         console.error('ingest error:', error);
-        alert(`Ошибка: ${error.message || 'ingest failed'}`);
+        alert(`РћС€РёР±РєР°: ${error.message || 'ingest failed'}`);
       } finally {
         setIngesting(false);
       }
@@ -1073,13 +1151,13 @@ export default function AdminParserTradesPage() {
   const publish = useCallback(
     async (id) => {
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно опубликовать объявление.');
+        alert('NEXT_PUBLIC_API_BASE РЅРµ Р·Р°РґР°РЅ. РќРµРІРѕР·РјРѕР¶РЅРѕ РѕРїСѓР±Р»РёРєРѕРІР°С‚СЊ РѕР±СЉСЏРІР»РµРЅРёРµ.');
         return;
       }
 
       const token = readToken();
       if (!token) {
-        alert('Сначала войдите в админ-аккаунт.');
+        alert('РЎРЅР°С‡Р°Р»Р° РІРѕР№РґРёС‚Рµ РІ Р°РґРјРёРЅ-Р°РєРєР°СѓРЅС‚.');
         return;
       }
 
@@ -1098,11 +1176,11 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        alert('Объявление опубликовано на сайте.');
+        alert('РћР±СЉСЏРІР»РµРЅРёРµ РѕРїСѓР±Р»РёРєРѕРІР°РЅРѕ РЅР° СЃР°Р№С‚Рµ.');
         await loadPage(page);
       } catch (error) {
         console.error('publish error:', error);
-        alert(`Ошибка публикации: ${error.message || 'failed'}`);
+        alert(`РћС€РёР±РєР° РїСѓР±Р»РёРєР°С†РёРё: ${error.message || 'failed'}`);
       } finally {
         setPublishingId(null);
       }
@@ -1114,13 +1192,13 @@ export default function AdminParserTradesPage() {
     async (id) => {
       if (view === 'published') return;
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно добавить объявление в ожидание.');
+        alert('NEXT_PUBLIC_API_BASE РЅРµ Р·Р°РґР°РЅ. РќРµРІРѕР·РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РѕР±СЉСЏРІР»РµРЅРёРµ РІ РѕР¶РёРґР°РЅРёРµ.');
         return;
       }
 
       const token = readToken();
       if (!token) {
-        alert('Сначала войдите в админ-аккаунт.');
+        alert('РЎРЅР°С‡Р°Р»Р° РІРѕР№РґРёС‚Рµ РІ Р°РґРјРёРЅ-Р°РєРєР°СѓРЅС‚.');
         return;
       }
 
@@ -1139,11 +1217,11 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        alert('Объявление добавлено в раздел ожидания публикации.');
+        alert('РћР±СЉСЏРІР»РµРЅРёРµ РґРѕР±Р°РІР»РµРЅРѕ РІ СЂР°Р·РґРµР» РѕР¶РёРґР°РЅРёСЏ РїСѓР±Р»РёРєР°С†РёРё.');
         await loadPage(page);
       } catch (error) {
         console.error('waiting error:', error);
-        alert(`Ошибка отправки в ожидание: ${error.message || 'failed'}`);
+        alert(`РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё РІ РѕР¶РёРґР°РЅРёРµ: ${error.message || 'failed'}`);
       } finally {
         setWaitingId(null);
       }
@@ -1155,18 +1233,18 @@ export default function AdminParserTradesPage() {
     async (id) => {
       if (view !== 'published') return;
       if (!API_BASE) {
-        alert('NEXT_PUBLIC_API_BASE не задан. Невозможно снять объявление с публикации.');
+        alert('NEXT_PUBLIC_API_BASE РЅРµ Р·Р°РґР°РЅ. РќРµРІРѕР·РјРѕР¶РЅРѕ СЃРЅСЏС‚СЊ РѕР±СЉСЏРІР»РµРЅРёРµ СЃ РїСѓР±Р»РёРєР°С†РёРё.');
         return;
       }
 
       const token = readToken();
       if (!token) {
-        alert('Сначала войдите в админ-аккаунт.');
+        alert('РЎРЅР°С‡Р°Р»Р° РІРѕР№РґРёС‚Рµ РІ Р°РґРјРёРЅ-Р°РєРєР°СѓРЅС‚.');
         return;
       }
 
       if (typeof window !== 'undefined') {
-        const confirmed = window.confirm('Снять объявление с публикации? Оно исчезнет из раздела /trades.');
+        const confirmed = window.confirm('РЎРЅСЏС‚СЊ РѕР±СЉСЏРІР»РµРЅРёРµ СЃ РїСѓР±Р»РёРєР°С†РёРё? РћРЅРѕ РёСЃС‡РµР·РЅРµС‚ РёР· СЂР°Р·РґРµР»Р° /trades.');
         if (!confirmed) return;
       }
 
@@ -1185,11 +1263,11 @@ export default function AdminParserTradesPage() {
           throw new Error((data && data.error) || 'failed');
         }
 
-        alert('Объявление снято с публикации и скрыто из раздела /trades.');
+        alert('РћР±СЉСЏРІР»РµРЅРёРµ СЃРЅСЏС‚Рѕ СЃ РїСѓР±Р»РёРєР°С†РёРё Рё СЃРєСЂС‹С‚Рѕ РёР· СЂР°Р·РґРµР»Р° /trades.');
         await loadPage(page);
       } catch (error) {
         console.error('unpublish error:', error);
-        alert(`Ошибка снятия с публикации: ${error.message || 'failed'}`);
+        alert(`РћС€РёР±РєР° СЃРЅСЏС‚РёСЏ СЃ РїСѓР±Р»РёРєР°С†РёРё: ${error.message || 'failed'}`);
       } finally {
         setUnpublishingId(null);
       }
@@ -1201,15 +1279,15 @@ export default function AdminParserTradesPage() {
   const isWaitingView = view === 'waiting';
   const isDraftsView = !isPublishedView && !isWaitingView;
   const pageTitle = isPublishedView
-    ? 'Админка — Опубликованные объявления'
+    ? 'РђРґРјРёРЅРєР° вЂ” РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Рµ РѕР±СЉСЏРІР»РµРЅРёСЏ'
     : isWaitingView
-      ? 'Админка — Объявления в ожидании'
-      : 'Админка — Объявления (из парсера)';
+      ? 'РђРґРјРёРЅРєР° вЂ” РћР±СЉСЏРІР»РµРЅРёСЏ РІ РѕР¶РёРґР°РЅРёРё'
+      : 'РђРґРјРёРЅРєР° вЂ” РћР±СЉСЏРІР»РµРЅРёСЏ (РёР· РїР°СЂСЃРµСЂР°)';
   const canGoPrev = page > 1;
   const canGoNext = page < pageCount;
-  const ingestPrimaryLabel = ingesting ? 'Загружаем…' : 'Получить новые с Федресурса';
-  const ingestMoreLabel = ingesting ? 'Загружаем…' : 'Получить ещё с парсера';
-  const parseAllLabel = parsingAll ? 'Парсим все…' : 'СПАРСИТЬ ВСЕ';
+  const ingestPrimaryLabel = ingesting ? 'Р—Р°РіСЂСѓР¶Р°РµРјвЂ¦' : 'РџРѕР»СѓС‡РёС‚СЊ РЅРѕРІС‹Рµ СЃ Р¤РµРґСЂРµСЃСѓСЂСЃР°';
+  const ingestMoreLabel = ingesting ? 'Р—Р°РіСЂСѓР¶Р°РµРјвЂ¦' : 'РџРѕР»СѓС‡РёС‚СЊ РµС‰С‘ СЃ РїР°СЂСЃРµСЂР°';
+  const parseAllLabel = parsingAll ? 'РџР°СЂСЃРёРј РІСЃРµвЂ¦' : 'РЎРџРђР РЎРРўР¬ Р’РЎР•';
   const ingestDisabled = ingesting || parsingAll;
   const streamStage = parseStreamProgress?.stage || parseStreamMeta?.stage;
   const streamParsed = Number.isFinite(Number(parseStreamProgress?.parsed))
@@ -1242,18 +1320,18 @@ export default function AdminParserTradesPage() {
             className="link"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <span aria-hidden="true">←</span>
-            <span>Админ-панель</span>
+            <span aria-hidden="true">в†ђ</span>
+            <span>РђРґРјРёРЅ-РїР°РЅРµР»СЊ</span>
           </Link>
         </div>
         <div className="admin-page__header">
           <h1 className="admin-page__title">{pageTitle}</h1>
           <p className="admin-page__subtitle">
             {isPublishedView
-              ? 'Редактируйте объявления, которые уже опубликованы на сайте.'
+              ? 'Р РµРґР°РєС‚РёСЂСѓР№С‚Рµ РѕР±СЉСЏРІР»РµРЅРёСЏ, РєРѕС‚РѕСЂС‹Рµ СѓР¶Рµ РѕРїСѓР±Р»РёРєРѕРІР°РЅС‹ РЅР° СЃР°Р№С‚Рµ.'
               : isWaitingView
-                ? 'Подготовленные объявления, которые ожидают финальной проверки перед публикацией.'
-                : 'Отслеживайте свежие объявления из парсера и готовьте их к публикации.'}
+                ? 'РџРѕРґРіРѕС‚РѕРІР»РµРЅРЅС‹Рµ РѕР±СЉСЏРІР»РµРЅРёСЏ, РєРѕС‚РѕСЂС‹Рµ РѕР¶РёРґР°СЋС‚ С„РёРЅР°Р»СЊРЅРѕР№ РїСЂРѕРІРµСЂРєРё РїРµСЂРµРґ РїСѓР±Р»РёРєР°С†РёРµР№.'
+                : 'РћС‚СЃР»РµР¶РёРІР°Р№С‚Рµ СЃРІРµР¶РёРµ РѕР±СЉСЏРІР»РµРЅРёСЏ РёР· РїР°СЂСЃРµСЂР° Рё РіРѕС‚РѕРІСЊС‚Рµ РёС… Рє РїСѓР±Р»РёРєР°С†РёРё.'}
           </p>
         </div>
 
@@ -1264,7 +1342,7 @@ export default function AdminParserTradesPage() {
             onClick={() => changeView('drafts')}
             disabled={view === 'drafts'}
           >
-            Неопубликованные
+            РќРµРѕРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Рµ
           </button>
           <button
             type="button"
@@ -1272,7 +1350,7 @@ export default function AdminParserTradesPage() {
             onClick={() => changeView('waiting')}
             disabled={view === 'waiting'}
           >
-            Ожидание
+            РћР¶РёРґР°РЅРёРµ
           </button>
           <button
             type="button"
@@ -1280,7 +1358,7 @@ export default function AdminParserTradesPage() {
             onClick={() => changeView('published')}
             disabled={view === 'published'}
           >
-            Опубликованные
+            РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Рµ
           </button>
         </div>
 
@@ -1337,49 +1415,49 @@ export default function AdminParserTradesPage() {
               className="admin-hint-card__title"
               style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
             >
-              <span>{parsingAll ? 'Идёт потоковый парсинг…' : 'Последний потоковый парсинг'}</span>
+              <span>{parsingAll ? 'РРґС‘С‚ РїРѕС‚РѕРєРѕРІС‹Р№ РїР°СЂСЃРёРЅРівЂ¦' : 'РџРѕСЃР»РµРґРЅРёР№ РїРѕС‚РѕРєРѕРІС‹Р№ РїР°СЂСЃРёРЅРі'}</span>
               <button type="button" className="button button-small button-ghost" onClick={resetParseStreamState}>
-                Сбросить статус
+                РЎР±СЂРѕСЃРёС‚СЊ СЃС‚Р°С‚СѓСЃ
               </button>
             </div>
             <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 6 }}>
               <span>
-                Запрос: <strong>{parseStreamMeta?.search_string || progressSearchTerm}</strong>
+                Р—Р°РїСЂРѕСЃ: <strong>{parseStreamMeta?.search_string || progressSearchTerm}</strong>
               </span>
               {streamRegions ? (
                 <span>
-                  Регионы: <strong>{streamRegions.join(', ')}</strong>
+                  Р РµРіРёРѕРЅС‹: <strong>{streamRegions.join(', ')}</strong>
                 </span>
               ) : null}
               {streamStage ? (
                 <span>
-                  Стадия: <strong>{streamStage}</strong>
+                  РЎС‚Р°РґРёСЏ: <strong>{streamStage}</strong>
                 </span>
               ) : null}
               {streamCollected != null ? (
                 <span>
-                  Собрано: <strong>{formatNumber(streamCollected)}</strong>
+                  РЎРѕР±СЂР°РЅРѕ: <strong>{formatNumber(streamCollected)}</strong>
                 </span>
               ) : null}
               {streamOffset != null ? (
                 <span>
-                  Текущий offset: <strong>{formatNumber(streamOffset)}</strong>
+                  РўРµРєСѓС‰РёР№ offset: <strong>{formatNumber(streamOffset)}</strong>
                 </span>
               ) : null}
               {streamTotalFound != null ? (
                 <span>
-                  Найдено всего: <strong>{formatNumber(streamTotalFound)}</strong>
+                  РќР°Р№РґРµРЅРѕ РІСЃРµРіРѕ: <strong>{formatNumber(streamTotalFound)}</strong>
                 </span>
               ) : null}
               {streamParsed != null ? (
                 <span>
-                  Распарсено: <strong>{formatNumber(streamParsed)}</strong>
+                  Р Р°СЃРїР°СЂСЃРµРЅРѕ: <strong>{formatNumber(streamParsed)}</strong>
                 </span>
               ) : null}
             </div>
             {parseStreamError ? (
               <div className="admin-hint-card__meta" style={{ color: '#b91c1c' }}>
-                Ошибка: {parseStreamError}
+                РћС€РёР±РєР°: {parseStreamError}
               </div>
             ) : null}
           </div>
@@ -1387,38 +1465,38 @@ export default function AdminParserTradesPage() {
 
         {isPublishedView ? (
           <div className="admin-hint-card">
-            <div className="admin-hint-card__title">Опубликованные объявления</div>
+            <div className="admin-hint-card__title">РћРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹Рµ РѕР±СЉСЏРІР»РµРЅРёСЏ</div>
             <p className="admin-hint-card__text">
-              Здесь собраны объявления, которые уже видят пользователи сайта. Вы можете обновить данные или снять лот при необходимости.
+              Р—РґРµСЃСЊ СЃРѕР±СЂР°РЅС‹ РѕР±СЉСЏРІР»РµРЅРёСЏ, РєРѕС‚РѕСЂС‹Рµ СѓР¶Рµ РІРёРґСЏС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»Рё СЃР°Р№С‚Р°. Р’С‹ РјРѕР¶РµС‚Рµ РѕР±РЅРѕРІРёС‚СЊ РґР°РЅРЅС‹Рµ РёР»Рё СЃРЅСЏС‚СЊ Р»РѕС‚ РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё.
             </p>
           </div>
         ) : isWaitingView ? (
           <div className="admin-hint-card">
-            <div className="admin-hint-card__title">Ожидающие публикации</div>
+            <div className="admin-hint-card__title">РћР¶РёРґР°СЋС‰РёРµ РїСѓР±Р»РёРєР°С†РёРё</div>
             <p className="admin-hint-card__text">
-              Эти объявления прошли подготовку и ждут финальной загрузки фотографий или документов. После проверки опубликуйте их на сайте.
+              Р­С‚Рё РѕР±СЉСЏРІР»РµРЅРёСЏ РїСЂРѕС€Р»Рё РїРѕРґРіРѕС‚РѕРІРєСѓ Рё Р¶РґСѓС‚ С„РёРЅР°Р»СЊРЅРѕР№ Р·Р°РіСЂСѓР·РєРё С„РѕС‚РѕРіСЂР°С„РёР№ РёР»Рё РґРѕРєСѓРјРµРЅС‚РѕРІ. РџРѕСЃР»Рµ РїСЂРѕРІРµСЂРєРё РѕРїСѓР±Р»РёРєСѓР№С‚Рµ РёС… РЅР° СЃР°Р№С‚Рµ.
             </p>
           </div>
         ) : (
           <div className="admin-hint-card">
-            <div className="admin-hint-card__title">Статус загрузки парсера</div>
+            <div className="admin-hint-card__title">РЎС‚Р°С‚СѓСЃ Р·Р°РіСЂСѓР·РєРё РїР°СЂСЃРµСЂР°</div>
             <div className="admin-hint-card__meta" style={{ display: 'grid', gap: 8 }}>
               <span>
-                Обьявлений в базе парсера: <strong>{formatNumber(lastIngest?.totalFound ?? totalCount ?? 0)}</strong>
+                РћР±СЊСЏРІР»РµРЅРёР№ РІ Р±Р°Р·Рµ РїР°СЂСЃРµСЂР°: <strong>{formatNumber(lastIngest?.totalFound ?? totalCount ?? 0)}</strong>
               </span>
               <span>
-                Обьявлений в категории «Непопубликованные»: <strong>{formatNumber(totalCount)}</strong>
+                РћР±СЊСЏРІР»РµРЅРёР№ РІ РєР°С‚РµРіРѕСЂРёРё В«РќРµРїРѕРїСѓР±Р»РёРєРѕРІР°РЅРЅС‹РµВ»: <strong>{formatNumber(totalCount)}</strong>
               </span>
               <span>
-                Обновлено: {lastIngest?.updatedAt ? formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt : DASH}
+                РћР±РЅРѕРІР»РµРЅРѕ: {lastIngest?.updatedAt ? formatCreatedAt(lastIngest.updatedAt) || lastIngest.updatedAt : DASH}
               </span>
             </div>
             <div className="admin-hint-card__note">
-              Текущий запрос: <strong>{progressSearchTerm}</strong>. Следующий offset <strong>{nextOffset}</strong>.
+              РўРµРєСѓС‰РёР№ Р·Р°РїСЂРѕСЃ: <strong>{progressSearchTerm}</strong>. РЎР»РµРґСѓСЋС‰РёР№ offset <strong>{nextOffset}</strong>.
             </div>
             {!lastIngest ? (
               <div className="admin-hint-card__footer">
-                Используйте кнопки выше, чтобы загрузить актуальные объявления по выбранному фильтру.
+                РСЃРїРѕР»СЊР·СѓР№С‚Рµ РєРЅРѕРїРєРё РІС‹С€Рµ, С‡С‚РѕР±С‹ Р·Р°РіСЂСѓР·РёС‚СЊ Р°РєС‚СѓР°Р»СЊРЅС‹Рµ РѕР±СЉСЏРІР»РµРЅРёСЏ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ С„РёР»СЊС‚СЂСѓ.
               </div>
             ) : null}
           </div>
@@ -1429,19 +1507,19 @@ export default function AdminParserTradesPage() {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Заголовок</th>
-                  <th>Регион</th>
-                  <th>Тип объявления</th>
-                  <th>Начальная цена</th>
-                  <th>Окончание</th>
-                  <th>Действия</th>
+                  <th>Р—Р°РіРѕР»РѕРІРѕРє</th>
+                  <th>Р РµРіРёРѕРЅ</th>
+                  <th>РўРёРї РѕР±СЉСЏРІР»РµРЅРёСЏ</th>
+                  <th>РќР°С‡Р°Р»СЊРЅР°СЏ С†РµРЅР°</th>
+                  <th>РћРєРѕРЅС‡Р°РЅРёРµ</th>
+                  <th>Р”РµР№СЃС‚РІРёСЏ</th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
                     <td className="admin-table__empty" colSpan={6}>
-                      {listLoading ? 'Загрузка…' : 'Записей пока нет.'}
+                      {listLoading ? 'Р—Р°РіСЂСѓР·РєР°вЂ¦' : 'Р—Р°РїРёСЃРµР№ РїРѕРєР° РЅРµС‚.'}
                     </td>
                   </tr>
                 ) : (
@@ -1494,28 +1572,28 @@ export default function AdminParserTradesPage() {
                     return (
                       <tr key={item.id}>
                         <td>
-                          <div className="admin-table__title">{item.title || 'Лот'}</div>
+                          <div className="admin-table__title">{item.title || 'Р›РѕС‚'}</div>
                           <div className="admin-table__meta">
                             {item.source_url ? (
                               <a href={item.source_url} target="_blank" rel="noreferrer" className="link">
-                                Источник
+                                РСЃС‚РѕС‡РЅРёРє
                               </a>
                             ) : (
                               <span>{DASH}</span>
                             )}
-                            {createdAt ? <span>Создано: {createdAt}</span> : null}
+                            {createdAt ? <span>РЎРѕР·РґР°РЅРѕ: {createdAt}</span> : null}
                           </div>
                           {publishedAt ? (
-                            <div className="admin-table__meta">Опубликовано: {publishedAt}</div>
+                            <div className="admin-table__meta">РћРїСѓР±Р»РёРєРѕРІР°РЅРѕ: {publishedAt}</div>
                           ) : waitingAt ? (
-                            <div className="admin-table__meta">В ожидании: {waitingAt}</div>
+                            <div className="admin-table__meta">Р’ РѕР¶РёРґР°РЅРёРё: {waitingAt}</div>
                           ) : null}
                         </td>
                         <td>{item.region || DASH}</td>
                         <td>
                           <div className="admin-table__value">{tradeTypeText}</div>
                           {tradeTypeCodeText && tradeTypeText !== tradeTypeCodeText ? (
-                            <div className="admin-table__meta">Код: {tradeTypeCodeText}</div>
+                            <div className="admin-table__meta">РљРѕРґ: {tradeTypeCodeText}</div>
                           ) : null}
                         </td>
                         <td>{formatCurrency(item.start_price, item.currency || 'RUB')}</td>
@@ -1543,10 +1621,10 @@ export default function AdminParserTradesPage() {
                                 display: 'inline-block',
                               }}
                             />
-                            <span>{status?.label || 'Статус не определён'}</span>
+                            <span>{status?.label || 'РЎС‚Р°С‚СѓСЃ РЅРµ РѕРїСЂРµРґРµР»С‘РЅ'}</span>
                           </div>
                           {finishDateText ? (
-                            <div className="admin-table__meta">Окончание: {finishDateText}</div>
+                            <div className="admin-table__meta">РћРєРѕРЅС‡Р°РЅРёРµ: {finishDateText}</div>
                           ) : null}
                           {item.trade_place ? <div className="admin-table__meta">{item.trade_place}</div> : null}
                         </td>
@@ -1555,7 +1633,7 @@ export default function AdminParserTradesPage() {
                             href={detailHref}
                             className="button button-small button-outline"
                           >
-                            Открыть
+                            РћС‚РєСЂС‹С‚СЊ
                           </Link>
                           {isPublishedView ? (
                             <button
@@ -1565,7 +1643,7 @@ export default function AdminParserTradesPage() {
                               disabled={isUnpublishing || listLoading}
                               style={{ color: '#b91c1c', borderColor: '#fca5a5' }}
                             >
-                              {isUnpublishing ? 'Снимаем…' : 'Снять с публикации'}
+                              {isUnpublishing ? 'РЎРЅРёРјР°РµРјвЂ¦' : 'РЎРЅСЏС‚СЊ СЃ РїСѓР±Р»РёРєР°С†РёРё'}
                             </button>
                           ) : isWaitingView ? (
                             <button
@@ -1574,7 +1652,7 @@ export default function AdminParserTradesPage() {
                               onClick={() => publish(item.id)}
                               disabled={isPublishing || listLoading}
                             >
-                              {isPublishing ? 'Публикуем…' : 'Опубликовать'}
+                              {isPublishing ? 'РџСѓР±Р»РёРєСѓРµРјвЂ¦' : 'РћРїСѓР±Р»РёРєРѕРІР°С‚СЊ'}
                             </button>
                           ) : (
                             <button
@@ -1583,7 +1661,7 @@ export default function AdminParserTradesPage() {
                               onClick={() => addToWaiting(item.id)}
                               disabled={isWaiting || listLoading}
                             >
-                              {isWaiting ? 'Отправляем…' : 'Ожидание'}
+                              {isWaiting ? 'РћС‚РїСЂР°РІР»СЏРµРјвЂ¦' : 'РћР¶РёРґР°РЅРёРµ'}
                             </button>
                           )}
                           {item.source_url ? (
@@ -1593,7 +1671,7 @@ export default function AdminParserTradesPage() {
                               rel="noreferrer"
                               className="button button-small button-outline"
                             >
-                              Источник
+                              РСЃС‚РѕС‡РЅРёРє
                             </a>
                           ) : null}
                         </td>
@@ -1613,10 +1691,10 @@ export default function AdminParserTradesPage() {
             onClick={() => loadPage(page - 1)}
             disabled={!canGoPrev || listLoading}
           >
-            {ARROW_LEFT} Назад
+            {ARROW_LEFT} РќР°Р·Р°Рґ
           </button>
           <div className="admin-pagination__info">
-            Страница {page} из {pageCount}
+            РЎС‚СЂР°РЅРёС†Р° {page} РёР· {pageCount}
           </div>
           <button
             type="button"
@@ -1624,7 +1702,7 @@ export default function AdminParserTradesPage() {
             onClick={() => loadPage(page + 1)}
             disabled={!canGoNext || listLoading}
           >
-            Вперёд {ARROW_RIGHT}
+            Р’РїРµСЂС‘Рґ {ARROW_RIGHT}
           </button>
         </div>
       </div>
