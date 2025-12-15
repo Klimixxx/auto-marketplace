@@ -30,6 +30,12 @@ import adminSupportRouter from './routes/adminSupport.js';
 import { setSocketInstance } from './services/socket.js';
 import { canAccessTicket, createUserNotification, formatDisplayName } from './services/support.js';
 import {
+  startParserJobForClient,
+  subscribeParserJob,
+  stopParserJob,
+  releaseClient as releaseParserClient,
+} from './services/parserWsJobs.js';
+import {
   RUSSIAN_REGIONS,
   getRegionNameByCode,
   normalizeRegionCode,
@@ -248,6 +254,8 @@ io.on('connection', (socket) => {
     console.error('socket connection init error:', err);
   }
 
+  const parserJobs = new Set();
+
   socket.on('support:join', async (payload = {}) => {
     const ticketId = Number(payload.ticketId);
     if (!Number.isFinite(ticketId) || ticketId <= 0) return;
@@ -283,6 +291,50 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('socket typing error:', error);
     }
+  });
+
+  socket.on('parser:fedresurs:start', async (payload = {}, cb) => {
+    try {
+      const jobId = await startParserJobForClient(socket, payload);
+      parserJobs.add(jobId);
+      if (typeof cb === 'function') cb({ ok: true, jobId });
+    } catch (error) {
+      console.error('parser start error:', error?.message || error);
+      if (typeof cb === 'function') cb({ ok: false, error: error?.message || 'Failed to start parser job' });
+    }
+  });
+
+  socket.on('parser:fedresurs:subscribe', (payload = {}, cb) => {
+    try {
+      const jobId = typeof payload.jobId === 'string' ? payload.jobId : '';
+      if (!jobId) throw new Error('jobId is required');
+      const lastEventId = Number.isFinite(Number(payload.lastEventId)) ? Number(payload.lastEventId) : null;
+      subscribeParserJob(socket, { jobId, lastEventId });
+      parserJobs.add(jobId);
+      if (typeof cb === 'function') cb({ ok: true, jobId });
+    } catch (error) {
+      console.error('parser subscribe error:', error?.message || error);
+      if (typeof cb === 'function') cb({ ok: false, error: error?.message || 'Failed to subscribe' });
+    }
+  });
+
+  socket.on('parser:fedresurs:stop', async (payload = {}, cb) => {
+    try {
+      const jobId = typeof payload.jobId === 'string' ? payload.jobId : '';
+      if (jobId) {
+        parserJobs.delete(jobId);
+        await stopParserJob(jobId, 'Stopped by client');
+      }
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (error) {
+      console.error('parser stop error:', error?.message || error);
+      if (typeof cb === 'function') cb({ ok: false, error: error?.message || 'Failed to stop job' });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    releaseParserClient(socket);
+    parserJobs.clear();
   });
 });
 app.use(cors({
