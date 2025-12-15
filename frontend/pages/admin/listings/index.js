@@ -419,7 +419,6 @@ export default function AdminParserTradesPage() {
     typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null,
   );
   const parseJobIdRef = useRef(parseJobId);
-  const pendingParserSubscriptionRef = useRef(null);
   const parserSocketReadyRef = useRef(false);
   const [parseStreamMeta, setParseStreamMeta] = useState(initialStreamState?.meta || null);
   const [parseStreamProgress, setParseStreamProgress] = useState(initialStreamState?.progress || null);
@@ -514,15 +513,13 @@ export default function AdminParserTradesPage() {
       if (lastEventId) payload.lastEventId = lastEventId;
 
       const socket = parseSocketRef.current;
-      if (socket && parserSocketReadyRef.current) {
-        socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
-          if (!resp.ok) {
-            setParseStreamError(resp.error || 'Не удалось подписаться на поток парсера');
-          }
-        });
-      } else {
-        pendingParserSubscriptionRef.current = payload;
-      }
+      if (!socket || !parserSocketReadyRef.current) return;
+
+      socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
+        if (!resp.ok) {
+          setParseStreamError(resp.error || 'Не удалось подписаться на поток парсера');
+        }
+      });
     },
     [setParseStreamError],
   );
@@ -580,11 +577,15 @@ export default function AdminParserTradesPage() {
       setParseStreamError(stored?.error || null);
       setParseStreamLastEventId(stored?.last_event_id || null);
       setParseJobId(typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null);
+      const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
+      if (jobId && parserSocketReadyRef.current) {
+        subscribeToParserJob(jobId, stored?.last_event_id || null);
+      }
     };
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [subscribeToParserJob]);
 
   // РђРІС‚РѕРїРѕРґРєР»СЋС‡РµРЅРёРµ РїРѕСЃР»Рµ РїРµСЂРµР·Р°РіСЂСѓР·РєРё СЃС‚СЂР°РЅРёС†С‹
   // автоподнятие активной подписки после перезагрузки
@@ -601,18 +602,6 @@ export default function AdminParserTradesPage() {
     });
 
     parseSocketRef.current = socket;
-
-    const flushPending = () => {
-      const pending = pendingParserSubscriptionRef.current;
-      if (pending?.jobId) {
-        socket.emit('parser:fedresurs:subscribe', pending, (resp = {}) => {
-          if (!resp.ok) {
-            setParseStreamError(resp.error || 'Не удалось подключиться к парсеру');
-          }
-        });
-        pendingParserSubscriptionRef.current = null;
-      }
-    };
 
     const onEvent = (payload) =>
       handleParserEvent(payload, {
@@ -634,14 +623,15 @@ export default function AdminParserTradesPage() {
 
     socket.on('connect', () => {
       parserSocketReadyRef.current = true;
-      flushPending();
+      const currentJobId = parseJobIdRef.current;
+      if (currentJobId) {
+        subscribeToParserJob(currentJobId, parseStreamLastEventIdRef.current || null);
+      }
     });
 
     socket.on('disconnect', () => {
       parserSocketReadyRef.current = false;
     });
-
-    flushPending();
 
     return () => {
       socket.off('parser:fedresurs:event', onEvent);
@@ -660,6 +650,7 @@ export default function AdminParserTradesPage() {
     setParseStreamProgress,
     setParseStreamLastEventId,
     stopParseStream,
+    subscribeToParserJob,
   ]);
 
   // восстановление состояния стрима из localStorage
@@ -682,17 +673,8 @@ export default function AdminParserTradesPage() {
     const payload = { jobId };
     if (resumeLastEventId) payload.lastEventId = resumeLastEventId;
 
-    const socket = parseSocketRef.current;
-    if (socket && parserSocketReadyRef.current) {
-      socket.emit('parser:fedresurs:subscribe', payload, (resp = {}) => {
-        if (!resp.ok) {
-          setParseStreamError(resp.error || 'Не удалось переподключиться к парсеру');
-        }
-      });
-    } else {
-      pendingParserSubscriptionRef.current = payload;
-    }
-  }, []);
+    subscribeToParserJob(payload.jobId, payload.lastEventId || null);
+  }, [subscribeToParserJob]);
   const changeView = useCallback(
     (nextView) => {
       setView(nextView);
