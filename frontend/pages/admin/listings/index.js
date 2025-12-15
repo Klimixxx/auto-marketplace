@@ -894,7 +894,7 @@ export default function AdminParserTradesPage() {
       const startData = await startRes.json().catch(() => ({}));
       const jobId = startData?.jobId;
       if (!startRes.ok || !jobId) {
-        const detail = startData?.error || startData?.detail || 'گ?گç ‘?گ?گّگ>گ?‘?‘? گْگّگُ‘?‘?‘'گٌ‘'‘? گْگّگ?گّ‘ط‘? گُگّ‘?‘?گٌگ?گ?گّ';
+        const detail = startData?.error || startData?.detail || 'Не удалось запустить задачу парсинга';
         throw new Error(detail);
       }
       
