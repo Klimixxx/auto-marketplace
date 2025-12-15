@@ -33,7 +33,7 @@ function isAbortLikeError(error) {
  */
 router.post('/fedresurs/all/start', express.json(), async (req, res) => {
   try {
-    const upstreamUrl = new URL('/jobs/fedresurs/all/start', PARSER_BASE_URL);
+    const upstreamUrl = new URL('/parse-fedresurs-trades-all-stream/start', PARSER_BASE_URL);
 
     const upstream = await fetch(upstreamUrl.toString(), {
       method: 'POST',
@@ -52,6 +52,10 @@ router.post('/fedresurs/all/start', express.json(), async (req, res) => {
       });
     }
 
+    if (!data?.jobId) {
+      return res.status(502).json({ error: 'jobId missing from parser response' });
+    }
+
     return res.json(data);
   } catch (error) {
     console.error('start job proxy error:', error?.message || error);
@@ -68,7 +72,7 @@ router.post('/fedresurs/all/:jobId/stop', async (req, res) => {
   if (!jobId) return res.status(400).json({ error: 'jobId is required' });
 
   try {
-    const upstreamUrl = new URL(`/jobs/fedresurs/all/${encodeURIComponent(jobId)}/stop`, PARSER_BASE_URL);
+    const upstreamUrl = new URL(`/parse-fedresurs-trades-all-stream/${encodeURIComponent(jobId)}/stop`, PARSER_BASE_URL);
 
     const upstream = await fetch(upstreamUrl.toString(), {
       method: 'POST',
@@ -99,9 +103,14 @@ router.get('/fedresurs/all/stream', async (req, res) => {
   const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : '';
   if (jobId) {
     const upstreamUrl = new URL(
-      `/jobs/fedresurs/all/${encodeURIComponent(jobId)}/stream`,
+      `/parse-fedresurs-trades-all-stream/${encodeURIComponent(jobId)}`,
       PARSER_BASE_URL,
     );
+    const lastEventIdParam = req.query.lastEventId;
+    const parsedLastEventId = Array.isArray(lastEventIdParam)
+      ? Number.parseInt(lastEventIdParam[0], 10)
+      : Number.parseInt(String(lastEventIdParam ?? ''), 10);
+    const lastEventId = Number.isFinite(parsedLastEventId) ? parsedLastEventId : null;
 
     const abortController = new AbortController();
     let reader = null;
@@ -123,8 +132,8 @@ router.get('/fedresurs/all/stream', async (req, res) => {
       const headers = { accept: 'text/event-stream' };
 
       // Resume support: пробрасываем Last-Event-ID в FastAPI
-      const lastEventId = req.headers['last-event-id'];
-      if (lastEventId) headers['last-event-id'] = String(lastEventId);
+      const lastEventIdHeader = req.headers['last-event-id'] || (lastEventId != null ? String(lastEventId) : '');
+      if (lastEventIdHeader) headers['last-event-id'] = String(lastEventIdHeader);
 
       const upstream = await fetch(upstreamUrl.toString(), {
         method: 'GET',
