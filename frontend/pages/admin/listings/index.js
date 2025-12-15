@@ -567,6 +567,71 @@ export default function AdminParserTradesPage() {
     [],
   );
 
+  const loadPage = useCallback(
+    async (nextPage = 1, filtersOverride) => {
+      if (!API_BASE) {
+        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
+        return;
+      }
+
+      const token = readToken();
+      if (!token) {
+        alert('Для доступа в раздел авторизуйтесь под админ-аккаунтом.');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      const activeFilters = cleanFilters(filtersOverride ?? filtersRef.current);
+      if (activeFilters.q) params.set('q', activeFilters.q);
+      if (activeFilters.region_code) {
+        const regionFilter = activeFilters.region_code;
+        if (Array.isArray(regionFilter)) {
+          regionFilter.forEach((code) => {
+            if (code) params.append('region_code', code);
+          });
+        } else {
+          params.set('region_code', regionFilter);
+        }
+      } else if (activeFilters.region) {
+        params.set('region_code', activeFilters.region);
+      }
+      if (activeFilters.city) params.set('city', activeFilters.city);
+      if (activeFilters.brand) params.set('brand', activeFilters.brand);
+      if (activeFilters.trade_type) params.set('trade_type', activeFilters.trade_type);
+      if (activeFilters.minPrice) params.set('minPrice', activeFilters.minPrice);
+      if (activeFilters.maxPrice) params.set('maxPrice', activeFilters.maxPrice);
+      params.set('page', String(nextPage));
+      params.set('limit', String(PAGE_SIZE));
+      const status = view === 'published' ? 'published' : view === 'waiting' ? 'waiting' : 'drafts';
+      params.set('status', status);
+
+      setListLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
+        }
+
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setPage(data.page || nextPage);
+        setPageCount(data.pageCount || 1);
+        setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
+      } catch (error) {
+        console.error('loadPage error:', error);
+        alert(error.message || 'Ошибка запроса');
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [view],
+  );
+
   useEffect(() => {
     persistStreamState();
   }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
@@ -806,71 +871,6 @@ export default function AdminParserTradesPage() {
       }
     },
     [applyProgress],
-  );
-
-  const loadPage = useCallback(
-    async (nextPage = 1, filtersOverride) => {
-      if (!API_BASE) {
-        console.warn('NEXT_PUBLIC_API_BASE is not configured.');
-        return;
-      }
-
-      const token = readToken();
-      if (!token) {
-        alert('Для доступа в раздел авторизуйтесь под админ-аккаунтом.');
-        return;
-      }
-
-      const params = new URLSearchParams();
-      const activeFilters = cleanFilters(filtersOverride ?? filtersRef.current);
-      if (activeFilters.q) params.set('q', activeFilters.q);
-      if (activeFilters.region_code) {
-        const regionFilter = activeFilters.region_code;
-        if (Array.isArray(regionFilter)) {
-          regionFilter.forEach((code) => {
-            if (code) params.append('region_code', code);
-          });
-        } else {
-          params.set('region_code', regionFilter);
-        }
-      } else if (activeFilters.region) {
-        params.set('region_code', activeFilters.region);
-      }
-      if (activeFilters.city) params.set('city', activeFilters.city);
-      if (activeFilters.brand) params.set('brand', activeFilters.brand);
-      if (activeFilters.trade_type) params.set('trade_type', activeFilters.trade_type);
-      if (activeFilters.minPrice) params.set('minPrice', activeFilters.minPrice);
-      if (activeFilters.maxPrice) params.set('maxPrice', activeFilters.maxPrice);
-      params.set('page', String(nextPage));
-      params.set('limit', String(PAGE_SIZE));
-      const status = view === 'published' ? 'published' : view === 'waiting' ? 'waiting' : 'drafts';
-      params.set('status', status);
-
-      setListLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/parser-trades?${params.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data) {
-          throw new Error((data && data.error) || 'Не удалось загрузить список объявлений');
-        }
-
-        setItems(Array.isArray(data.items) ? data.items : []);
-        setPage(data.page || nextPage);
-        setPageCount(data.pageCount || 1);
-        setTotalCount(Number.isFinite(Number(data.total)) ? Number(data.total) : 0);
-      } catch (error) {
-        console.error('loadPage error:', error);
-        alert(error.message || 'Ошибка запроса');
-      } finally {
-        setListLoading(false);
-      }
-    },
-    [view],
   );
 
   useEffect(() => {
@@ -1700,5 +1700,3 @@ export default function AdminParserTradesPage() {
     </div>
   );
 }
-
-
