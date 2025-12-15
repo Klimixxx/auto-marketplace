@@ -608,57 +608,6 @@ export default function AdminParserTradesPage() {
     [view],
   );
 
-  useEffect(() => {
-    persistStreamState();
-  }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleStorage = (event) => {
-      if (event.key && event.key !== PARSE_STREAM_STORAGE_KEY) return;
-      const stored = readStoredParseStreamState();
-      setParsingAll(Boolean(stored?.active));
-      setParseStreamMeta(stored?.meta || null);
-      setParseStreamProgress(stored?.progress || null);
-      setParseStreamError(stored?.error || null);
-      setParseStreamLastEventId(stored?.last_event_id || null);
-      setParseJobId(typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null);
-      const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
-      if (jobId) {
-        subscribeToParserJob(jobId, stored?.last_event_id || null);
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [subscribeToParserJob]);
-
-  useEffect(() => () => {
-    closeParserSocket();
-  }, [closeParserSocket]);
-
-  // Загружаем…Загружаем… Загружаем…?? ?????? ?? localStorage
-  useEffect(() => {
-    const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
-    if (!jobId) return;
-
-    const storedState = readStoredParseStreamState();
-    if (!storedState?.active) return;
-
-    const resumeLastEventId = storedState?.last_event_id || null;
-    setParseJobId(jobId);
-    setParseStreamLastEventId(resumeLastEventId);
-    parseStreamLastEventIdRef.current = resumeLastEventId;
-    setParsingAll(true);
-    setParseStreamMeta(storedState?.meta || null);
-    setParseStreamProgress(storedState?.progress || null);
-    setParseStreamError(storedState?.error || null);
-
-    const payload = { jobId };
-    if (resumeLastEventId) payload.lastEventId = resumeLastEventId;
-
-    subscribeToParserJob(payload.jobId, payload.lastEventId || null);
-  }, [subscribeToParserJob]);
   const handleParserPayload = useCallback(
     (payload) =>
       handleParserEvent(payload, {
@@ -682,7 +631,6 @@ export default function AdminParserTradesPage() {
       stopParseStream,
     ],
   );
-
 
   const connectParserSocket = useCallback(
     (initPayload) =>
@@ -782,7 +730,57 @@ export default function AdminParserTradesPage() {
     [connectParserSocket],
   );
 
+  useEffect(() => {
+    persistStreamState();
+  }, [parseStreamMeta, parseStreamProgress, parseStreamError, parsingAll, persistStreamState]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStorage = (event) => {
+      if (event.key && event.key !== PARSE_STREAM_STORAGE_KEY) return;
+      const stored = readStoredParseStreamState();
+      setParsingAll(Boolean(stored?.active));
+      setParseStreamMeta(stored?.meta || null);
+      setParseStreamProgress(stored?.progress || null);
+      setParseStreamError(stored?.error || null);
+      setParseStreamLastEventId(stored?.last_event_id || null);
+      setParseJobId(typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null);
+      const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
+      if (jobId) {
+        subscribeToParserJob(jobId, stored?.last_event_id || null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [subscribeToParserJob]);
+
+  useEffect(() => () => {
+    closeParserSocket();
+  }, [closeParserSocket]);
+
+  // Загружаем…Загружаем… Загружаем…?? ?????? ?? localStorage
+  useEffect(() => {
+    const jobId = typeof window !== 'undefined' ? localStorage.getItem(PARSE_JOB_ID_KEY) : null;
+    if (!jobId) return;
+
+    const storedState = readStoredParseStreamState();
+    if (!storedState?.active) return;
+
+    const resumeLastEventId = storedState?.last_event_id || null;
+    setParseJobId(jobId);
+    setParseStreamLastEventId(resumeLastEventId);
+    parseStreamLastEventIdRef.current = resumeLastEventId;
+    setParsingAll(true);
+    setParseStreamMeta(storedState?.meta || null);
+    setParseStreamProgress(storedState?.progress || null);
+    setParseStreamError(storedState?.error || null);
+
+    const payload = { jobId };
+    if (resumeLastEventId) payload.lastEventId = resumeLastEventId;
+
+    subscribeToParserJob(payload.jobId, payload.lastEventId || null);
+  }, [subscribeToParserJob]);
   const changeView = useCallback(
     (nextView) => {
       setView(nextView);
