@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { upsertParserTrade } from './parserTrades.js';
 
 const PARSER_BASE_URL = process.env.PARSER_BASE_URL || 'http://5.129.250.178:8000';
-const STOP_GRACE_MS = 30_000;
+const STOP_GRACE_MS = 120_000;
 
 const activeSessions = new Map();
 
