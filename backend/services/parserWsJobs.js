@@ -24,21 +24,33 @@ function createDeferred() {
 
 function broadcast(session, event, payload) {
   const deadClients = [];
+  const eventName = payload?.event || event;
+  const eventId = payload?.id;
+  
   for (const client of Array.from(session.clients)) {
     try {
-      if (client.connected !== false) {
+      // More reliable check for Socket.IO client state
+      if (client.connected === true || (client.connected !== false && client.disconnected !== true)) {
         client.emit(event, payload);
+        // Log important events for debugging
+        if (eventName === 'done' || eventName === 'error' || eventName === 'stopped') {
+          console.log(`Broadcasted ${eventName} event (id=${eventId}) to client for jobId=${session.jobId}`);
+        }
       } else {
         deadClients.push(client);
       }
     } catch (error) {
-      console.error('Failed to emit parser event to client:', error?.message || error);
+      console.error(`Failed to emit parser event ${eventName} (id=${eventId}) to client:`, error?.message || error);
       deadClients.push(client);
     }
   }
   // Clean up dead clients
   for (const client of deadClients) {
     session.clients.delete(client);
+  }
+  
+  if (session.clients.size === 0 && (eventName === 'done' || eventName === 'error' || eventName === 'stopped')) {
+    console.log(`No clients remaining for jobId=${session.jobId} after ${eventName} event`);
   }
 }
 
@@ -160,21 +172,35 @@ function attachWebSocket(session) {
     }
 
     // Broadcast to clients, but don't fail if broadcast fails
+    const broadcastPayload = {
+      jobId: session.jobId,
+      event: eventName,
+      data,
+      id: payload?.id ?? null,
+    };
+    
     try {
-      broadcast(session, 'parser:fedresurs:event', {
-        jobId: session.jobId,
-        event: eventName,
-        data,
-        id: payload?.id ?? null,
-      });
+      broadcast(session, 'parser:fedresurs:event', broadcastPayload);
+      console.log(`Processed ${eventName} event (id=${payload?.id ?? 'none'}) for jobId=${session.jobId}, clients=${session.clients.size}`);
     } catch (error) {
       console.error('Failed to broadcast parser event:', error?.message || error);
       // Continue processing even if broadcast fails
     }
 
     if (eventName === 'done' || eventName === 'error' || eventName === 'stopped') {
+      console.log(`Received ${eventName} event for jobId=${session.jobId}, closing connection after broadcast`);
       session.stopRequested = true;
-      try { ws.close(); } catch {}
+      // Give a small delay to ensure the broadcast completes before closing
+      // This is especially important for the 'done' event
+      setTimeout(() => {
+        try {
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+          }
+        } catch (error) {
+          console.error('Error closing WebSocket after done/error/stopped:', error?.message || error);
+        }
+      }, 100);
     }
   });
 
@@ -186,11 +212,31 @@ function attachWebSocket(session) {
     session.ws = null;
 
     const reasonStr = reason?.toString() || 'Unknown';
-    console.log(`Parser WS closed: code=${code}, reason=${reasonStr}, jobId=${session.jobId || 'none'}, clients=${session.clients.size}`);
+    console.log(`Parser WS closed: code=${code}, reason=${reasonStr}, jobId=${session.jobId || 'none'}, clients=${session.clients.size}, lastEventId=${session.lastEventId}`);
 
     if (!session.started && !session.stopRequested) {
       session.startDeferred.reject?.(new Error('Upstream socket closed before start'));
       return;
+    }
+
+    // If connection closed unexpectedly and we haven't received 'done' event,
+    // try to send a synthetic 'done' event to clients if we have clients
+    if (!session.stopRequested && session.jobId && session.clients.size > 0) {
+      console.log(`Connection closed unexpectedly for jobId=${session.jobId}, sending synthetic done event to ${session.clients.size} clients`);
+      try {
+        broadcast(session, 'parser:fedresurs:event', {
+          jobId: session.jobId,
+          event: 'done',
+          data: {
+            stage: 'done',
+            connection_closed: true,
+            last_event_id: session.lastEventId,
+          },
+          id: session.lastEventId + 1,
+        });
+      } catch (error) {
+        console.error('Failed to send synthetic done event:', error?.message || error);
+      }
     }
 
     if (session.stopRequested) {
