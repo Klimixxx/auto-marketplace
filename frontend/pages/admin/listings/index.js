@@ -22,7 +22,7 @@ function normalizeBase(value) {
 
 const API_BASE = normalizeBase(RAW_API_BASE);
 const PAGE_SIZE = 20;
-const PARSER_PAGE_SIZE = 50;
+const PARSER_PAGE_SIZE = 15;
 const MAX_STREAM_ITEMS = 200;
 const DEFAULT_SEARCH_TERM = 'vin';
 const DASH = '—';
