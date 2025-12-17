@@ -42,6 +42,8 @@ import {
   findRegionCodeByName,
 } from '../shared/regions.js';
 
+import requestLogger from './middleware/requestLogger.js';
+
 const REGION_CODE_SET = new Set(RUSSIAN_REGIONS.map((region) => region.code));
 
 const __filename = fileURLToPath(import.meta.url);
@@ -139,6 +141,8 @@ const app = express();
 const server = http.createServer(app);
 app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Логируем входящие HTTP-запросы
+app.use(requestLogger);
 
 
 // ==== МИГРАЦИИ (выполнить все .sql из /backend/migrations по алфавиту) ====
