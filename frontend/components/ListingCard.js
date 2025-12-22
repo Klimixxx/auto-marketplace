@@ -641,9 +641,9 @@ export default function ListingCard({
   const listingKind = tradeTypeInfo?.kind || normalizedTradeType || null;
   const tradePriceDirection =
     listingKind === "public_offer"
-      ? "up"
-      : listingKind === "open_auction"
-        ? "down"
+      ? "down"
+      : listingKind === "open_auction" || listingKind === "auction"
+        ? "up"
         : null;
   const nowTs = Date.now();
 
