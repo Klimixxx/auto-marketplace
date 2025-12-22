@@ -557,20 +557,21 @@ function hasData(value) {
 
 const PRICE_HEADER_STYLE = {
   textAlign: "left",
-  padding: "10px 12px",
+  padding: "12px 14px",
   fontSize: 12,
-  fontWeight: 600,
-  color: "#9aa6b2",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  fontWeight: 700,
+  color: "#64748b",
+  borderBottom: "1px solid rgba(148,163,184,0.3)",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.08em",
+  background: "rgba(248,250,252,0.9)",
 };
 const PRICE_CELL_STYLE = {
-  padding: "10px 12px",
-  borderBottom: "1px solid rgba(255,255,255,0.05)",
+  padding: "12px 14px",
+  borderBottom: "1px solid rgba(148,163,184,0.2)",
   verticalAlign: "top",
   fontSize: 13,
-  color: "#4b5563",
+  color: "#1f2937",
 };
 
 function resolveApiBase(req) {
@@ -604,11 +605,11 @@ function KeyValueGrid({ entries }) {
   if (!entries || !entries.length) return null;
   return (
     <div
-      className="panel"
+      className="panel kv-grid"
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-        gap: 12,
+        gap: 14,
       }}
     >
       {entries.map((entry, index) => {
@@ -625,32 +626,12 @@ function KeyValueGrid({ entries }) {
 
         if (!excludeKeys.includes(key))
           return (
-            <div
-              key={`${key}-${index}`}
-              style={{ display: "flex", flexDirection: "column", gap: 4 }}
-            >
-              <div className="detail-label">{key}</div>
+            <div key={`${key}-${index}`} className="kv-grid__item">
+              <div className="detail-label kv-grid__label">{key}</div>
               {isMultiline ? (
-                <pre
-                  style={{
-                    margin: 0,
-                    fontSize: 13,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {value}
-                </pre>
+                <pre className="kv-grid__value kv-grid__value--multiline">{value}</pre>
               ) : (
-                <div
-                  style={{
-                    fontWeight: 600,
-                    wordBreak: "break-word",
-                    color: "#4b5563",
-                  }}
-                >
-                  {value}
-                </div>
+                <div className="kv-grid__value">{value}</div>
               )}
             </div>
           );
@@ -1016,9 +997,12 @@ export default function ListingPage({ item }) {
       : summaryAuctionStepRaw;
 
   const depositBasePrice = (() => {
-    if (isPublicOffer) return resolvedCurrentPrice ?? summaryStartPrice ?? null;
-    if (isOpenAuction) return summaryStartPrice ?? resolvedCurrentPrice ?? null;
-    return resolvedCurrentPrice ?? summaryStartPrice ?? null;
+    const startPriceNumber = parseNumberValue(summaryStartPrice);
+    const currentPriceNumber = parseNumberValue(resolvedCurrentPrice);
+
+    if (isPublicOffer) return currentPriceNumber ?? startPriceNumber ?? null;
+    if (isOpenAuction) return startPriceNumber ?? currentPriceNumber ?? null;
+    return currentPriceNumber ?? startPriceNumber ?? null;
   })();
 
   const explicitDeposit = pickNumericFromSources(
@@ -1077,7 +1061,8 @@ export default function ListingPage({ item }) {
 
   const summaryDepositDisplay = summaryDeposit != null ? fmtPrice(summaryDeposit, currency) : "—";
 
-  const tradePriceDirection = isPublicOffer ? "up" : isOpenAuction ? "down" : null;
+  const isAuction = isOpenAuction || normalizedTradeType === "auction";
+  const tradePriceDirection = isPublicOffer ? "down" : isAuction ? "up" : null;
 
   const summaryPriceBlocks = (() => {
     const blocks = [];
@@ -1805,7 +1790,7 @@ export default function ListingPage({ item }) {
             <section className="detail-section">
               <h2>График снижения цены</h2>
               <div className="panel table-scroll" style={{ padding: 0 }}>
-                <table>
+                <table className="price-table">
                   <thead>
                     <tr>
                       <th style={{ ...PRICE_HEADER_STYLE, width: 60 }}>№</th>
@@ -1884,7 +1869,7 @@ export default function ListingPage({ item }) {
             <section className="detail-section">
               <h2>История цен</h2>
               <div className="panel table-scroll" style={{ padding: 0 }}>
-                <table>
+                <table className="price-table">
                   <thead>
                     <tr>
                       <th style={{ ...PRICE_HEADER_STYLE, width: 60 }}>№</th>
