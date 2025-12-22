@@ -1297,43 +1297,78 @@ router.post('/parser-trades/:id/publish', async (req, res) => {
       details.region_code = regionCode;
     }
 
+    const city = lotDetails?.city || lotDetails?.location || trade.city || trade.location || null;
+    const brand = trade.brand || lotDetails?.brand || null;
+    const model = trade.model || lotDetails?.model || null;
+    const productionYear =
+      trade.year
+      || lotDetails?.year
+      || lotDetails?.production_year
+      || lotDetails?.manufacture_year
+      || null;
+    const vin = trade.vin || lotDetails?.vin || null;
+    const tradeType = normalizeTradeTypeCode(
+      trade.trade_type
+      || lotDetails?.trade_type
+      || lotDetails?.procedure_type
+      || lotDetails?.type,
+    ) || null;
+    const publishedAt = trade.published_at || new Date();
+    const title = trade.title || [brand, model, productionYear].filter(Boolean).join(' ') || 'Lot';
+
     const sourceId = trade.fedresurs_id || trade.bidding_number || trade.id;
 
     await query(`
       insert into listings
-        (source_id, title, description, asset_type, region, region_code, currency, start_price,
-         current_price, status, end_date, source_url, details, published)
+        (source_id, title, description, asset_type, region, region_code, city, brand, model, production_year, vin,
+         trade_type, currency, start_price, current_price, status, end_date, source_url, photos, details, published, published_at)
       values
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true)
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,true,$21)
       on conflict (source_id) do update set
         title=excluded.title,
         description=excluded.description,
         asset_type=excluded.asset_type,
         region=excluded.region,
         region_code=excluded.region_code,
+        city=excluded.city,
+        brand=excluded.brand,
+        model=excluded.model,
+        production_year=excluded.production_year,
+        vin=excluded.vin,
+        trade_type=excluded.trade_type,
         currency=excluded.currency,
         start_price=excluded.start_price,
         current_price=excluded.current_price,
         status=excluded.status,
         end_date=excluded.end_date,
         source_url=excluded.source_url,
+        photos=excluded.photos,
         details=excluded.details,
         published=true,
+        published_at=coalesce(listings.published_at, excluded.published_at, now()),
         updated_at=now()
     `, [
       sourceId,
-      trade.title || [trade.brand, trade.model, trade.year].filter(Boolean).join(' ') || 'Лот',
+      title,
       trade.description || trade.lot_details?.description || null,
       trade.category || 'vehicle',
       regionName || trade.region || null,
       regionCode,
+      city,
+      brand,
+      model,
+      productionYear,
+      vin,
+      tradeType,
       currency,
       trade.start_price || null,
       currentPrice,
       null,
       trade.date_finish || null,
       trade.source_url || null,
-      details,
+      JSON.stringify(normalizedPhotos),
+      JSON.stringify(details),
+      publishedAt,
     ]);
 
     await query(
